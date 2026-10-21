@@ -2,543 +2,706 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<title>Draw Rate Tracker — Multi-Machine</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050805">
+<title>Draw Rate Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050805'/%3E%3Cpath d='M6 22 L13 14 L18 18 L26 9' stroke='%235cff6e' stroke-width='3' fill='none'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #050805;
-    --green: #5CFF6E;
-    --amber: #FFB000;
-    --dim: #2A4A2A;
-    --red: #FF6B6B;
-    --font: 'Courier New', Courier, monospace;
+    --surface: #0a120a;
+    --green: #5cff6e;
+    --amber: #ffb000;
+    --red: #ff6b6b;
+    --dim: rgba(92, 255, 110, 0.32);
+    --dash: rgba(92, 255, 110, 0.28);
+    --font: "Courier New", Courier, "Noto Sans Mono", ui-monospace, monospace;
   }
   * { box-sizing: border-box; }
-  body {
+  html, body {
+    margin: 0;
     background: var(--bg);
     color: var(--green);
     font-family: var(--font);
-    margin: 0;
-    padding: 10px;
-    font-size: 15px;
-    line-height: 1.3;
+    -webkit-text-size-adjust: 100%;
+  }
+  main {
+    margin: 0 auto;
+    width: 100%;
+    max-width: 32rem;
+    padding: 1rem 0.75rem 2rem;
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0,0,0,0.14) 3px);
   }
   h1 {
+    margin: 0 0 0.75rem;
     text-align: center;
     color: var(--amber);
-    font-size: 1.3em;
-    margin: 6px 0 12px;
+    font-size: 1.25rem;
+    letter-spacing: 0.2em;
     text-shadow: 0 0 8px var(--amber);
   }
-  .punch-row, .target-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    justify-content: center;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-  }
-  .punch-row label, .target-row label { color: var(--amber); font-size: 0.85em; }
-  input[type="number"], input[type="time"], input[type="text"] {
-    background: var(--bg);
-    color: var(--green);
-    border: 2px solid var(--green);
-    padding: 8px 10px;
-    font-family: var(--font);
-    font-size: 1em;
-    border-radius: 4px;
-  }
-  input[type="number"] { width: 90px; text-align: right; }
-  input[type="time"] { width: 100px; }
-  button {
-    background: var(--bg);
-    color: var(--green);
-    border: 2px solid var(--green);
-    padding: 10px 14px;
-    font-family: var(--font);
-    font-size: 1em;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  button:active { background: var(--green); color: var(--bg); }
-  button.active { background: var(--green); color: var(--bg); }
-  .machine-tabs {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    margin: 10px 0;
-  }
-  .controls {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin: 8px 0 12px;
-    justify-content: center;
-  }
-  .metrics {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-  .metric {
-    background: #0A120A;
-    border: 1px solid var(--dim);
-    padding: 8px;
-    border-radius: 6px;
-    text-align: center;
-  }
-  .metric .label {
-    font-size: 0.65em;
+  .lbl {
     color: var(--amber);
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
   }
-  .metric .value {
-    font-size: 1.45em;
-    font-weight: bold;
-    margin-top: 2px;
-    text-shadow: 0 0 5px var(--green);
+  .punch-grid {
+    display: grid;
+    grid-template-columns: 6.75rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
   }
-  .metric .value.big { font-size: 1.8em; }
-  .ahead { color: var(--green); }
-  .behind { color: var(--red); }
-  .coil-entry {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    margin: 12px 0;
-    flex-wrap: wrap;
+  .term-input {
+    height: 3rem;
+    width: 100%;
+    min-width: 0;
+    border: 2px solid var(--green);
+    background: var(--bg);
+    color: var(--green);
+    border-radius: 4px;
+    padding: 0 0.75rem;
+    font-family: inherit;
+    font-size: 1.125rem;
+    font-variant-numeric: tabular-nums;
+    color-scheme: dark;
+    -webkit-appearance: none;
+    appearance: none;
   }
-  .coils-list {
-    max-height: 200px;
-    overflow-y: auto;
+  .term-input::placeholder { color: rgba(92, 255, 110, 0.45); }
+  .term-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--green), 0 0 12px rgba(92, 255, 110, 0.5);
+  }
+  .term-btn {
+    min-height: 3rem;
+    border: 2px solid var(--green);
+    background: var(--bg);
+    color: var(--green);
+    border-radius: 4px;
+    padding: 0.5rem 0.4rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    touch-action: manipulation;
+    overflow: hidden;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .term-btn:active:not(:disabled) { background: var(--green); color: var(--bg); }
+  .term-btn.solid { background: var(--green); color: var(--bg); }
+  .term-btn.alert { border-color: var(--red); color: var(--red); }
+  .term-btn.alert:active:not(:disabled) { background: var(--red); color: var(--bg); }
+  .term-btn:disabled { opacity: 0.4; cursor: default; }
+  .term-btn.live:disabled { opacity: 1; background: var(--green); color: var(--bg); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+  .metric-card {
+    background: var(--surface);
     border: 1px solid var(--dim);
-    padding: 6px;
-    background: #081008;
-    font-size: 0.9em;
+    border-radius: 6px;
+    padding: 0.55rem 0.35rem;
+    text-align: center;
+    min-width: 0;
+  }
+  .metric-label {
+    color: var(--amber);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .readout {
+    margin-top: 0.15rem;
+    font-weight: 700;
+    font-size: 1.25rem;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px rgba(92, 255, 110, 0.65);
+    overflow-wrap: anywhere;
+  }
+  .readout.lg { font-size: 1.7rem; }
+  .readout.behind { color: var(--red); text-shadow: 0 0 6px rgba(255, 107, 107, 0.65); }
+  .hint { margin: 0.5rem 0 0; text-align: center; font-size: 0.75rem; color: var(--amber); }
+  .section { margin-bottom: 1rem; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .tab-inner {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live-dot {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+  .live-dot[hidden] { display: none; }
+  .term-btn.solid .live-dot { background: var(--bg); box-shadow: none; }
+  .other-line {
+    min-height: 1.25rem;
+    margin: 0.5rem 0 0.75rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--amber);
+    font-variant-numeric: tabular-nums;
+  }
+  .panel[hidden] { display: none; }
+  .row-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7.5rem;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+  .controls { margin-bottom: 0.75rem; }
+  .coil-entry {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7.5rem;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+  }
+  .coil-scroll {
+    max-height: 12.5rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--dim);
+    background: var(--surface);
+    padding: 0.35rem 0.5rem;
   }
   .coil-row {
     display: grid;
-    grid-template-columns: 36px 70px 90px 1fr;
-    gap: 6px;
-    padding: 4px 0;
-    border-bottom: 1px dashed var(--dim);
+    grid-template-columns: 2.25rem 4.5rem 6.4rem minmax(0, 1fr);
+    gap: 0.35rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px dashed var(--dash);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
   }
-  .coil-row .split { color: var(--amber); }
-  .status-bar {
-    text-align: center;
-    margin-top: 10px;
-    font-size: 0.8em;
-    color: var(--amber);
+  .coil-row:last-child { border-bottom: 0; }
+  .coil-row .split { color: var(--amber); text-align: right; }
+  .coil-empty { text-align: center; padding: 1rem; color: rgba(92, 255, 110, 0.5); }
+  .status { margin-top: 1rem; text-align: center; font-size: 0.875rem; color: var(--amber); }
+  @media (max-width: 360px) {
+    .punch-grid { grid-template-columns: 5.5rem minmax(0, 1fr); }
+    .readout { font-size: 1.05rem; }
+    .readout.lg { font-size: 1.4rem; }
+    .coil-row { grid-template-columns: 2rem 4rem 5.6rem minmax(0, 1fr); font-size: 0.8rem; }
+    .term-btn { font-size: 0.85rem; }
   }
-  .day-note {
-    text-align: center;
-    font-size: 0.75em;
-    color: var(--dim);
-    margin-bottom: 8px;
-  }
-  .machine-panel { display: none; }
-  .machine-panel.active { display: block; }
 </style>
 </head>
 <body>
-<h1>DRAW RATE TRACKER</h1>
+<div class="scanlines" aria-hidden="true"></div>
+<main>
+  <h1>DRAW RATE</h1>
 
-<div class="punch-row">
-  <label>Punch In:</label>
-  <input type="time" id="punchIn">
-  <label>Punch Out:</label>
-  <input type="time" id="punchOut">
-  <label>Break min:</label>
-  <input type="number" id="breakMin" value="0" min="0" step="5" style="width:60px;">
-</div>
-<div class="day-note">Day pace uses combined actual from all machines vs combined expected (each machine’s rate × shift hours).</div>
+  <section class="punch-grid" aria-label="Shift punches">
+    <label for="punch-in" class="lbl">Punch in</label>
+    <input id="punch-in" class="term-input" type="time">
+    <label for="punch-out" class="lbl">Punch out</label>
+    <input id="punch-out" class="term-input" type="time">
+    <label for="break-min" class="lbl">Break min</label>
+    <input id="break-min" class="term-input" type="number" inputmode="numeric" min="0" step="5" value="0">
+  </section>
 
-<div class="machine-tabs">
-  <button id="tab1" class="active" onclick="switchMachine(0)">MACHINE 1</button>
-  <button id="tab2" onclick="switchMachine(1)">MACHINE 2</button>
-</div>
+  <section class="section" aria-label="Day pace">
+    <div class="grid2">
+      <article class="metric-card"><div class="metric-label">Day expected</div><div class="readout" id="day-expected">—</div></article>
+      <article class="metric-card"><div class="metric-label">Should have now</div><div class="readout" id="should-have">—</div></article>
+      <article class="metric-card"><div class="metric-label">Day pace</div><div class="readout" id="day-pace">—</div></article>
+      <article class="metric-card"><div class="metric-label">Need rate rest of day</div><div class="readout" id="need-rate">—</div></article>
+    </div>
+    <p class="hint" id="pace-hint"></p>
+  </section>
 
-<div id="panels">
-  <!-- Machine panels generated / managed in JS -->
-</div>
+  <div class="tabs" role="tablist" aria-label="Machines" id="tabs"></div>
+  <p class="other-line" id="other-line" aria-live="polite"></p>
 
-<div class="metrics" id="dayMetrics">
-  <div class="metric">
-    <div class="label">Day Expected (combined)</div>
-    <div class="value" id="dayExpected">—</div>
-  </div>
-  <div class="metric">
-    <div class="label">Should Have Now</div>
-    <div class="value" id="shouldHave">—</div>
-  </div>
-  <div class="metric">
-    <div class="label">Day Pace (combined)</div>
-    <div class="value" id="dayPace">—</div>
-  </div>
-  <div class="metric">
-    <div class="label">Need Rate Rest of Day</div>
-    <div class="value" id="needRate">—</div>
-  </div>
-</div>
+  <div id="panels"></div>
 
-<div class="status-bar" id="status">Enter punches and machine rates. Switch machines with the tabs.</div>
+  <p class="status" id="status" role="status"></p>
+</main>
 
 <script>
-const punchInInput = document.getElementById('punchIn');
-const punchOutInput = document.getElementById('punchOut');
-const breakMinInput = document.getElementById('breakMin');
-const dayExpectedEl = document.getElementById('dayExpected');
-const shouldHaveEl = document.getElementById('shouldHave');
-const dayPaceEl = document.getElementById('dayPace');
-const needRateEl = document.getElementById('needRate');
-const statusEl = document.getElementById('status');
-const panelsEl = document.getElementById('panels');
+(function () {
+  "use strict";
 
-let machines = [
-  { id: 0, name: 'Machine 1', rate: 2800, startTime: null, running: false, intervalId: null, coils: [], nextId: 1 },
-  { id: 1, name: 'Machine 2', rate: 2800, startTime: null, running: false, intervalId: null, coils: [], nextId: 1 }
-];
-let activeMachine = 0;
+  var STORAGE_KEY = "drawRateMulti";
+  var DAY_MS = 24 * 60 * 60 * 1000;
+  var DEFAULT_RATE = 2800;
+  var MACHINE_COUNT = 2;
 
-function formatTime(ms) {
-  if (ms < 0) ms = 0;
-  const totalSec = ms / 1000;
-  const hours = Math.floor(totalSec / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  const secs = Math.floor(totalSec % 60);
-  const tenths = Math.floor((ms % 1000) / 100);
-  return `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}.${tenths}`;
-}
+  // ---------- model ----------
+  function defaultMachine(name) {
+    return { name: name, rate: DEFAULT_RATE, startTime: null, running: false, coils: [], nextId: 1 };
+  }
+  function defaultState() {
+    var machines = [];
+    for (var i = 0; i < MACHINE_COUNT; i++) machines.push(defaultMachine("Machine " + (i + 1)));
+    return { punchIn: "", punchOut: "", breakMin: 0, active: 0, machines: machines };
+  }
 
-function parseTimeToday(timeStr) {
-  if (!timeStr) return null;
-  const [h, m] = timeStr.split(':').map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.getTime();
-}
+  function num(v) {
+    var n = typeof v === "number" ? v : parseFloat(v);
+    return isFinite(n) ? n : NaN;
+  }
+  function cleanClock(v) {
+    return typeof v === "string" && /^\d{1,2}:\d{2}/.test(v) ? v.slice(0, 5) : "";
+  }
 
-function getShiftInfo() {
-  const punchInMs = parseTimeToday(punchInInput.value);
-  const punchOutMs = parseTimeToday(punchOutInput.value);
-  const breakMin = parseFloat(breakMinInput.value) || 0;
-  if (!punchInMs || !punchOutMs || punchOutMs <= punchInMs) return null;
-  const totalMs = punchOutMs - punchInMs - (breakMin * 60000);
-  if (totalMs <= 0) return null;
-  const totalHours = totalMs / 3600000;
-
-  const now = Date.now();
-  let elapsedShiftMs = 0;
-  if (now >= punchOutMs) {
-    elapsedShiftMs = totalMs;
-  } else if (now > punchInMs) {
-    elapsedShiftMs = now - punchInMs;
-    if (breakMin > 0 && now > punchInMs + (punchOutMs - punchInMs) / 2) {
-      elapsedShiftMs = Math.max(0, elapsedShiftMs - breakMin * 60000);
+  // Accepts the current format, the original tracker's format (activeMachine,
+  // breakMin as a string) and anything broken. Never throws.
+  function sanitize(raw) {
+    var s = defaultState();
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return s;
+    s.punchIn = cleanClock(raw.punchIn);
+    s.punchOut = cleanClock(raw.punchOut);
+    var b = num(raw.breakMin);
+    s.breakMin = isFinite(b) && b >= 0 ? b : 0;
+    var act = num(typeof raw.active === "number" ? raw.active : raw.activeMachine);
+    s.active = act === 0 || act === 1 ? act : 0;
+    if (Array.isArray(raw.machines)) {
+      for (var i = 0; i < MACHINE_COUNT; i++) {
+        var sm = raw.machines[i];
+        if (!sm || typeof sm !== "object") continue;
+        var m = s.machines[i];
+        if (typeof sm.name === "string" && sm.name.trim()) m.name = sm.name.slice(0, 40);
+        var r = num(sm.rate);
+        m.rate = isFinite(r) && r > 0 ? r : DEFAULT_RATE;
+        var st = num(sm.startTime);
+        m.startTime = isFinite(st) && st > 0 && st <= Date.now() + 60000 ? st : null;
+        m.running = !!sm.running && m.startTime != null;
+        if (!m.running) m.startTime = null;
+        var coils = [];
+        if (Array.isArray(sm.coils)) {
+          sm.coils.forEach(function (c) {
+            if (!c || typeof c !== "object") return;
+            var w = num(c.weight), t = num(c.timestamp);
+            if (!isFinite(w) || w <= 0) return;
+            coils.push({ id: coils.length + 1, weight: w, timestamp: isFinite(t) && t >= 0 ? t : 0 });
+          });
+        }
+        m.coils = coils;
+        m.nextId = coils.length + 1;
+      }
     }
-    elapsedShiftMs = Math.min(elapsedShiftMs, totalMs);
+    return s;
   }
-  const fraction = elapsedShiftMs / totalMs;
-  const remainingHours = Math.max(0, (totalMs - elapsedShiftMs) / 3600000);
-  return { totalHours, fraction, remainingHours };
-}
 
-function renderPanels() {
-  panelsEl.innerHTML = '';
-  machines.forEach((m, idx) => {
-    const panel = document.createElement('div');
-    panel.className = 'machine-panel' + (idx === activeMachine ? ' active' : '');
-    panel.id = 'panel-' + idx;
-    panel.innerHTML = `
-      <div class="target-row">
-        <label>Rate lb/hr:</label>
-        <input type="number" class="rate-input" data-m="${idx}" value="${m.rate}" step="10" min="1">
-        <input type="text" class="name-input" data-m="${idx}" value="${m.name}" style="width:140px;">
-      </div>
-      <div class="controls">
-        <button class="start-btn" data-m="${idx}">${m.running ? 'RUNNING' : 'START'}</button>
-        <button class="reset-btn" data-m="${idx}">RESET</button>
-        <button class="undo-btn" data-m="${idx}">UNDO LAST</button>
-      </div>
-      <div class="metrics">
-        <div class="metric"><div class="label">Elapsed</div><div class="value elapsed" id="elapsed-${idx}">00:00:00.0</div></div>
-        <div class="metric"><div class="label">Target lbs</div><div class="value big target" id="target-${idx}">0.0</div></div>
-        <div class="metric"><div class="label">Actual lbs</div><div class="value big actual" id="actual-${idx}">0.0</div></div>
-        <div class="metric"><div class="label">Rate</div><div class="value rate" id="rate-${idx}">—</div></div>
-        <div class="metric"><div class="label">Variance</div><div class="value variance" id="var-${idx}">0.0</div></div>
-        <div class="metric"><div class="label">Efficiency</div><div class="value eff" id="eff-${idx}">—</div></div>
-      </div>
-      <div class="coil-entry">
-        <input type="number" class="coil-weight" data-m="${idx}" placeholder="Coil lbs" step="0.1" min="0">
-        <button class="add-coil" data-m="${idx}">ADD COIL</button>
-      </div>
-      <div class="coils-list" id="coils-${idx}"></div>
-    `;
-    panelsEl.appendChild(panel);
-  });
-  attachListeners();
-  updateAllDisplays();
-}
-
-function attachListeners() {
-  document.querySelectorAll('.rate-input').forEach(el => {
-    el.addEventListener('change', e => {
-      const i = +e.target.dataset.m;
-      machines[i].rate = parseFloat(e.target.value) || 2800;
-      saveState();
-      updateAllDisplays();
-    });
-  });
-  document.querySelectorAll('.name-input').forEach(el => {
-    el.addEventListener('change', e => {
-      const i = +e.target.dataset.m;
-      machines[i].name = e.target.value || `Machine ${i+1}`;
-      document.getElementById('tab' + (i+1)).textContent = machines[i].name.toUpperCase();
-      saveState();
-    });
-  });
-  document.querySelectorAll('.start-btn').forEach(btn => {
-    btn.addEventListener('click', e => startMachine(+e.target.dataset.m));
-  });
-  document.querySelectorAll('.reset-btn').forEach(btn => {
-    btn.addEventListener('click', e => resetMachine(+e.target.dataset.m));
-  });
-  document.querySelectorAll('.undo-btn').forEach(btn => {
-    btn.addEventListener('click', e => undoMachine(+e.target.dataset.m));
-  });
-  document.querySelectorAll('.add-coil').forEach(btn => {
-    btn.addEventListener('click', e => addCoil(+e.target.dataset.m));
-  });
-  document.querySelectorAll('.coil-weight').forEach(el => {
-    el.addEventListener('keypress', e => {
-      if (e.key === 'Enter') addCoil(+e.target.dataset.m);
-    });
-  });
-}
-
-function switchMachine(idx) {
-  activeMachine = idx;
-  document.querySelectorAll('.machine-tabs button').forEach((b, i) => {
-    b.classList.toggle('active', i === idx);
-  });
-  document.querySelectorAll('.machine-panel').forEach((p, i) => {
-    p.classList.toggle('active', i === idx);
-  });
-  updateAllDisplays();
-}
-
-function getElapsedMs(m) {
-  if (!m.startTime || !m.running) return 0;
-  return Date.now() - m.startTime;
-}
-
-function updateMachineDisplay(idx) {
-  const m = machines[idx];
-  const elapsedMs = getElapsedMs(m);
-  const elapsedHours = elapsedMs / 3600000;
-  const targetLbs = elapsedHours * m.rate;
-  const actualLbs = m.coils.reduce((s, c) => s + c.weight, 0);
-  const actualRate = elapsedHours > 0.001 ? actualLbs / elapsedHours : 0;
-  const variance = actualLbs - targetLbs;
-  const efficiency = targetLbs > 0 ? (actualLbs / targetLbs) * 100 : 0;
-
-  const el = id => document.getElementById(id);
-  if (!el('elapsed-' + idx)) return;
-
-  el('elapsed-' + idx).textContent = formatTime(elapsedMs);
-  el('target-' + idx).textContent = targetLbs.toFixed(1);
-  el('actual-' + idx).textContent = actualLbs.toFixed(1);
-  el('rate-' + idx).textContent = elapsedHours > 0.001 ? actualRate.toFixed(0) + ' lb/hr' : '—';
-
-  const varEl = el('var-' + idx);
-  varEl.textContent = (variance >= 0 ? '+' : '') + variance.toFixed(1);
-  varEl.className = 'value variance ' + (variance >= 0 ? 'ahead' : 'behind');
-
-  const effEl = el('eff-' + idx);
-  effEl.textContent = targetLbs > 0 ? efficiency.toFixed(1) + '%' : '—';
-  effEl.className = 'value eff ' + (efficiency >= 100 ? 'ahead' : 'behind');
-
-  const list = el('coils-' + idx);
-  if (m.coils.length === 0) {
-    list.innerHTML = '<div style="text-align:center; color:var(--dim); padding:16px;">No coils logged</div>';
-  } else {
-    let html = '';
-    for (let i = m.coils.length - 1; i >= 0; i--) {
-      const c = m.coils[i];
-      const prev = i > 0 ? m.coils[i-1].timestamp : 0;
-      const splitHours = (c.timestamp - prev) / 3600000;
-      const splitRate = splitHours > 0.0001 ? c.weight / splitHours : 0;
-      html += `<div class="coil-row">
-        <div>#${c.id}</div>
-        <div>${c.weight.toFixed(1)} lb</div>
-        <div>${formatTime(c.timestamp)}</div>
-        <div class="split">${splitRate > 0 ? splitRate.toFixed(0) + ' lb/hr' : '—'}</div>
-      </div>`;
+  function loadState() {
+    try {
+      var saved = window.localStorage.getItem(STORAGE_KEY);
+      if (!saved) return defaultState();
+      return sanitize(JSON.parse(saved));
+    } catch (e) {
+      return defaultState();
     }
-    list.innerHTML = html;
+  }
+  function saveState() {
+    try {
+      var out = {
+        punchIn: state.punchIn,
+        punchOut: state.punchOut,
+        breakMin: state.breakMin,
+        active: state.active,
+        activeMachine: state.active, // keeps the original tracker able to read it
+        machines: state.machines.map(function (m) {
+          return { name: m.name, rate: m.rate, startTime: m.startTime, running: m.running, coils: m.coils, nextId: m.nextId };
+        })
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    } catch (e) { /* storage full or blocked: keep running in memory */ }
   }
 
-  const startBtn = document.querySelector(`.start-btn[data-m="${idx}"]`);
-  if (startBtn) {
-    startBtn.textContent = m.running ? 'RUNNING' : 'START';
-    startBtn.disabled = m.running;
+  // ---------- math ----------
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function formatElapsed(ms) {
+    if (!isFinite(ms) || ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var tenths = Math.floor((ms % 1000) / 100);
+    return pad(h) + ":" + pad(m) + ":" + pad(s) + "." + tenths;
   }
-}
-
-function updateDayPace() {
-  const shift = getShiftInfo();
-  const totalActual = machines.reduce((s, m) => s + m.coils.reduce((ss, c) => ss + c.weight, 0), 0);
-  if (!shift) {
-    dayExpectedEl.textContent = '—';
-    shouldHaveEl.textContent = '—';
-    dayPaceEl.textContent = '—';
-    dayPaceEl.className = 'value';
-    needRateEl.textContent = '—';
-    needRateEl.className = 'value';
-    return;
+  function signed(n, digits) {
+    var t = n.toFixed(digits);
+    return n >= 0 ? "+" + t : t;
   }
-  const combinedRate = machines.reduce((s, m) => s + m.rate, 0);
-  const totalExpected = shift.totalHours * combinedRate;
-  const shouldHave = shift.fraction * totalExpected;
-  const dayVar = totalActual - shouldHave;
-
-  dayExpectedEl.textContent = totalExpected.toFixed(0);
-  shouldHaveEl.textContent = shouldHave.toFixed(1);
-  dayPaceEl.textContent = (dayVar >= 0 ? '+' : '') + dayVar.toFixed(1);
-  dayPaceEl.className = 'value ' + (dayVar >= 0 ? 'ahead' : 'behind');
-
-  if (shift.remainingHours > 0.01) {
-    const need = (totalExpected - totalActual) / shift.remainingHours;
-    needRateEl.textContent = need > 0 ? need.toFixed(0) + ' lb/hr' : 'Done';
-    needRateEl.className = 'value ' + (need <= combinedRate ? 'ahead' : 'behind');
-  } else {
-    needRateEl.textContent = totalActual >= totalExpected ? 'Hit' : 'Missed';
-    needRateEl.className = 'value ' + (totalActual >= totalExpected ? 'ahead' : 'behind');
+  function parseClock(str) {
+    if (!str) return null;
+    var p = str.split(":");
+    if (p.length < 2) return null;
+    var h = Number(p[0]), m = Number(p[1]);
+    if (!(h >= 0 && h <= 23 && m >= 0 && m <= 59) || h % 1 || m % 1) return null;
+    return { h: h, m: m };
   }
-}
-
-function updateAllDisplays() {
-  machines.forEach((_, i) => updateMachineDisplay(i));
-  updateDayPace();
-  const runningCount = machines.filter(m => m.running).length;
-  const coilCount = machines.reduce((s, m) => s + m.coils.length, 0);
-  statusEl.textContent = runningCount
-    ? `${runningCount} machine(s) running • ${coilCount} total coils logged`
-    : 'Enter punches and rates. Switch machines with the tabs.';
-}
-
-function startMachine(idx) {
-  const m = machines[idx];
-  if (m.running) return;
-  m.startTime = Date.now();
-  m.running = true;
-  if (m.intervalId) clearInterval(m.intervalId);
-  m.intervalId = setInterval(() => updateMachineDisplay(idx), 100);
-  updateAllDisplays();
-  saveState();
-}
-
-function resetMachine(idx) {
-  const m = machines[idx];
-  m.running = false;
-  if (m.intervalId) clearInterval(m.intervalId);
-  m.startTime = null;
-  m.coils = [];
-  m.nextId = 1;
-  updateAllDisplays();
-  saveState();
-}
-
-function addCoil(idx) {
-  const m = machines[idx];
-  const input = document.querySelector(`.coil-weight[data-m="${idx}"]`);
-  const weight = parseFloat(input.value);
-  if (isNaN(weight) || weight <= 0) {
-    statusEl.textContent = 'Enter a valid positive weight.';
-    return;
+  function atClock(base, h, m) {
+    var d = new Date(base);
+    d.setHours(h, m, 0, 0);
+    return d.getTime();
   }
-  if (!m.running) {
-    statusEl.textContent = 'Start the timer for this machine first.';
-    return;
+
+  function getShiftInfo(punchIn, punchOut, breakMin, now) {
+    var inn = parseClock(punchIn), out = parseClock(punchOut);
+    if (!inn || !out) return null;
+    if (inn.h === out.h && inn.m === out.m) return null;
+    var breakMs = Math.max(0, (isFinite(breakMin) ? breakMin : 0) * 60000);
+    var inToday = atClock(now, inn.h, inn.m);
+    var outToday = atClock(now, out.h, out.m);
+    var overnight = outToday < inToday;
+    var start, end;
+    if (!overnight) { start = inToday; end = outToday; }
+    else if (now >= inToday) { start = inToday; end = outToday + DAY_MS; }
+    else { start = inToday - DAY_MS; end = outToday; } // after midnight: last night's shift
+    var grossMs = end - start;
+    var totalMs = grossMs - breakMs;
+    if (totalMs <= 0) return null;
+    var elapsed = 0, phase = "upcoming";
+    if (now >= end) { elapsed = totalMs; phase = "done"; }
+    else if (now > start) {
+      phase = "live";
+      elapsed = now - start;
+      if (breakMs > 0 && now > start + grossMs / 2) elapsed = Math.max(0, elapsed - breakMs);
+      elapsed = Math.min(elapsed, totalMs);
+    }
+    return {
+      totalHours: totalMs / 3600000,
+      fraction: elapsed / totalMs,
+      remainingHours: Math.max(0, (totalMs - elapsed) / 3600000),
+      overnight: overnight,
+      phase: phase
+    };
   }
-  m.coils.push({
-    id: m.nextId++,
-    weight: weight,
-    timestamp: getElapsedMs(m)
-  });
-  input.value = '';
-  input.focus();
-  updateAllDisplays();
-  saveState();
-}
 
-function undoMachine(idx) {
-  const m = machines[idx];
-  if (m.coils.length === 0) return;
-  m.coils.pop();
-  m.nextId--;
-  updateAllDisplays();
-  saveState();
-}
+  function machineStats(m, now) {
+    var elapsedMs = m.running && m.startTime != null ? Math.max(0, now - m.startTime) : 0;
+    var hours = elapsedMs / 3600000;
+    var rate = isFinite(m.rate) ? m.rate : 0;
+    var target = hours * rate;
+    var actual = m.coils.reduce(function (s, c) { return s + c.weight; }, 0);
+    var showRate = hours > 0.001; // ~3.6 s
+    return {
+      elapsedMs: elapsedMs,
+      target: target,
+      actual: actual,
+      showRate: showRate,
+      actualRate: showRate ? actual / hours : 0,
+      variance: actual - target,
+      efficiency: target > 0 ? (actual / target) * 100 : null
+    };
+  }
 
-function saveState() {
-  const state = {
-    punchIn: punchInInput.value,
-    punchOut: punchOutInput.value,
-    breakMin: breakMinInput.value,
-    machines: machines.map(m => ({
-      name: m.name,
-      rate: m.rate,
-      startTime: m.startTime,
-      running: m.running,
-      coils: m.coils,
-      nextId: m.nextId
-    })),
-    activeMachine
-  };
-  localStorage.setItem('drawRateMulti', JSON.stringify(state));
-}
+  function splitRate(coils, i) {
+    var prev = i > 0 ? coils[i - 1].timestamp : 0;
+    var h = (coils[i].timestamp - prev) / 3600000;
+    return h > 0.0001 ? coils[i].weight / h : null;
+  }
 
-function loadState() {
-  const saved = localStorage.getItem('drawRateMulti');
-  if (!saved) return;
-  try {
-    const state = JSON.parse(saved);
-    if (state.punchIn) punchInInput.value = state.punchIn;
-    if (state.punchOut) punchOutInput.value = state.punchOut;
-    if (state.breakMin !== undefined) breakMinInput.value = state.breakMin;
-    if (state.machines) {
-      state.machines.forEach((sm, i) => {
-        if (machines[i]) {
-          machines[i].name = sm.name || machines[i].name;
-          machines[i].rate = sm.rate || 2800;
-          machines[i].startTime = sm.startTime;
-          machines[i].running = !!sm.running;
-          machines[i].coils = sm.coils || [];
-          machines[i].nextId = sm.nextId || 1;
-          if (machines[i].running && machines[i].startTime) {
-            machines[i].intervalId = setInterval(() => updateMachineDisplay(i), 100);
+  function dayNumbers(now) {
+    var totalActual = state.machines.reduce(function (s, m) {
+      return s + m.coils.reduce(function (ss, c) { return ss + c.weight; }, 0);
+    }, 0);
+    var shift = getShiftInfo(state.punchIn, state.punchOut, state.breakMin, now);
+    if (!shift) return { shift: null, totalActual: totalActual };
+    var combinedRate = state.machines.reduce(function (s, m) { return s + (isFinite(m.rate) ? m.rate : 0); }, 0);
+    var totalExpected = shift.totalHours * combinedRate;
+    var shouldHave = shift.fraction * totalExpected;
+    var need = shift.remainingHours > 0.01 ? (totalExpected - totalActual) / shift.remainingHours : null;
+    return {
+      shift: shift,
+      totalActual: totalActual,
+      combinedRate: combinedRate,
+      totalExpected: totalExpected,
+      shouldHave: shouldHave,
+      dayVar: totalActual - shouldHave,
+      need: need
+    };
+  }
+
+  // ---------- view ----------
+  var state = loadState();
+  var note = null;
+  var $ = function (id) { return document.getElementById(id); };
+  var punchIn = $("punch-in"), punchOut = $("punch-out"), breakMin = $("break-min");
+  var tabsEl = $("tabs"), panelsEl = $("panels");
+  var tabs = [], panels = [];
+
+  function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+  function setReadout(el, text, behind) {
+    setText(el, text);
+    var cls = "readout" + (el.classList.contains("lg") ? " lg" : "") + (behind ? " behind" : "");
+    if (el.className !== cls) el.className = cls;
+  }
+
+  function buildMachines() {
+    state.machines.forEach(function (m, i) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "term-btn";
+      tab.setAttribute("role", "tab");
+      tab.id = "tab-" + i;
+      tab.innerHTML = '<span class="tab-inner"><span class="truncate"></span><span class="live-dot" hidden></span></span>';
+      tab.addEventListener("click", function () { switchMachine(i); });
+      tabsEl.appendChild(tab);
+
+      var p = document.createElement("section");
+      p.className = "panel";
+      p.setAttribute("role", "tabpanel");
+      p.id = "panel-" + i;
+      p.innerHTML =
+        '<div class="row-fields">' +
+          '<div class="field"><label class="lbl" for="name-' + i + '">Name</label>' +
+          '<input id="name-' + i + '" class="term-input" type="text" maxlength="40" autocomplete="off"></div>' +
+          '<div class="field"><label class="lbl" for="rate-' + i + '">Target lb/hr</label>' +
+          '<input id="rate-' + i + '" class="term-input" type="number" inputmode="decimal" min="1" step="10"></div>' +
+        '</div>' +
+        '<div class="grid3 controls">' +
+          '<button type="button" class="term-btn live" data-act="start">START</button>' +
+          '<button type="button" class="term-btn" data-act="undo">UNDO LAST</button>' +
+          '<button type="button" class="term-btn alert" data-act="reset">RESET</button>' +
+        '</div>' +
+        '<div class="grid2">' +
+          '<article class="metric-card"><div class="metric-label">Elapsed</div><div class="readout" data-o="elapsed">00:00:00.0</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Rate</div><div class="readout" data-o="rate">—</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Target lbs</div><div class="readout lg" data-o="target">0.0</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Actual lbs</div><div class="readout lg" data-o="actual">0.0</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Variance</div><div class="readout" data-o="variance">+0.0</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Efficiency</div><div class="readout" data-o="eff">—</div></article>' +
+        '</div>' +
+        '<div class="coil-entry">' +
+          '<input id="coil-' + i + '" class="term-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Coil lbs" aria-label="Coil weight in pounds">' +
+          '<button type="button" class="term-btn solid" data-act="add">ADD COIL</button>' +
+        '</div>' +
+        '<div class="coil-scroll" data-o="coils"></div>';
+      panelsEl.appendChild(p);
+
+      var o = {};
+      Array.prototype.forEach.call(p.querySelectorAll("[data-o]"), function (el) { o[el.getAttribute("data-o")] = el; });
+      var btn = {};
+      Array.prototype.forEach.call(p.querySelectorAll("[data-act]"), function (el) { btn[el.getAttribute("data-act")] = el; });
+      var nameIn = $("name-" + i), rateIn = $("rate-" + i), coilIn = $("coil-" + i);
+      nameIn.value = m.name;
+      rateIn.value = String(m.rate);
+
+      nameIn.addEventListener("input", function () {
+        state.machines[i].name = nameIn.value.trim() ? nameIn.value.slice(0, 40) : "Machine " + (i + 1);
+        saveState(); render();
+      });
+      nameIn.addEventListener("change", function () { if (!nameIn.value.trim()) nameIn.value = state.machines[i].name; });
+      rateIn.addEventListener("input", function () {
+        var r = num(rateIn.value);
+        if (isFinite(r) && r > 0) { state.machines[i].rate = r; saveState(); render(); }
+      });
+      rateIn.addEventListener("change", function () {
+        var r = num(rateIn.value);
+        if (!(isFinite(r) && r > 0)) rateIn.value = String(state.machines[i].rate);
+      });
+      btn.start.addEventListener("click", function () { startMachine(i); });
+      btn.undo.addEventListener("click", function () { undoMachine(i); });
+      btn.reset.addEventListener("click", function () { resetMachine(i); });
+      btn.add.addEventListener("click", function () { addCoil(i); });
+      coilIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addCoil(i); } });
+
+      tabs.push(tab);
+      panels.push({ el: p, o: o, btn: btn, coilIn: coilIn, coilSig: null });
+    });
+  }
+
+  function switchMachine(i) {
+    state.active = i;
+    note = null;
+    saveState();
+    render();
+  }
+  function startMachine(i) {
+    var m = state.machines[i];
+    if (m.running) return;
+    m.running = true;
+    m.startTime = Date.now();
+    note = null;
+    saveState(); render(); schedule();
+  }
+  function resetMachine(i) {
+    var m = state.machines[i];
+    if ((m.coils.length || m.running) && !window.confirm("Reset " + m.name + "? This clears its timer and coil log. The other machine and your punches stay.")) return;
+    m.running = false; m.startTime = null; m.coils = []; m.nextId = 1;
+    panels[i].coilIn.value = "";
+    note = null;
+    saveState(); render(); schedule();
+  }
+  function undoMachine(i) {
+    var m = state.machines[i];
+    if (!m.coils.length) return;
+    m.coils.pop();
+    m.nextId = Math.max(1, m.nextId - 1);
+    note = null;
+    saveState(); render();
+  }
+  function addCoil(i) {
+    var m = state.machines[i];
+    var input = panels[i].coilIn;
+    var w = num(input.value);
+    if (!isFinite(w) || w <= 0) { note = "Enter a coil weight greater than 0."; render(); return; }
+    if (!m.running || m.startTime == null) { note = "Hit START on this machine before you log a coil."; render(); return; }
+    m.coils.push({ id: m.nextId, weight: w, timestamp: Math.max(0, Date.now() - m.startTime) });
+    m.nextId += 1;
+    input.value = "";
+    note = null;
+    saveState(); render();
+    try { input.focus(); } catch (e) {}
+  }
+
+  function paceHint(d) {
+    if (!d.shift) {
+      if (!state.punchIn || !state.punchOut) return "Day numbers stay blank until you enter punch in and punch out.";
+      return "Check your punches. The shift has no working time after the break.";
+    }
+    var parts = [d.shift.totalHours.toFixed(2) + " hr shift"];
+    if (d.shift.overnight) parts.push("ends next morning");
+    if (d.shift.phase === "upcoming") parts.push("not started yet");
+    if (d.shift.phase === "done") parts.push("shift over");
+    parts.push("all machines combined");
+    return parts.join(" · ");
+  }
+
+  function render() {
+    var now = Date.now();
+    // punches (don't overwrite a field the user is typing in)
+    if (document.activeElement !== punchIn && punchIn.value !== state.punchIn) punchIn.value = state.punchIn;
+    if (document.activeElement !== punchOut && punchOut.value !== state.punchOut) punchOut.value = state.punchOut;
+    if (document.activeElement !== breakMin && num(breakMin.value) !== state.breakMin) breakMin.value = String(state.breakMin);
+
+    var d = dayNumbers(now);
+    if (!d.shift) {
+      setReadout($("day-expected"), "—"); setReadout($("should-have"), "—");
+      setReadout($("day-pace"), "—"); setReadout($("need-rate"), "—");
+    } else {
+      setReadout($("day-expected"), d.totalExpected.toFixed(0));
+      setReadout($("should-have"), d.shouldHave.toFixed(1));
+      setReadout($("day-pace"), signed(d.dayVar, 1), d.dayVar < 0);
+      if (d.need != null) {
+        setReadout($("need-rate"), d.need > 0 ? d.need.toFixed(0) + " lb/hr" : "Done", d.need > d.combinedRate);
+      } else {
+        var hit = d.totalActual >= d.totalExpected;
+        setReadout($("need-rate"), hit ? "Hit" : "Missed", !hit);
+      }
+    }
+    setText($("pace-hint"), paceHint(d));
+
+    var running = 0, coilCount = 0;
+    state.machines.forEach(function (m, i) {
+      if (m.running) running++;
+      coilCount += m.coils.length;
+      var sel = i === state.active;
+      var tab = tabs[i];
+      var cls = sel ? "term-btn solid" : "term-btn";
+      if (tab.className !== cls) tab.className = cls;
+      tab.setAttribute("aria-selected", sel ? "true" : "false");
+      setText(tab.querySelector(".truncate"), m.name || "Machine " + (i + 1));
+      tab.querySelector(".live-dot").hidden = !m.running;
+
+      var P = panels[i];
+      P.el.hidden = !sel;
+      if (!sel) return; // hidden panel needs no per-tick work
+      var st = machineStats(m, now);
+      setText(P.o.elapsed, formatElapsed(st.elapsedMs));
+      setText(P.o.target, st.target.toFixed(1));
+      setText(P.o.actual, st.actual.toFixed(1));
+      setText(P.o.rate, st.showRate ? st.actualRate.toFixed(0) + " lb/hr" : "—");
+      setReadout(P.o.variance, signed(st.variance, 1), st.variance < 0);
+      setReadout(P.o.eff, st.efficiency == null ? "—" : st.efficiency.toFixed(1) + "%", st.efficiency != null && st.efficiency < 100);
+      setText(P.btn.start, m.running ? "RUNNING" : "START");
+      P.btn.start.disabled = m.running;
+      P.btn.undo.disabled = m.coils.length === 0;
+
+      var sig = m.coils.length + ":" + (m.coils.length ? m.coils[m.coils.length - 1].timestamp : 0);
+      if (sig !== P.coilSig) {
+        P.coilSig = sig;
+        P.o.coils.textContent = "";
+        if (!m.coils.length) {
+          var empty = document.createElement("div");
+          empty.className = "coil-empty";
+          empty.textContent = "No coils logged";
+          P.o.coils.appendChild(empty);
+        } else {
+          for (var k = m.coils.length - 1; k >= 0; k--) {
+            var c = m.coils[k], sr = splitRate(m.coils, k);
+            var row = document.createElement("div");
+            row.className = "coil-row";
+            [ "#" + c.id, c.weight.toFixed(1) + " lb", formatElapsed(c.timestamp), sr == null ? "—" : sr.toFixed(0) + " lb/hr" ]
+              .forEach(function (t, j) {
+                var cell = document.createElement("div");
+                if (j === 3) cell.className = "split";
+                cell.textContent = t;
+                row.appendChild(cell);
+              });
+            P.o.coils.appendChild(row);
           }
         }
-      });
-    }
-    if (typeof state.activeMachine === 'number') activeMachine = state.activeMachine;
-  } catch (e) {}
-}
+      }
+    });
 
-[punchInInput, punchOutInput, breakMinInput].forEach(el => {
-  el.addEventListener('change', () => { updateAllDisplays(); saveState(); });
-  el.addEventListener('input', updateAllDisplays);
-});
+    // line under the tabs about the machine you're not looking at
+    var otherLine = "";
+    state.machines.forEach(function (m, i) {
+      if (i === state.active || !m.running) return;
+      var st = machineStats(m, now);
+      otherLine = (m.name || "Machine " + (i + 1)) + " still running · " + st.actual.toFixed(0) + " lb · " + formatElapsed(st.elapsedMs);
+    });
+    setText($("other-line"), otherLine);
 
-// Global tick for day pace
-setInterval(updateAllDisplays, 1000);
+    var auto = running
+      ? running + " machine" + (running === 1 ? "" : "s") + " running · " + coilCount + " coil" + (coilCount === 1 ? "" : "s") + " logged"
+      : "Hit START, then log each coil. Switching machines does not stop a timer.";
+    setText($("status"), note || auto);
+  }
 
-loadState();
-renderPanels();
-switchMachine(activeMachine);
+  // ---------- punches ----------
+  function onPunch() {
+    state.punchIn = cleanClock(punchIn.value);
+    state.punchOut = cleanClock(punchOut.value);
+    var b = num(breakMin.value);
+    state.breakMin = isFinite(b) && b >= 0 ? b : 0;
+    saveState();
+    render();
+  }
+  [punchIn, punchOut, breakMin].forEach(function (el) {
+    el.addEventListener("input", onPunch);
+    el.addEventListener("change", onPunch);
+  });
+
+  // ---------- clock ----------
+  var timer = null, timerMs = 0;
+  function schedule() {
+    var want = state.machines.some(function (m) { return m.running; }) ? 100 : 1000;
+    if (timer && want === timerMs) return;
+    if (timer) clearInterval(timer);
+    timerMs = want;
+    timer = setInterval(render, want);
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) render(); });
+
+  buildMachines();
+  render();
+  schedule();
+})();
 </script>
 </body>
 </html>
