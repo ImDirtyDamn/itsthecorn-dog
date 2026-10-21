@@ -1,145 +1,544 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ItsTheCornDog Productions | Training films with a little bit extra</title>
-  <meta name="description" content="ItsTheCornDog Productions is an in-house video studio making orientation and instructional short films for workers. Now in production: a training series for a steel processing plant.">
-  <meta property="og:title" content="ItsTheCornDog Productions">
-  <meta property="og:description" content="Training films with high-budget visuals and low-budget narrator energy.">
-  <meta property="og:url" content="https://itsthecorn.dog/">
-  <meta property="og:type" content="website">
-  <link rel="canonical" href="https://itsthecorn.dog/">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌭</text></svg>">
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>Draw Rate Tracker — Multi-Machine</title>
+<style>
+  :root {
+    --bg: #050805;
+    --green: #5CFF6E;
+    --amber: #FFB000;
+    --dim: #2A4A2A;
+    --red: #FF6B6B;
+    --font: 'Courier New', Courier, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: var(--font);
+    margin: 0;
+    padding: 10px;
+    font-size: 15px;
+    line-height: 1.3;
+  }
+  h1 {
+    text-align: center;
+    color: var(--amber);
+    font-size: 1.3em;
+    margin: 6px 0 12px;
+    text-shadow: 0 0 8px var(--amber);
+  }
+  .punch-row, .target-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .punch-row label, .target-row label { color: var(--amber); font-size: 0.85em; }
+  input[type="number"], input[type="time"], input[type="text"] {
+    background: var(--bg);
+    color: var(--green);
+    border: 2px solid var(--green);
+    padding: 8px 10px;
+    font-family: var(--font);
+    font-size: 1em;
+    border-radius: 4px;
+  }
+  input[type="number"] { width: 90px; text-align: right; }
+  input[type="time"] { width: 100px; }
+  button {
+    background: var(--bg);
+    color: var(--green);
+    border: 2px solid var(--green);
+    padding: 10px 14px;
+    font-family: var(--font);
+    font-size: 1em;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:active { background: var(--green); color: var(--bg); }
+  button.active { background: var(--green); color: var(--bg); }
+  .machine-tabs {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 10px 0;
+  }
+  .controls {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 8px 0 12px;
+    justify-content: center;
+  }
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .metric {
+    background: #0A120A;
+    border: 1px solid var(--dim);
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+  }
+  .metric .label {
+    font-size: 0.65em;
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .metric .value {
+    font-size: 1.45em;
+    font-weight: bold;
+    margin-top: 2px;
+    text-shadow: 0 0 5px var(--green);
+  }
+  .metric .value.big { font-size: 1.8em; }
+  .ahead { color: var(--green); }
+  .behind { color: var(--red); }
+  .coil-entry {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 12px 0;
+    flex-wrap: wrap;
+  }
+  .coils-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--dim);
+    padding: 6px;
+    background: #081008;
+    font-size: 0.9em;
+  }
+  .coil-row {
+    display: grid;
+    grid-template-columns: 36px 70px 90px 1fr;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--dim);
+  }
+  .coil-row .split { color: var(--amber); }
+  .status-bar {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 0.8em;
+    color: var(--amber);
+  }
+  .day-note {
+    text-align: center;
+    font-size: 0.75em;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+  .machine-panel { display: none; }
+  .machine-panel.active { display: block; }
+</style>
 </head>
 <body>
-  <header class="site-header">
-    <a class="brand" href="#top" aria-label="ItsTheCornDog Productions home">
-      <span class="brand-mark" aria-hidden="true">🌭</span>
-      <span class="brand-name">ItsTheCornDog <em>Productions</em></span>
-    </a>
-    <nav class="nav" aria-label="Main">
-      <a href="#about">About</a>
-      <a href="#now">In production</a>
-      <a href="#videos">Videos</a>
-      <a href="#contact">Contact</a>
-    </nav>
-  </header>
+<h1>DRAW RATE TRACKER</h1>
 
-  <main id="top">
-    <!-- HERO -->
-    <section class="hero">
-      <div class="hero-grain" aria-hidden="true"></div>
-      <div class="letterbox letterbox-top" aria-hidden="true"></div>
-      <div class="hero-inner">
-        <p class="eyebrow">An in-house studio presentation</p>
-        <h1>Training films.<br><span class="gold">Shot like they matter.</span></h1>
-        <p class="lede">Orientation and instructional short films for the people who actually do the work. Cinematic visuals. A narrator who means every word. We are aware of the contradiction. We have chosen to proceed.</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#now">See what's in production</a>
-          <a class="btn btn-ghost" href="#about">About the studio</a>
-        </div>
-        <blockquote class="tagline">
-          “The difference between ordinary and extraordinary is that little bit extra.”
-          <cite>— Our narrator, completely sincere</cite>
-        </blockquote>
+<div class="punch-row">
+  <label>Punch In:</label>
+  <input type="time" id="punchIn">
+  <label>Punch Out:</label>
+  <input type="time" id="punchOut">
+  <label>Break min:</label>
+  <input type="number" id="breakMin" value="0" min="0" step="5" style="width:60px;">
+</div>
+<div class="day-note">Day pace uses combined actual from all machines vs combined expected (each machine’s rate × shift hours).</div>
+
+<div class="machine-tabs">
+  <button id="tab1" class="active" onclick="switchMachine(0)">MACHINE 1</button>
+  <button id="tab2" onclick="switchMachine(1)">MACHINE 2</button>
+</div>
+
+<div id="panels">
+  <!-- Machine panels generated / managed in JS -->
+</div>
+
+<div class="metrics" id="dayMetrics">
+  <div class="metric">
+    <div class="label">Day Expected (combined)</div>
+    <div class="value" id="dayExpected">—</div>
+  </div>
+  <div class="metric">
+    <div class="label">Should Have Now</div>
+    <div class="value" id="shouldHave">—</div>
+  </div>
+  <div class="metric">
+    <div class="label">Day Pace (combined)</div>
+    <div class="value" id="dayPace">—</div>
+  </div>
+  <div class="metric">
+    <div class="label">Need Rate Rest of Day</div>
+    <div class="value" id="needRate">—</div>
+  </div>
+</div>
+
+<div class="status-bar" id="status">Enter punches and machine rates. Switch machines with the tabs.</div>
+
+<script>
+const punchInInput = document.getElementById('punchIn');
+const punchOutInput = document.getElementById('punchOut');
+const breakMinInput = document.getElementById('breakMin');
+const dayExpectedEl = document.getElementById('dayExpected');
+const shouldHaveEl = document.getElementById('shouldHave');
+const dayPaceEl = document.getElementById('dayPace');
+const needRateEl = document.getElementById('needRate');
+const statusEl = document.getElementById('status');
+const panelsEl = document.getElementById('panels');
+
+let machines = [
+  { id: 0, name: 'Machine 1', rate: 2800, startTime: null, running: false, intervalId: null, coils: [], nextId: 1 },
+  { id: 1, name: 'Machine 2', rate: 2800, startTime: null, running: false, intervalId: null, coils: [], nextId: 1 }
+];
+let activeMachine = 0;
+
+function formatTime(ms) {
+  if (ms < 0) ms = 0;
+  const totalSec = ms / 1000;
+  const hours = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = Math.floor(totalSec % 60);
+  const tenths = Math.floor((ms % 1000) / 100);
+  return `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}.${tenths}`;
+}
+
+function parseTimeToday(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+function getShiftInfo() {
+  const punchInMs = parseTimeToday(punchInInput.value);
+  const punchOutMs = parseTimeToday(punchOutInput.value);
+  const breakMin = parseFloat(breakMinInput.value) || 0;
+  if (!punchInMs || !punchOutMs || punchOutMs <= punchInMs) return null;
+  const totalMs = punchOutMs - punchInMs - (breakMin * 60000);
+  if (totalMs <= 0) return null;
+  const totalHours = totalMs / 3600000;
+
+  const now = Date.now();
+  let elapsedShiftMs = 0;
+  if (now >= punchOutMs) {
+    elapsedShiftMs = totalMs;
+  } else if (now > punchInMs) {
+    elapsedShiftMs = now - punchInMs;
+    if (breakMin > 0 && now > punchInMs + (punchOutMs - punchInMs) / 2) {
+      elapsedShiftMs = Math.max(0, elapsedShiftMs - breakMin * 60000);
+    }
+    elapsedShiftMs = Math.min(elapsedShiftMs, totalMs);
+  }
+  const fraction = elapsedShiftMs / totalMs;
+  const remainingHours = Math.max(0, (totalMs - elapsedShiftMs) / 3600000);
+  return { totalHours, fraction, remainingHours };
+}
+
+function renderPanels() {
+  panelsEl.innerHTML = '';
+  machines.forEach((m, idx) => {
+    const panel = document.createElement('div');
+    panel.className = 'machine-panel' + (idx === activeMachine ? ' active' : '');
+    panel.id = 'panel-' + idx;
+    panel.innerHTML = `
+      <div class="target-row">
+        <label>Rate lb/hr:</label>
+        <input type="number" class="rate-input" data-m="${idx}" value="${m.rate}" step="10" min="1">
+        <input type="text" class="name-input" data-m="${idx}" value="${m.name}" style="width:140px;">
       </div>
-      <div class="letterbox letterbox-bottom" aria-hidden="true"></div>
-    </section>
-
-    <!-- ABOUT -->
-    <section id="about" class="section">
-      <div class="container two-col">
-        <div>
-          <p class="eyebrow">Scene 1 · About the studio</p>
-          <h2>High-budget visuals. Low-budget narrator energy.</h2>
-        </div>
-        <div class="prose">
-          <p>ItsTheCornDog Productions makes short orientation and instructional films for workers. The goal is simple: explain how the job works, why each step matters, and keep people watching long enough for it to stick.</p>
-          <p>Our style pairs polished, cinematic footage with a narrator who takes himself very seriously. The facts are straight. The delivery is deadpan. The jokes land because he doesn't realize he's telling them.</p>
-          <ul class="checks">
-            <li>Short films built for real workplaces</li>
-            <li>Accurate content, presented with a straight face</li>
-            <li>Just enough humor to keep the room awake</li>
-          </ul>
-        </div>
+      <div class="controls">
+        <button class="start-btn" data-m="${idx}">${m.running ? 'RUNNING' : 'START'}</button>
+        <button class="reset-btn" data-m="${idx}">RESET</button>
+        <button class="undo-btn" data-m="${idx}">UNDO LAST</button>
       </div>
-    </section>
-
-    <!-- NOW IN PRODUCTION -->
-    <section id="now" class="section section-dark">
-      <div class="container">
-        <p class="eyebrow">Scene 2 · Now in production</p>
-        <h2>The steel plant training series</h2>
-        <p class="section-lede">A series of training films for a working steel processing plant, following the steel from the moment it arrives to the moment it ships.</p>
-
-        <article class="feature-card">
-          <div class="feature-poster" aria-hidden="true">
-            <span class="poster-num">01</span>
-            <span class="poster-label">Series opener</span>
-          </div>
-          <div class="feature-body">
-            <span class="badge">Coming soon</span>
-            <h3>Video 1: What Each Department Does and How It Connects</h3>
-            <p>The series opener. Every department's output is the next department's input, and this film shows how the hand-offs fit together and why each one matters to the people downstream.</p>
-            <p class="fine">Release date: when it's ready. Our narrator insists that is a date.</p>
-          </div>
-        </article>
+      <div class="metrics">
+        <div class="metric"><div class="label">Elapsed</div><div class="value elapsed" id="elapsed-${idx}">00:00:00.0</div></div>
+        <div class="metric"><div class="label">Target lbs</div><div class="value big target" id="target-${idx}">0.0</div></div>
+        <div class="metric"><div class="label">Actual lbs</div><div class="value big actual" id="actual-${idx}">0.0</div></div>
+        <div class="metric"><div class="label">Rate</div><div class="value rate" id="rate-${idx}">—</div></div>
+        <div class="metric"><div class="label">Variance</div><div class="value variance" id="var-${idx}">0.0</div></div>
+        <div class="metric"><div class="label">Efficiency</div><div class="value eff" id="eff-${idx}">—</div></div>
       </div>
-    </section>
-
-    <!-- VIDEOS -->
-    <section id="videos" class="section">
-      <div class="container">
-        <p class="eyebrow">Scene 3 · The screening room</p>
-        <h2>Videos</h2>
-        <p class="section-lede">Finished films will play here. For now, please enjoy these placeholders, which are also shot with great care.</p>
-        <div class="video-grid">
-          <figure class="video-card">
-            <div class="thumb"><span class="play" aria-hidden="true">▶</span><span class="thumb-num">01</span></div>
-            <figcaption><strong>What Each Department Does and How It Connects</strong><span>Coming soon</span></figcaption>
-          </figure>
-          <figure class="video-card is-empty">
-            <div class="thumb"><span class="play" aria-hidden="true">▶</span><span class="thumb-num">02</span></div>
-            <figcaption><strong>Next episode</strong><span>In the works</span></figcaption>
-          </figure>
-          <figure class="video-card is-empty">
-            <div class="thumb"><span class="play" aria-hidden="true">▶</span><span class="thumb-num">03</span></div>
-            <figcaption><strong>Future episode</strong><span>In the works</span></figcaption>
-          </figure>
-          <figure class="video-card is-empty">
-            <div class="thumb"><span class="play" aria-hidden="true">▶</span><span class="thumb-num">04</span></div>
-            <figcaption><strong>Future episode</strong><span>In the works</span></figcaption>
-          </figure>
-          <figure class="video-card is-empty">
-            <div class="thumb"><span class="play" aria-hidden="true">▶</span><span class="thumb-num">05</span></div>
-            <figcaption><strong>Future episode</strong><span>In the works</span></figcaption>
-          </figure>
-          <figure class="video-card is-empty">
-            <div class="thumb"><span class="play" aria-hidden="true">▶</span><span class="thumb-num">06</span></div>
-            <figcaption><strong>Future episode</strong><span>In the works</span></figcaption>
-          </figure>
-        </div>
+      <div class="coil-entry">
+        <input type="number" class="coil-weight" data-m="${idx}" placeholder="Coil lbs" step="0.1" min="0">
+        <button class="add-coil" data-m="${idx}">ADD COIL</button>
       </div>
-    </section>
+      <div class="coils-list" id="coils-${idx}"></div>
+    `;
+    panelsEl.appendChild(panel);
+  });
+  attachListeners();
+  updateAllDisplays();
+}
 
-    <!-- CONTACT -->
-    <section id="contact" class="section section-dark contact">
-      <div class="container narrow center">
-        <p class="eyebrow">Scene 4 · Contact</p>
-        <h2>Contact coming soon.</h2>
-        <p class="section-lede">We're setting up a proper way to reach us. Until then, please stand by. Our narrator is standing by too. He's very good at it.</p>
-      </div>
-    </section>
-  </main>
+function attachListeners() {
+  document.querySelectorAll('.rate-input').forEach(el => {
+    el.addEventListener('change', e => {
+      const i = +e.target.dataset.m;
+      machines[i].rate = parseFloat(e.target.value) || 2800;
+      saveState();
+      updateAllDisplays();
+    });
+  });
+  document.querySelectorAll('.name-input').forEach(el => {
+    el.addEventListener('change', e => {
+      const i = +e.target.dataset.m;
+      machines[i].name = e.target.value || `Machine ${i+1}`;
+      document.getElementById('tab' + (i+1)).textContent = machines[i].name.toUpperCase();
+      saveState();
+    });
+  });
+  document.querySelectorAll('.start-btn').forEach(btn => {
+    btn.addEventListener('click', e => startMachine(+e.target.dataset.m));
+  });
+  document.querySelectorAll('.reset-btn').forEach(btn => {
+    btn.addEventListener('click', e => resetMachine(+e.target.dataset.m));
+  });
+  document.querySelectorAll('.undo-btn').forEach(btn => {
+    btn.addEventListener('click', e => undoMachine(+e.target.dataset.m));
+  });
+  document.querySelectorAll('.add-coil').forEach(btn => {
+    btn.addEventListener('click', e => addCoil(+e.target.dataset.m));
+  });
+  document.querySelectorAll('.coil-weight').forEach(el => {
+    el.addEventListener('keypress', e => {
+      if (e.key === 'Enter') addCoil(+e.target.dataset.m);
+    });
+  });
+}
 
-  <footer class="site-footer">
-    <div class="container footer-inner">
-      <p>© <span id="year">2026</span> ItsTheCornDog Productions · itsthecorn.dog</p>
-      <p class="fine">No corn dogs were harmed in the making of this website.</p>
-    </div>
-  </footer>
-  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+function switchMachine(idx) {
+  activeMachine = idx;
+  document.querySelectorAll('.machine-tabs button').forEach((b, i) => {
+    b.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.machine-panel').forEach((p, i) => {
+    p.classList.toggle('active', i === idx);
+  });
+  updateAllDisplays();
+}
+
+function getElapsedMs(m) {
+  if (!m.startTime || !m.running) return 0;
+  return Date.now() - m.startTime;
+}
+
+function updateMachineDisplay(idx) {
+  const m = machines[idx];
+  const elapsedMs = getElapsedMs(m);
+  const elapsedHours = elapsedMs / 3600000;
+  const targetLbs = elapsedHours * m.rate;
+  const actualLbs = m.coils.reduce((s, c) => s + c.weight, 0);
+  const actualRate = elapsedHours > 0.001 ? actualLbs / elapsedHours : 0;
+  const variance = actualLbs - targetLbs;
+  const efficiency = targetLbs > 0 ? (actualLbs / targetLbs) * 100 : 0;
+
+  const el = id => document.getElementById(id);
+  if (!el('elapsed-' + idx)) return;
+
+  el('elapsed-' + idx).textContent = formatTime(elapsedMs);
+  el('target-' + idx).textContent = targetLbs.toFixed(1);
+  el('actual-' + idx).textContent = actualLbs.toFixed(1);
+  el('rate-' + idx).textContent = elapsedHours > 0.001 ? actualRate.toFixed(0) + ' lb/hr' : '—';
+
+  const varEl = el('var-' + idx);
+  varEl.textContent = (variance >= 0 ? '+' : '') + variance.toFixed(1);
+  varEl.className = 'value variance ' + (variance >= 0 ? 'ahead' : 'behind');
+
+  const effEl = el('eff-' + idx);
+  effEl.textContent = targetLbs > 0 ? efficiency.toFixed(1) + '%' : '—';
+  effEl.className = 'value eff ' + (efficiency >= 100 ? 'ahead' : 'behind');
+
+  const list = el('coils-' + idx);
+  if (m.coils.length === 0) {
+    list.innerHTML = '<div style="text-align:center; color:var(--dim); padding:16px;">No coils logged</div>';
+  } else {
+    let html = '';
+    for (let i = m.coils.length - 1; i >= 0; i--) {
+      const c = m.coils[i];
+      const prev = i > 0 ? m.coils[i-1].timestamp : 0;
+      const splitHours = (c.timestamp - prev) / 3600000;
+      const splitRate = splitHours > 0.0001 ? c.weight / splitHours : 0;
+      html += `<div class="coil-row">
+        <div>#${c.id}</div>
+        <div>${c.weight.toFixed(1)} lb</div>
+        <div>${formatTime(c.timestamp)}</div>
+        <div class="split">${splitRate > 0 ? splitRate.toFixed(0) + ' lb/hr' : '—'}</div>
+      </div>`;
+    }
+    list.innerHTML = html;
+  }
+
+  const startBtn = document.querySelector(`.start-btn[data-m="${idx}"]`);
+  if (startBtn) {
+    startBtn.textContent = m.running ? 'RUNNING' : 'START';
+    startBtn.disabled = m.running;
+  }
+}
+
+function updateDayPace() {
+  const shift = getShiftInfo();
+  const totalActual = machines.reduce((s, m) => s + m.coils.reduce((ss, c) => ss + c.weight, 0), 0);
+  if (!shift) {
+    dayExpectedEl.textContent = '—';
+    shouldHaveEl.textContent = '—';
+    dayPaceEl.textContent = '—';
+    dayPaceEl.className = 'value';
+    needRateEl.textContent = '—';
+    needRateEl.className = 'value';
+    return;
+  }
+  const combinedRate = machines.reduce((s, m) => s + m.rate, 0);
+  const totalExpected = shift.totalHours * combinedRate;
+  const shouldHave = shift.fraction * totalExpected;
+  const dayVar = totalActual - shouldHave;
+
+  dayExpectedEl.textContent = totalExpected.toFixed(0);
+  shouldHaveEl.textContent = shouldHave.toFixed(1);
+  dayPaceEl.textContent = (dayVar >= 0 ? '+' : '') + dayVar.toFixed(1);
+  dayPaceEl.className = 'value ' + (dayVar >= 0 ? 'ahead' : 'behind');
+
+  if (shift.remainingHours > 0.01) {
+    const need = (totalExpected - totalActual) / shift.remainingHours;
+    needRateEl.textContent = need > 0 ? need.toFixed(0) + ' lb/hr' : 'Done';
+    needRateEl.className = 'value ' + (need <= combinedRate ? 'ahead' : 'behind');
+  } else {
+    needRateEl.textContent = totalActual >= totalExpected ? 'Hit' : 'Missed';
+    needRateEl.className = 'value ' + (totalActual >= totalExpected ? 'ahead' : 'behind');
+  }
+}
+
+function updateAllDisplays() {
+  machines.forEach((_, i) => updateMachineDisplay(i));
+  updateDayPace();
+  const runningCount = machines.filter(m => m.running).length;
+  const coilCount = machines.reduce((s, m) => s + m.coils.length, 0);
+  statusEl.textContent = runningCount
+    ? `${runningCount} machine(s) running • ${coilCount} total coils logged`
+    : 'Enter punches and rates. Switch machines with the tabs.';
+}
+
+function startMachine(idx) {
+  const m = machines[idx];
+  if (m.running) return;
+  m.startTime = Date.now();
+  m.running = true;
+  if (m.intervalId) clearInterval(m.intervalId);
+  m.intervalId = setInterval(() => updateMachineDisplay(idx), 100);
+  updateAllDisplays();
+  saveState();
+}
+
+function resetMachine(idx) {
+  const m = machines[idx];
+  m.running = false;
+  if (m.intervalId) clearInterval(m.intervalId);
+  m.startTime = null;
+  m.coils = [];
+  m.nextId = 1;
+  updateAllDisplays();
+  saveState();
+}
+
+function addCoil(idx) {
+  const m = machines[idx];
+  const input = document.querySelector(`.coil-weight[data-m="${idx}"]`);
+  const weight = parseFloat(input.value);
+  if (isNaN(weight) || weight <= 0) {
+    statusEl.textContent = 'Enter a valid positive weight.';
+    return;
+  }
+  if (!m.running) {
+    statusEl.textContent = 'Start the timer for this machine first.';
+    return;
+  }
+  m.coils.push({
+    id: m.nextId++,
+    weight: weight,
+    timestamp: getElapsedMs(m)
+  });
+  input.value = '';
+  input.focus();
+  updateAllDisplays();
+  saveState();
+}
+
+function undoMachine(idx) {
+  const m = machines[idx];
+  if (m.coils.length === 0) return;
+  m.coils.pop();
+  m.nextId--;
+  updateAllDisplays();
+  saveState();
+}
+
+function saveState() {
+  const state = {
+    punchIn: punchInInput.value,
+    punchOut: punchOutInput.value,
+    breakMin: breakMinInput.value,
+    machines: machines.map(m => ({
+      name: m.name,
+      rate: m.rate,
+      startTime: m.startTime,
+      running: m.running,
+      coils: m.coils,
+      nextId: m.nextId
+    })),
+    activeMachine
+  };
+  localStorage.setItem('drawRateMulti', JSON.stringify(state));
+}
+
+function loadState() {
+  const saved = localStorage.getItem('drawRateMulti');
+  if (!saved) return;
+  try {
+    const state = JSON.parse(saved);
+    if (state.punchIn) punchInInput.value = state.punchIn;
+    if (state.punchOut) punchOutInput.value = state.punchOut;
+    if (state.breakMin !== undefined) breakMinInput.value = state.breakMin;
+    if (state.machines) {
+      state.machines.forEach((sm, i) => {
+        if (machines[i]) {
+          machines[i].name = sm.name || machines[i].name;
+          machines[i].rate = sm.rate || 2800;
+          machines[i].startTime = sm.startTime;
+          machines[i].running = !!sm.running;
+          machines[i].coils = sm.coils || [];
+          machines[i].nextId = sm.nextId || 1;
+          if (machines[i].running && machines[i].startTime) {
+            machines[i].intervalId = setInterval(() => updateMachineDisplay(i), 100);
+          }
+        }
+      });
+    }
+    if (typeof state.activeMachine === 'number') activeMachine = state.activeMachine;
+  } catch (e) {}
+}
+
+[punchInInput, punchOutInput, breakMinInput].forEach(el => {
+  el.addEventListener('change', () => { updateAllDisplays(); saveState(); });
+  el.addEventListener('input', updateAllDisplays);
+});
+
+// Global tick for day pace
+setInterval(updateAllDisplays, 1000);
+
+loadState();
+renderPanels();
+switchMachine(activeMachine);
+</script>
 </body>
 </html>
