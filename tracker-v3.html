@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Draw Rate Tracker</title>
+<meta name="theme-color" content="#050805">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%0A  %3Crect width=%2232%22 height=%2232%22 fill=%22%23050805%22/%3E%0A  %3Crect x=%225%22 y=%227%22 width=%2222%22 height=%223%22 fill=%22%23ffb000%22/%3E%0A  %3Crect x=%227%22 y=%2213%22 width=%2218%22 height=%2212%22 fill=%22none%22 stroke=%22%235cff6e%22 stroke-width=%222%22/%3E%0A  %3Crect x=%2213%22 y=%2216%22 width=%226%22 height=%226%22 fill=%22%235cff6e%22/%3E%0A%3C/svg%3E">
+<style>
+  :root {
+    --bg: #050805;
+    --surface: #0a120a;
+    --phosphor: #5cff6e;
+    --amber: #ffb000;
+    --alert: #ff6b6b;
+    --font-mono: "Courier New", Courier, "Noto Sans Mono", ui-monospace, monospace;
+    --radius-term: 4px;
+  }
+  /* minimal stand-in for Tailwind preflight */
+  *, *::before, *::after { box-sizing: border-box; border: 0 solid; margin: 0; padding: 0; }
+  html { line-height: 1.5; -webkit-text-size-adjust: 100%; }
+  html, body { background: var(--bg); color: var(--phosphor); font-family: var(--font-mono); }
+  button, input { font: inherit; color: inherit; letter-spacing: inherit; background: transparent; }
+  button:not(:disabled) { cursor: pointer; }
+  input[type="time"], input[type="number"] { color-scheme: dark; }
+  [hidden] { display: none !important; }
+
+  /* Tailwind utilities used by the component */
+  .wrap { margin: 0 auto; min-height: 100vh; width: 100%; max-width: 32rem; padding: 1rem 0.75rem 2rem; }
+  .text-center { text-align: center; }
+  .text-amber { color: var(--amber); }
+  .text-phosphor { color: var(--phosphor); }
+  .text-alert { color: var(--alert); }
+  .text-xs { font-size: 0.75rem; line-height: 1rem; }
+  .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+  .lbl { font-size: 0.75rem; line-height: 1rem; letter-spacing: 0.025em; text-transform: uppercase; color: var(--amber); }
+  .mb-3 { margin-bottom: 0.75rem; }
+  .mb-4 { margin-bottom: 1rem; }
+  .mt-1 { margin-top: 0.25rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 0.75rem; }
+  .mt-4 { margin-top: 1rem; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  .col { display: flex; flex-direction: column; gap: 0.5rem; }
+  h1 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; letter-spacing: 0.1em; color: var(--amber); }
+  .tab-inner { display: inline-flex; max-width: 100%; align-items: center; justify-content: center; gap: 0.5rem; }
+  .truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { padding: 1rem 0; text-align: center; font-size: 0.875rem; line-height: 1.25rem; color: rgba(92, 255, 110, 0.5); }
+  .py-1 { padding: 0.25rem 0; }
+
+  /* Grok's component styles (color-mix replaced with rgba equivalents for older browsers) */
+  .scanlines {
+    pointer-events: none;
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 40;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0, 0, 0, 0.14) 3px);
+  }
+  .punch-grid {
+    display: grid;
+    grid-template-columns: 6.75rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+  .term-input {
+    height: 3rem;
+    width: 100%;
+    min-width: 0;
+    border: 2px solid var(--phosphor);
+    background: var(--bg);
+    color: var(--phosphor);
+    border-radius: var(--radius-term);
+    padding: 0 0.75rem;
+    font-family: inherit;
+    font-size: 1.125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .term-input::placeholder { color: rgba(92, 255, 110, 0.45); }
+  .term-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--phosphor), 0 0 12px rgba(92, 255, 110, 0.5);
+  }
+  .term-btn {
+    min-height: 3rem;
+    border: 2px solid var(--phosphor);
+    background: var(--bg);
+    color: var(--phosphor);
+    border-radius: var(--radius-term);
+    padding: 0.5rem 0.4rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    touch-action: manipulation;
+    overflow: hidden;
+  }
+  .term-btn:active:not(:disabled) { background: var(--phosphor); color: var(--bg); }
+  .term-btn-solid { background: var(--phosphor); color: var(--bg); }
+  .term-btn-alert { border-color: var(--alert); color: var(--alert); }
+  .term-btn-alert:active:not(:disabled) { background: var(--alert); color: var(--bg); }
+  .term-btn:disabled { opacity: 0.4; cursor: default; }
+  .term-btn-live:disabled { opacity: 1; background: var(--phosphor); color: var(--bg); cursor: default; }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid rgba(92, 255, 110, 0.32);
+    border-radius: 6px;
+    padding: 0.55rem 0.35rem;
+    text-align: center;
+    min-width: 0;
+  }
+  .metric-label {
+    color: var(--amber);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .readout {
+    margin-top: 0.15rem;
+    font-weight: 700;
+    font-size: 1.25rem;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px rgba(92, 255, 110, 0.65);
+    overflow-wrap: anywhere;
+    word-wrap: break-word;
+  }
+  .readout-lg { font-size: 1.7rem; }
+  .readout.behind { color: var(--alert); text-shadow: 0 0 6px rgba(255, 107, 107, 0.65); }
+  .coil-scroll {
+    max-height: 12.5rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid rgba(92, 255, 110, 0.32);
+    background: var(--surface);
+    padding: 0.35rem 0.5rem;
+  }
+  .coil-row {
+    display: grid;
+    grid-template-columns: 2.1rem 5.4rem 6.2rem minmax(0, 1fr);
+    gap: 0.35rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px dashed rgba(92, 255, 110, 0.28);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+  }
+  .live-dot {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--phosphor);
+    box-shadow: 0 0 6px var(--phosphor);
+  }
+  .pm-table { margin-top: 0.5rem; border: 1px solid rgba(92, 255, 110, 0.32); background: var(--surface); border-radius: 6px; padding: 0.25rem 0.5rem; }
+  .pm-row { display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)); gap: 0.35rem; padding: 0.3rem 0; font-size: 0.8rem; line-height: 1.1rem; font-variant-numeric: tabular-nums; text-align: right; border-bottom: 1px dashed rgba(92, 255, 110, 0.28); }
+  .pm-row:last-child { border-bottom: 0; }
+  .pm-row > :first-child { text-align: left; }
+  .pm-head { color: var(--amber); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .pm-row .behind { color: var(--alert); }
+  .glow-amber { text-shadow: 0 0 8px rgba(255, 176, 0, 0.8); }
+  @media (prefers-reduced-motion: reduce) { .scanlines { display: none; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="scanlines" aria-hidden="true"></div>
+  <header class="mb-3 text-center">
+    <h1 class="glow-amber">DRAW RATE</h1>
+  </header>
+
+  <section class="punch-grid mb-3" aria-label="Shift punches">
+    <label for="punch-in" class="lbl">Punch in</label>
+    <input id="punch-in" class="term-input" type="time">
+    <label for="punch-out" class="lbl">Punch out</label>
+    <input id="punch-out" class="term-input" type="time">
+    <label for="break-min" class="lbl">Break min</label>
+    <input id="break-min" class="term-input" type="number" inputmode="numeric" min="0" step="5" value="0">
+  </section>
+
+  <section class="mb-4" aria-label="True output versus pace car">
+    <div class="grid2">
+      <article class="metric-card">
+        <div class="metric-label">True output</div>
+        <div class="readout readout-lg" id="true-output">0.0</div>
+        <div class="metric-label">lb ran</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">Pace car</div>
+        <div class="readout readout-lg" id="pace-car">—</div>
+        <div class="metric-label">lb by now</div>
+      </article>
+    </div>
+    <p id="pace-line" class="mt-2 text-center text-sm text-amber"></p>
+    <p id="machine-lbs" class="mt-1 text-center text-xs text-amber"></p>
+    <div id="per-machine" class="pm-table" hidden></div>
+    <div class="mt-2 grid2">
+      <article class="metric-card">
+        <div class="metric-label">Day expected</div>
+        <div class="readout" id="day-expected">—</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">Catch-up rate</div>
+        <div class="readout" id="need-rate">—</div>
+      </article>
+    </div>
+    <p id="pace-hint" class="mt-2 text-center text-xs text-amber"></p>
+  </section>
+
+  <div class="mb-3 grid2" role="tablist" aria-label="Machines" id="tabs"></div>
+
+  <p id="other-line" class="mb-3 text-center text-xs text-amber"></p>
+
+  <div id="panels"></div>
+
+  <p id="status" class="mt-4 text-center text-sm text-amber" role="status"></p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "drawRateMulti";
+  var DAY_MS = 24 * 60 * 60 * 1000;
+
+  // ---------- src/lib/draw-rate.ts ----------
+  function defaultMachine(name) {
+    return { name: name, rate: 2800, startTime: null, running: false, coils: [], nextId: 1 };
+  }
+  function defaultState() {
+    return { punchIn: "", punchOut: "", breakMin: 0, active: 0,
+      machines: [defaultMachine("Machine 1"), defaultMachine("Machine 2")] };
+  }
+  function isNum(v) { return typeof v === "number" && isFinite(v); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function formatElapsed(ms) {
+    if (!isFinite(ms) || ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var hours = Math.floor(totalSec / 3600);
+    var mins = Math.floor((totalSec % 3600) / 60);
+    var secs = totalSec % 60;
+    var tenths = Math.floor((ms % 1000) / 100);
+    return pad(hours) + ":" + pad(mins) + ":" + pad(secs) + "." + tenths;
+  }
+
+  function parseClock(timeStr) {
+    if (!timeStr || typeof timeStr !== "string") return null;
+    var parts = timeStr.split(":");
+    if (parts.length < 2) return null;
+    var h = Number(parts[0]), m = Number(parts[1]);
+    if (!isNum(h) || !isNum(m) || h % 1 !== 0 || m % 1 !== 0) return null;
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return { h: h, m: m };
+  }
+  function atClock(base, h, m) {
+    var d = new Date(base);
+    d.setHours(h, m, 0, 0);
+    return d.getTime();
+  }
+
+  function getShiftInfo(punchIn, punchOut, breakMin, now) {
+    var inn = parseClock(punchIn), out = parseClock(punchOut);
+    if (!inn || !out) return null;
+    if (inn.h === out.h && inn.m === out.m) return null;
+    var breakMs = Math.max(0, (isFinite(breakMin) ? breakMin : 0) * 60000);
+    var inToday = atClock(now, inn.h, inn.m);
+    var outToday = atClock(now, out.h, out.m);
+    var overnight = outToday < inToday;
+    var start, end;
+    if (!overnight) { start = inToday; end = outToday; }
+    else if (now >= inToday) { start = inToday; end = outToday + DAY_MS; }
+    else {
+      // After midnight this is still yesterday's shift, including the gap
+      // between morning punch-out and tonight's punch-in.
+      start = inToday - DAY_MS; end = outToday;
+    }
+    var grossMs = end - start;
+    var totalMs = grossMs - breakMs;
+    if (totalMs <= 0) return null;
+    var elapsedShiftMs = 0, phase = "upcoming";
+    if (now >= end) { elapsedShiftMs = totalMs; phase = "done"; }
+    else if (now > start) {
+      phase = "live";
+      elapsedShiftMs = now - start;
+      if (breakMs > 0 && now > start + grossMs / 2) elapsedShiftMs = Math.max(0, elapsedShiftMs - breakMs);
+      elapsedShiftMs = Math.min(elapsedShiftMs, totalMs);
+    }
+    return {
+      totalHours: totalMs / 3600000,
+      fraction: elapsedShiftMs / totalMs,
+      remainingHours: Math.max(0, (totalMs - elapsedShiftMs) / 3600000),
+      overnight: overnight,
+      phase: phase
+    };
+  }
+
+  function sumCoils(m) { return m.coils.reduce(function (s, c) { return s + c.weight; }, 0); }
+
+  function machineStats(machine, now) {
+    var elapsedMs = machine.running && machine.startTime != null ? Math.max(0, now - machine.startTime) : 0;
+    var elapsedHours = elapsedMs / 3600000;
+    var rate = isFinite(machine.rate) ? machine.rate : 0;
+    var targetLbs = elapsedHours * rate;
+    var actualLbs = sumCoils(machine);
+    var showRate = elapsedHours > 0.001;
+    var actualRate = showRate ? actualLbs / elapsedHours : 0;
+    var variance = actualLbs - targetLbs;
+    var efficiency = targetLbs > 0 ? (actualLbs / targetLbs) * 100 : null;
+    return { elapsedMs: elapsedMs, elapsedHours: elapsedHours, targetLbs: targetLbs, actualLbs: actualLbs,
+      actualRate: actualRate, showRate: showRate, variance: variance, efficiency: efficiency };
+  }
+
+  function splitRate(coils, index) {
+    var coil = coils[index];
+    if (!coil) return 0;
+    var prev = index > 0 ? coils[index - 1] : undefined;
+    var hours;
+    if (coil.loggedAt && prev && prev.loggedAt) {
+      hours = (coil.loggedAt - prev.loggedAt) / 3600000;
+      if (hours <= 0.0001) return 0;
+      return coil.weight / hours;
+    }
+    var prevTs = prev ? prev.timestamp : 0;
+    hours = (coil.timestamp - prevTs) / 3600000;
+    if (hours <= 0.0001) return 0;
+    return coil.weight / hours;
+  }
+
+  // A machine counts once it has data: started/running or at least one coil.
+  // Machine 1 always counts.
+  function inUse(m, index) {
+    return index === 0 || !!m.running || m.startTime != null || m.coils.length > 0;
+  }
+  function rateOf(m) { return isFinite(m.rate) ? m.rate : 0; }
+
+  // Per-machine day numbers from that machine's own rate.
+  function machineDay(m, shift) {
+    var lbs = sumCoils(m);
+    if (!shift) return { lbs: lbs, expected: null, shouldHave: null, need: null, dayVar: null };
+    var expected = shift.totalHours * rateOf(m);
+    var shouldHave = shift.fraction * expected;
+    var need = shift.remainingHours > 0.01 ? (expected - lbs) / shift.remainingHours : null;
+    return { lbs: lbs, expected: expected, shouldHave: shouldHave, need: need, dayVar: lbs - shouldHave };
+  }
+
+  function dayNumbers(state, now) {
+    var shift = getShiftInfo(state.punchIn, state.punchOut, state.breakMin, now);
+    var used = state.machines.filter(function (m, i) { return inUse(m, i); });
+    var totalActual = used.reduce(function (s, m) { return s + sumCoils(m); }, 0);
+    var combinedRate = used.reduce(function (s, m) { return s + rateOf(m); }, 0);
+    var clocksSet = Boolean(parseClock(state.punchIn) && parseClock(state.punchOut));
+    if (!shift) {
+      return { shift: shift, used: used, totalActual: totalActual, combinedRate: combinedRate, totalExpected: null,
+        shouldHave: null, dayVar: null, need: null, blocked: clocksSet };
+    }
+    // Totals are the sum of each in-use machine's own numbers.
+    var totalExpected = 0, shouldHave = 0, need = 0;
+    used.forEach(function (m) {
+      var d = machineDay(m, shift);
+      totalExpected += d.expected;
+      shouldHave += d.shouldHave;
+      if (d.need != null) need += d.need;
+    });
+    if (!(shift.remainingHours > 0.01)) need = null;
+    return { shift: shift, used: used, totalActual: totalActual, combinedRate: combinedRate, totalExpected: totalExpected,
+      shouldHave: shouldHave, dayVar: totalActual - shouldHave, need: need, blocked: false };
+  }
+
+  function asMachine(value, fallback) {
+    if (!value || typeof value !== "object") return fallback;
+    var raw = value;
+    var coils = [];
+    if (Array.isArray(raw.coils)) {
+      raw.coils.forEach(function (row) {
+        if (!row || typeof row !== "object") return;
+        if (!isNum(row.weight) || !isNum(row.timestamp)) return;
+        if (!(row.weight > 0)) return;
+        coils.push({
+          id: isNum(row.id) ? row.id : 0,
+          weight: row.weight,
+          timestamp: row.timestamp,
+          loggedAt: isNum(row.loggedAt) ? row.loggedAt : undefined
+        });
+      });
+    }
+    return {
+      name: typeof raw.name === "string" && raw.name.trim() ? raw.name : fallback.name,
+      rate: isNum(raw.rate) && raw.rate > 0 ? raw.rate : fallback.rate,
+      startTime: isNum(raw.startTime) ? raw.startTime : null,
+      running: Boolean(raw.running && isNum(raw.startTime)),
+      coils: coils,
+      nextId: isNum(raw.nextId) && raw.nextId >= 1 ? raw.nextId : coils.length + 1
+    };
+  }
+
+  function loadState() {
+    try {
+      if (typeof localStorage === "undefined") return defaultState();
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultState();
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return defaultState();
+      var base = defaultState();
+      var breakRaw = parsed.breakMin;
+      var breakNum = typeof breakRaw === "number" ? breakRaw : Number(breakRaw);
+      var ms = Array.isArray(parsed.machines) ? parsed.machines : [];
+      return {
+        punchIn: typeof parsed.punchIn === "string" ? parsed.punchIn : "",
+        punchOut: typeof parsed.punchOut === "string" ? parsed.punchOut : "",
+        breakMin: isFinite(breakNum) && breakNum >= 0 ? breakNum : 0,
+        active: parsed.active === 1 ? 1 : 0,
+        machines: base.machines.map(function (machine, index) { return asMachine(ms[index], machine); })
+      };
+    } catch (e) {
+      return defaultState();
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        punchIn: state.punchIn,
+        punchOut: state.punchOut,
+        breakMin: state.breakMin,
+        active: state.active,
+        machines: state.machines.map(function (m) {
+          return { name: m.name, rate: m.rate, startTime: m.startTime, running: m.running, coils: m.coils, nextId: m.nextId };
+        })
+      }));
+    } catch (e) {
+      // Storage can be blocked. The shift still runs for this visit.
+    }
+  }
+
+  // ---------- src/components/draw-tracker.tsx ----------
+  function signed(n, digits) {
+    var text = n.toFixed(digits);
+    return n >= 0 ? "+" + text : text;
+  }
+
+  var state = loadState();
+  var drafts = ["", ""];
+  var note = null;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
+  function setClass(el, c) { if (el.className !== c) el.className = c; }
+  function commit() { saveState(state); render(); schedule(); }
+
+  function paceHint(pace) {
+    if (!pace.shift) {
+      if (pace.blocked) return "Those punches don\u2019t leave any working time. Check out vs in, and the break.";
+      return "Day numbers stay blank until both punches are in.";
+    }
+    var hours = pace.shift.totalHours.toFixed(1);
+    var rate = pace.used.map(function (m) { return (m.name || "Block") + " " + rateOf(m).toFixed(0); }).join(" + ") + " lb/hr";
+    if (pace.shift.phase === "upcoming") return "Shift hasn\u2019t started \u00b7 " + hours + " hr \u00b7 " + rate + ".";
+    if (pace.shift.phase === "done") return "Shift window is over \u00b7 " + hours + " hr \u00b7 " + rate + ".";
+    if (pace.shift.overnight) return "Overnight \u00b7 " + hours + " hr on the clock \u00b7 " + rate + ".";
+    return hours + " hr on the clock \u00b7 " + rate + ".";
+  }
+
+  function needRate(pace) {
+    if (!pace.shift || pace.totalExpected == null) return ["—", "readout"];
+    if (pace.need == null) {
+      var hit = pace.totalActual >= pace.totalExpected;
+      return [hit ? "Hit" : "Missed", hit ? "readout" : "readout behind"];
+    }
+    if (pace.need <= 0) return ["Done", "readout"];
+    var ok = pace.need <= pace.combinedRate;
+    return [pace.need.toFixed(0) + " lb/hr", ok ? "readout" : "readout behind"];
+  }
+
+  function machineNeed(md, m) {
+    if (md.expected == null) return ["—", "readout"];
+    if (md.need == null) {
+      var hit = md.lbs >= md.expected;
+      return [hit ? "Hit" : "Missed", hit ? "readout" : "readout behind"];
+    }
+    if (md.need <= 0) return ["Done", "readout"];
+    return [md.need.toFixed(0) + " lb/hr", md.need <= rateOf(m) ? "readout" : "readout behind"];
+  }
+
+  function patchMachine(index, recipe) {
+    state.machines = state.machines.map(function (m, i) { return i === index ? recipe(m) : m; });
+  }
+  function assign(target, src) { for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) target[k] = src[k]; return target; }
+  function withM(m, p) { return assign(assign({}, m), p); }
+
+  function startMachine(index) {
+    var machine = state.machines[index];
+    if (!machine || machine.running) return;
+    patchMachine(index, function (c) { return withM(c, { running: true, startTime: Date.now() }); });
+    note = null;
+    commit();
+  }
+  function resetMachine(index) {
+    patchMachine(index, function (c) { return withM(c, { running: false, startTime: null, coils: [], nextId: 1 }); });
+    drafts[index] = "";
+    panels[index].coil.value = "";
+    note = null;
+    commit();
+  }
+  function undoMachine(index) {
+    var machine = state.machines[index];
+    if (!machine || machine.coils.length === 0) return;
+    patchMachine(index, function (c) { return withM(c, { coils: c.coils.slice(0, -1), nextId: Math.max(1, c.nextId - 1) }); });
+    note = null;
+    commit();
+  }
+  function addCoil(index) {
+    var machine = state.machines[index];
+    var weight = parseFloat(drafts[index] || "");
+    if (!machine) return;
+    if (!isFinite(weight) || weight <= 0) {
+      note = "Enter a coil weight greater than 0.";
+      render();
+      return;
+    }
+    var timestamp = machine.running && machine.startTime != null ? Math.max(0, Date.now() - machine.startTime) : 0;
+    patchMachine(index, function (c) {
+      return withM(c, { nextId: c.nextId + 1,
+        coils: c.coils.concat([{ id: c.nextId, weight: weight, timestamp: timestamp, loggedAt: Date.now() }]) });
+    });
+    drafts[index] = "";
+    panels[index].coil.value = "";
+    note = null;
+    commit();
+    try { panels[index].coil.focus(); } catch (e) {}
+  }
+
+  // ---------- DOM ----------
+  var tabs = [], panels = [];
+  var punchIn = $("punch-in"), punchOut = $("punch-out"), breakMin = $("break-min");
+
+  function build() {
+    state.machines.forEach(function (_, i) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.id = "tab-" + i;
+      tab.innerHTML = '<span class="tab-inner"><span class="truncate"></span><span class="live-dot" aria-hidden="true" hidden></span></span>';
+      tab.addEventListener("click", function () { state.active = i; commit(); });
+      $("tabs").appendChild(tab);
+      tabs.push({ el: tab, name: tab.querySelector(".truncate"), dot: tab.querySelector(".live-dot") });
+
+      var sec = document.createElement("section");
+      sec.id = "panel-" + i;
+      sec.innerHTML =
+        '<div class="punch-grid mb-3">' +
+          '<label for="rate-' + i + '" class="lbl">Need rate lb/hr</label>' +
+          '<input id="rate-' + i + '" class="term-input" type="number" inputmode="numeric" min="1" step="10">' +
+          '<label for="name-' + i + '" class="lbl">Name</label>' +
+          '<input id="name-' + i + '" class="term-input" type="text" autocomplete="off" spellcheck="false">' +
+        '</div>' +
+        '<div class="mb-3 grid3">' +
+          '<article class="metric-card"><div class="metric-label">Day expected</div><div class="readout" data-o="mexp">—</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Pace car</div><div class="readout" data-o="mpace">—</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Catch-up rate</div><div class="readout" data-o="mneed">—</div></article>' +
+        '</div>' +
+        '<div class="mb-3 grid3">' +
+          '<button type="button" data-a="start"></button>' +
+          '<button type="button" class="term-btn term-btn-alert" data-a="reset">RESET</button>' +
+          '<button type="button" class="term-btn" data-a="undo">UNDO</button>' +
+        '</div>' +
+        '<div class="col">' +
+          '<label for="coil-' + i + '" class="lbl">Coil weight</label>' +
+          '<input id="coil-' + i + '" class="term-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Pounds on this coil">' +
+          '<button type="button" class="term-btn term-btn-solid" data-a="add">LOG COIL</button>' +
+        '</div>' +
+        '<div class="coil-scroll mt-3">' +
+          '<p class="metric-label py-1 text-center" data-o="coilhead"></p>' +
+          '<div data-o="coils"></div>' +
+        '</div>' +
+        '<div class="mt-3 grid2">' +
+          '<article class="metric-card"><div class="metric-label">Elapsed</div><div class="readout" data-o="elapsed"></div></article>' +
+          '<article class="metric-card"><div class="metric-label">Target lb</div><div class="readout readout-lg" data-o="target"></div></article>' +
+          '<article class="metric-card"><div class="metric-label">Actual lb</div><div class="readout readout-lg" data-o="actual"></div></article>' +
+          '<article class="metric-card"><div class="metric-label">Rate</div><div class="readout" data-o="rate"></div></article>' +
+          '<article class="metric-card"><div class="metric-label">Variance</div><div class="readout" data-o="variance"></div></article>' +
+          '<article class="metric-card"><div class="metric-label">Efficiency</div><div class="readout" data-o="eff"></div></article>' +
+        '</div>';
+      $("panels").appendChild(sec);
+
+      var P = { el: sec, o: {}, b: {}, rate: $("rate-" + i), name: $("name-" + i), coil: $("coil-" + i), sig: null };
+      Array.prototype.forEach.call(sec.querySelectorAll("[data-o]"), function (el) { P.o[el.getAttribute("data-o")] = el; });
+      Array.prototype.forEach.call(sec.querySelectorAll("[data-a]"), function (el) { P.b[el.getAttribute("data-a")] = el; });
+      panels.push(P);
+
+      P.rate.addEventListener("focus", function () { try { P.rate.select(); } catch (e) {} });
+      P.rate.addEventListener("input", function () {
+        var next = parseFloat(P.rate.value);
+        if (isFinite(next) && next > 0) { patchMachine(i, function (m) { return withM(m, { rate: next }); }); commit(); }
+      });
+      P.rate.addEventListener("blur", function () { P.rate.value = String(state.machines[i].rate); });
+      P.name.addEventListener("input", function () {
+        var v = P.name.value;
+        patchMachine(i, function (m) { return withM(m, { name: v }); });
+        commit();
+      });
+      P.coil.addEventListener("input", function () { drafts[i] = P.coil.value; if (note) { note = null; render(); } });
+      P.coil.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addCoil(i); } });
+      P.b.start.addEventListener("click", function () { startMachine(i); });
+      P.b.reset.addEventListener("click", function () { resetMachine(i); });
+      P.b.undo.addEventListener("click", function () { undoMachine(i); });
+      P.b.add.addEventListener("click", function () { addCoil(i); });
+    });
+
+    punchIn.addEventListener("input", function () { state.punchIn = punchIn.value; commit(); });
+    punchIn.addEventListener("change", function () { state.punchIn = punchIn.value; commit(); });
+    punchOut.addEventListener("input", function () { state.punchOut = punchOut.value; commit(); });
+    punchOut.addEventListener("change", function () { state.punchOut = punchOut.value; commit(); });
+    var onBreak = function () {
+      var next = parseFloat(breakMin.value);
+      state.breakMin = isFinite(next) && next >= 0 ? next : 0;
+      commit();
+    };
+    breakMin.addEventListener("input", onBreak);
+    breakMin.addEventListener("blur", function () { breakMin.value = String(state.breakMin); });
+  }
+
+  function syncInput(el, v) { if (document.activeElement !== el && el.value !== v) el.value = v; }
+
+  function render() {
+    var now = Date.now();
+    var activeIdx = state.machines[state.active] ? state.active : 0;
+    var pace = dayNumbers(state, now);
+    var runningCount = state.machines.filter(function (m) { return m.running; }).length;
+    var coilCount = state.machines.reduce(function (s, m) { return s + m.coils.length; }, 0);
+
+    syncInput(punchIn, state.punchIn);
+    syncInput(punchOut, state.punchOut);
+    syncInput(breakMin, String(state.breakMin));
+
+    setText($("true-output"), pace.totalActual.toFixed(1));
+    setText($("pace-car"), pace.shouldHave == null ? "—" : pace.shouldHave.toFixed(1));
+    var pl = $("pace-line");
+    setClass(pl, pace.dayVar == null ? "mt-2 text-center text-sm text-amber"
+      : pace.dayVar >= 0 ? "mt-2 text-center text-sm text-phosphor" : "mt-2 text-center text-sm text-alert");
+    setText(pl, pace.dayVar == null
+      ? "Set punch in and punch out. The pace car is each machine\u2019s rate times the shift."
+      : (pace.dayVar >= 0 ? "Ahead of" : "Behind") + " the pace car by " + Math.abs(pace.dayVar).toFixed(1) + " lb");
+    setText($("machine-lbs"), state.machines.map(function (m, i) {
+      return (m.name || "Block") + " " + sumCoils(m).toFixed(1) + (inUse(m, i) ? "" : " (not in use)");
+    }).join(" \u00b7 "));
+    var pmBox = $("per-machine");
+    if (!pace.shift) { pmBox.hidden = true; }
+    else {
+      pmBox.hidden = false;
+      var pmHtml = '<div class="pm-row pm-head"><div>Machine / need</div><div>Expected</div><div>Pace car</div><div>Catch-up</div></div>';
+      state.machines.forEach(function (m, i) {
+        if (!inUse(m, i)) return;
+        var md = machineDay(m, pace.shift);
+        var nm = machineNeed(md, m);
+        pmHtml += '<div class="pm-row" data-pm="' + i + '"><div><div class="truncate"></div><div class="pm-head"></div></div><div>' + md.expected.toFixed(0) +
+          '</div><div>' + md.shouldHave.toFixed(1) + '</div><div class="' + (nm[1].indexOf("behind") >= 0 ? "behind" : "") + '">' + nm[0] + '</div></div>';
+      });
+      if (pmBox.getAttribute("data-html") !== pmHtml) {
+        pmBox.setAttribute("data-html", pmHtml);
+        pmBox.innerHTML = pmHtml;
+        Array.prototype.forEach.call(pmBox.querySelectorAll("[data-pm]"), function (row) {
+          var m = state.machines[+row.getAttribute("data-pm")];
+          row.firstChild.firstChild.textContent = m.name || "Block";
+          row.firstChild.lastChild.textContent = rateOf(m).toFixed(0) + " lb/hr";
+        });
+      }
+    }
+    setText($("day-expected"), pace.totalExpected == null ? "—" : pace.totalExpected.toFixed(0));
+    var nr = needRate(pace);
+    setText($("need-rate"), nr[0]);
+    setClass($("need-rate"), nr[1]);
+    setText($("pace-hint"), paceHint(pace));
+
+    state.machines.forEach(function (m, i) {
+      var sel = i === activeIdx;
+      var T = tabs[i];
+      setClass(T.el, sel ? "term-btn term-btn-solid" : "term-btn");
+      T.el.setAttribute("aria-selected", sel ? "true" : "false");
+      setText(T.name, m.name || "Machine " + (i + 1));
+      T.dot.hidden = !m.running;
+
+      var P = panels[i];
+      P.el.hidden = !sel;
+      P.el.setAttribute("aria-label", m.name);
+      syncInput(P.rate, String(m.rate));
+      syncInput(P.name, m.name);
+      if (!sel) return;
+      var stats = machineStats(m, now);
+      var md = machineDay(m, pace.shift);
+      setText(P.o.mexp, md.expected == null ? "—" : md.expected.toFixed(0));
+      setText(P.o.mpace, md.shouldHave == null ? "—" : md.shouldHave.toFixed(1));
+      var mn = machineNeed(md, m);
+      setText(P.o.mneed, mn[0]);
+      setClass(P.o.mneed, mn[1]);
+      setClass(P.b.start, m.running ? "term-btn term-btn-live" : "term-btn term-btn-solid");
+      P.b.start.disabled = m.running;
+      setText(P.b.start, m.running ? "RUNNING" : "START");
+      P.b.undo.disabled = m.coils.length === 0;
+      setText(P.o.coilhead, "Coils ran \u00b7 " + stats.actualLbs.toFixed(1) + " lb" +
+        (m.running ? " \u00b7 block pace " + stats.targetLbs.toFixed(0) : ""));
+
+      var sig = m.coils.length + ":" + (m.coils.length ? m.coils[m.coils.length - 1].loggedAt + "/" + m.coils[m.coils.length - 1].weight : "");
+      if (sig !== P.sig) {
+        P.sig = sig;
+        var box = P.o.coils;
+        box.textContent = "";
+        if (m.coils.length === 0) {
+          var e = document.createElement("p");
+          e.className = "empty";
+          e.textContent = "No coils logged yet";
+          box.appendChild(e);
+        } else {
+          for (var k = m.coils.length - 1; k >= 0; k--) {
+            var coil = m.coils[k];
+            var split = splitRate(m.coils, k);
+            var row = document.createElement("div");
+            row.className = "coil-row";
+            ["#" + coil.id, coil.weight.toFixed(1) + " lb",
+             coil.timestamp > 0 ? formatElapsed(coil.timestamp) : "—",
+             split > 0 ? split.toFixed(0) + " lb/hr" : "—"].forEach(function (t, j) {
+              var cell = document.createElement("div");
+              if (j === 3) cell.className = "text-amber";
+              cell.textContent = t;
+              row.appendChild(cell);
+            });
+            box.appendChild(row);
+          }
+        }
+      }
+      setText(P.o.elapsed, formatElapsed(stats.elapsedMs));
+      setText(P.o.target, stats.targetLbs.toFixed(1));
+      setText(P.o.actual, stats.actualLbs.toFixed(1));
+      setText(P.o.rate, stats.showRate ? stats.actualRate.toFixed(0) + " lb/hr" : "—");
+      setText(P.o.variance, signed(stats.variance, 1));
+      setClass(P.o.variance, stats.variance >= 0 ? "readout" : "readout behind");
+      setText(P.o.eff, stats.efficiency == null ? "—" : stats.efficiency.toFixed(1) + "%");
+      setClass(P.o.eff, stats.efficiency == null || stats.efficiency >= 100 ? "readout" : "readout behind");
+    });
+
+    var other = null;
+    state.machines.forEach(function (m, i) { if (!other && i !== state.active) other = m; });
+    var ol = $("other-line");
+    if (other) {
+      var os = machineStats(other, now);
+      ol.hidden = false;
+      setText(ol, other.name + " " + (other.running ? "still running" : "stopped") + " \u00b7 " + os.actualLbs.toFixed(0) + " lb" +
+        (other.running ? " \u00b7 " + formatElapsed(os.elapsedMs) : ""));
+    } else {
+      ol.hidden = true;
+    }
+
+    var autoStatus = runningCount
+      ? runningCount + " machine" + (runningCount === 1 ? "" : "s") + " running \u00b7 " + coilCount + " coil" + (coilCount === 1 ? "" : "s") + " logged"
+      : "Type a coil weight and hit LOG. Those pounds are true output against the pace car.";
+    setText($("status"), note != null ? note : autoStatus);
+  }
+
+  var timer = null, timerMs = 0;
+  function schedule() {
+    var want = state.machines.some(function (m) { return m.running; }) ? 100 : 1000;
+    if (timer && want === timerMs) return;
+    if (timer) clearInterval(timer);
+    timerMs = want;
+    timer = setInterval(render, want);
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) render(); });
+
+  build();
+  render();
+  schedule();
+})();
+</script>
+</body>
+</html>
