@@ -153,6 +153,12 @@
     background: var(--phosphor);
     box-shadow: 0 0 6px var(--phosphor);
   }
+  .pm-table { margin-top: 0.5rem; border: 1px solid rgba(92, 255, 110, 0.32); background: var(--surface); border-radius: 6px; padding: 0.25rem 0.5rem; }
+  .pm-row { display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)); gap: 0.35rem; padding: 0.3rem 0; font-size: 0.8rem; line-height: 1.1rem; font-variant-numeric: tabular-nums; text-align: right; border-bottom: 1px dashed rgba(92, 255, 110, 0.28); }
+  .pm-row:last-child { border-bottom: 0; }
+  .pm-row > :first-child { text-align: left; }
+  .pm-head { color: var(--amber); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .pm-row .behind { color: var(--alert); }
   .glow-amber { text-shadow: 0 0 8px rgba(255, 176, 0, 0.8); }
   @media (prefers-reduced-motion: reduce) { .scanlines { display: none; } }
 </style>
@@ -188,13 +194,14 @@
     </div>
     <p id="pace-line" class="mt-2 text-center text-sm text-amber"></p>
     <p id="machine-lbs" class="mt-1 text-center text-xs text-amber"></p>
+    <div id="per-machine" class="pm-table" hidden></div>
     <div class="mt-2 grid2">
       <article class="metric-card">
         <div class="metric-label">Day expected</div>
         <div class="readout" id="day-expected">—</div>
       </article>
       <article class="metric-card">
-        <div class="metric-label">Need rate</div>
+        <div class="metric-label">Catch-up rate</div>
         <div class="readout" id="need-rate">—</div>
       </article>
     </div>
@@ -321,19 +328,43 @@
     return coil.weight / hours;
   }
 
+  // A machine counts once it has data: started/running or at least one coil.
+  // Machine 1 always counts.
+  function inUse(m, index) {
+    return index === 0 || !!m.running || m.startTime != null || m.coils.length > 0;
+  }
+  function rateOf(m) { return isFinite(m.rate) ? m.rate : 0; }
+
+  // Per-machine day numbers from that machine's own rate.
+  function machineDay(m, shift) {
+    var lbs = sumCoils(m);
+    if (!shift) return { lbs: lbs, expected: null, shouldHave: null, need: null, dayVar: null };
+    var expected = shift.totalHours * rateOf(m);
+    var shouldHave = shift.fraction * expected;
+    var need = shift.remainingHours > 0.01 ? (expected - lbs) / shift.remainingHours : null;
+    return { lbs: lbs, expected: expected, shouldHave: shouldHave, need: need, dayVar: lbs - shouldHave };
+  }
+
   function dayNumbers(state, now) {
     var shift = getShiftInfo(state.punchIn, state.punchOut, state.breakMin, now);
-    var totalActual = state.machines.reduce(function (s, m) { return s + sumCoils(m); }, 0);
-    var combinedRate = state.machines.reduce(function (s, m) { return s + (isFinite(m.rate) ? m.rate : 0); }, 0);
+    var used = state.machines.filter(function (m, i) { return inUse(m, i); });
+    var totalActual = used.reduce(function (s, m) { return s + sumCoils(m); }, 0);
+    var combinedRate = used.reduce(function (s, m) { return s + rateOf(m); }, 0);
     var clocksSet = Boolean(parseClock(state.punchIn) && parseClock(state.punchOut));
     if (!shift) {
-      return { shift: shift, totalActual: totalActual, combinedRate: combinedRate, totalExpected: null,
+      return { shift: shift, used: used, totalActual: totalActual, combinedRate: combinedRate, totalExpected: null,
         shouldHave: null, dayVar: null, need: null, blocked: clocksSet };
     }
-    var totalExpected = shift.totalHours * combinedRate;
-    var shouldHave = shift.fraction * totalExpected;
-    var need = shift.remainingHours > 0.01 ? (totalExpected - totalActual) / shift.remainingHours : null;
-    return { shift: shift, totalActual: totalActual, combinedRate: combinedRate, totalExpected: totalExpected,
+    // Totals are the sum of each in-use machine's own numbers.
+    var totalExpected = 0, shouldHave = 0, need = 0;
+    used.forEach(function (m) {
+      var d = machineDay(m, shift);
+      totalExpected += d.expected;
+      shouldHave += d.shouldHave;
+      if (d.need != null) need += d.need;
+    });
+    if (!(shift.remainingHours > 0.01)) need = null;
+    return { shift: shift, used: used, totalActual: totalActual, combinedRate: combinedRate, totalExpected: totalExpected,
       shouldHave: shouldHave, dayVar: totalActual - shouldHave, need: need, blocked: false };
   }
 
@@ -424,11 +455,11 @@
       return "Day numbers stay blank until both punches are in.";
     }
     var hours = pace.shift.totalHours.toFixed(1);
-    var rate = pace.combinedRate.toFixed(0);
-    if (pace.shift.phase === "upcoming") return "Shift hasn\u2019t started \u00b7 " + hours + " hr \u00b7 both blocks " + rate + " lb/hr.";
-    if (pace.shift.phase === "done") return "Shift window is over \u00b7 " + hours + " hr \u00b7 both blocks " + rate + " lb/hr.";
-    if (pace.shift.overnight) return "Overnight \u00b7 " + hours + " hr on the clock \u00b7 both blocks " + rate + " lb/hr.";
-    return hours + " hr on the clock \u00b7 both blocks " + rate + " lb/hr.";
+    var rate = pace.used.map(function (m) { return (m.name || "Block") + " " + rateOf(m).toFixed(0); }).join(" + ") + " lb/hr";
+    if (pace.shift.phase === "upcoming") return "Shift hasn\u2019t started \u00b7 " + hours + " hr \u00b7 " + rate + ".";
+    if (pace.shift.phase === "done") return "Shift window is over \u00b7 " + hours + " hr \u00b7 " + rate + ".";
+    if (pace.shift.overnight) return "Overnight \u00b7 " + hours + " hr on the clock \u00b7 " + rate + ".";
+    return hours + " hr on the clock \u00b7 " + rate + ".";
   }
 
   function needRate(pace) {
@@ -440,6 +471,16 @@
     if (pace.need <= 0) return ["Done", "readout"];
     var ok = pace.need <= pace.combinedRate;
     return [pace.need.toFixed(0) + " lb/hr", ok ? "readout" : "readout behind"];
+  }
+
+  function machineNeed(md, m) {
+    if (md.expected == null) return ["—", "readout"];
+    if (md.need == null) {
+      var hit = md.lbs >= md.expected;
+      return [hit ? "Hit" : "Missed", hit ? "readout" : "readout behind"];
+    }
+    if (md.need <= 0) return ["Done", "readout"];
+    return [md.need.toFixed(0) + " lb/hr", md.need <= rateOf(m) ? "readout" : "readout behind"];
   }
 
   function patchMachine(index, recipe) {
@@ -509,10 +550,15 @@
       sec.id = "panel-" + i;
       sec.innerHTML =
         '<div class="punch-grid mb-3">' +
-          '<label for="rate-' + i + '" class="lbl">Rate lb/hr</label>' +
+          '<label for="rate-' + i + '" class="lbl">Need rate lb/hr</label>' +
           '<input id="rate-' + i + '" class="term-input" type="number" inputmode="numeric" min="1" step="10">' +
           '<label for="name-' + i + '" class="lbl">Name</label>' +
           '<input id="name-' + i + '" class="term-input" type="text" autocomplete="off" spellcheck="false">' +
+        '</div>' +
+        '<div class="mb-3 grid3">' +
+          '<article class="metric-card"><div class="metric-label">Day expected</div><div class="readout" data-o="mexp">—</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Pace car</div><div class="readout" data-o="mpace">—</div></article>' +
+          '<article class="metric-card"><div class="metric-label">Catch-up rate</div><div class="readout" data-o="mneed">—</div></article>' +
         '</div>' +
         '<div class="mb-3 grid3">' +
           '<button type="button" data-a="start"></button>' +
@@ -594,11 +640,33 @@
     setClass(pl, pace.dayVar == null ? "mt-2 text-center text-sm text-amber"
       : pace.dayVar >= 0 ? "mt-2 text-center text-sm text-phosphor" : "mt-2 text-center text-sm text-alert");
     setText(pl, pace.dayVar == null
-      ? "Set punch in and punch out. The pace car is both rates times the shift."
+      ? "Set punch in and punch out. The pace car is each machine\u2019s rate times the shift."
       : (pace.dayVar >= 0 ? "Ahead of" : "Behind") + " the pace car by " + Math.abs(pace.dayVar).toFixed(1) + " lb");
-    setText($("machine-lbs"), state.machines.map(function (m) {
-      return (m.name || "Block") + " " + sumCoils(m).toFixed(1);
+    setText($("machine-lbs"), state.machines.map(function (m, i) {
+      return (m.name || "Block") + " " + sumCoils(m).toFixed(1) + (inUse(m, i) ? "" : " (not in use)");
     }).join(" \u00b7 "));
+    var pmBox = $("per-machine");
+    if (!pace.shift) { pmBox.hidden = true; }
+    else {
+      pmBox.hidden = false;
+      var pmHtml = '<div class="pm-row pm-head"><div>Machine / need</div><div>Expected</div><div>Pace car</div><div>Catch-up</div></div>';
+      state.machines.forEach(function (m, i) {
+        if (!inUse(m, i)) return;
+        var md = machineDay(m, pace.shift);
+        var nm = machineNeed(md, m);
+        pmHtml += '<div class="pm-row" data-pm="' + i + '"><div><div class="truncate"></div><div class="pm-head"></div></div><div>' + md.expected.toFixed(0) +
+          '</div><div>' + md.shouldHave.toFixed(1) + '</div><div class="' + (nm[1].indexOf("behind") >= 0 ? "behind" : "") + '">' + nm[0] + '</div></div>';
+      });
+      if (pmBox.getAttribute("data-html") !== pmHtml) {
+        pmBox.setAttribute("data-html", pmHtml);
+        pmBox.innerHTML = pmHtml;
+        Array.prototype.forEach.call(pmBox.querySelectorAll("[data-pm]"), function (row) {
+          var m = state.machines[+row.getAttribute("data-pm")];
+          row.firstChild.firstChild.textContent = m.name || "Block";
+          row.firstChild.lastChild.textContent = rateOf(m).toFixed(0) + " lb/hr";
+        });
+      }
+    }
     setText($("day-expected"), pace.totalExpected == null ? "—" : pace.totalExpected.toFixed(0));
     var nr = needRate(pace);
     setText($("need-rate"), nr[0]);
@@ -620,6 +688,12 @@
       syncInput(P.name, m.name);
       if (!sel) return;
       var stats = machineStats(m, now);
+      var md = machineDay(m, pace.shift);
+      setText(P.o.mexp, md.expected == null ? "—" : md.expected.toFixed(0));
+      setText(P.o.mpace, md.shouldHave == null ? "—" : md.shouldHave.toFixed(1));
+      var mn = machineNeed(md, m);
+      setText(P.o.mneed, mn[0]);
+      setClass(P.o.mneed, mn[1]);
       setClass(P.b.start, m.running ? "term-btn term-btn-live" : "term-btn term-btn-solid");
       P.b.start.disabled = m.running;
       setText(P.b.start, m.running ? "RUNNING" : "START");
