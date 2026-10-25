@@ -162,6 +162,11 @@ var ProdCalc = (function () {
     var label = String(row.card || "").trim() || ("Row " + (index + 1));
     var woCoils = num(row.woCoils), woTotal = num(row.woTotal), avgIn = num(row.avgWgt);
     var drawn = num(row.coilsDrawn), half = !!row.halfCut;
+    var outIn = num(row.coilsOut), coilsOut;
+    if (outIn !== null && outIn > 0) coilsOut = outIn;
+    else if (half && drawn !== null && drawn > 0) coilsOut = drawn * 2;
+    else coilsOut = null;
+    var cut = coilsOut !== null && drawn !== null && drawn > 0 && coilsOut !== drawn;
     var weighed = (row.actualWeights || []).map(num).filter(function (w) { return w !== null && w > 0; });
     var steps = [], warnings = [], avg = null, avgSource = "none";
     if (woCoils !== null && woTotal !== null && woCoils > 0 && woTotal > 0) {
@@ -180,11 +185,13 @@ var ProdCalc = (function () {
       else steps.push("Card " + label + ": weighed coils " + parts.map(fmtInt).join(" + ") + " = " + fmtInt(weight) + " lb");
     } else if (avg !== null && drawn !== null && drawn > 0) {
       weight = rhu(avg * drawn); weightSource = "avg";
-      steps.push("Card " + label + ": " + fmtInt(avg) + " lb \u00d7 " + fmtNum(drawn) + " " +
+      if (cut) steps.push("Card " + label + ": you drew " + fmtNum(drawn) + " " + plural(drawn, "coil", "coils") + " (cut into " +
+        fmtNum(coilsOut) + "). Weight counts the coils you drew: " + fmtInt(avg) + " lb \u00d7 " + fmtNum(drawn) + " = " + fmtInt(weight) + " lb");
+      else steps.push("Card " + label + ": " + fmtInt(avg) + " lb \u00d7 " + fmtNum(drawn) + " " +
         plural(drawn, "coil", "coils") + " drawn = " + fmtInt(weight) + " lb");
     }
     var coilsText;
-    if (drawn !== null && drawn > 0) coilsText = fmtNum(drawn) + (half ? "=" + fmtNum(drawn * 2) : "");
+    if (drawn !== null && drawn > 0) coilsText = fmtNum(drawn) + (cut ? "=" + fmtNum(coilsOut) : "");
     else if (weighed.length) coilsText = fmtInt(weighed.length);
     else coilsText = "";
     if (woCoils !== null && drawn !== null && drawn > woCoils)
@@ -194,7 +201,7 @@ var ProdCalc = (function () {
       else warnings.push("Card " + label + ": how many coils did you draw?");
     }
     return { label: label, avg: avg, avgSource: avgSource, weight: weight, weightSource: weightSource,
-      coilsText: coilsText, steps: steps, warnings: warnings };
+      coilsOut: coilsOut, coilsText: coilsText, steps: steps, warnings: warnings };
   }
   function compute(shift) {
     var rows = (shift.rows || []).map(computeRow);
@@ -283,7 +290,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   var $ = function (id) { return document.getElementById(id); };
   function today() { var d = new Date(); return (d.getMonth() + 1) + "/" + d.getDate() + "/" + String(d.getFullYear()).slice(2); }
   function blankRow() { return { card: "", finish: "", grade: "", compound: "", package: "", machine: "", woCoils: "", woTotal: "",
-    avgWgt: "", coilsDrawn: "", halfCut: false, weighed: "" }; }
+    avgWgt: "", coilsDrawn: "", coilsOut: "", halfCut: false, weighed: "" }; }
   function fresh(settings) {
     return { schema: "draw-calc/v1", shift: { name: "", date: today(), shift: "", hours: String(settings.hours || 10),
       goal: String(settings.goal || 2800), rows: [blankRow()] }, settings: settings };
@@ -360,24 +367,45 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       p.appendChild(outLine("AVG. WGT. (per coil)", "c" + i + "-avg"));
       // coils drawn stepper
       var cw = document.createElement("div"); cw.className = "f"; cw.style.marginTop = "10px";
-      var cl = document.createElement("label"); cl.htmlFor = "c" + i + "-coilsDrawn"; cl.textContent = "Coils drawn this shift (on this card)";
+      var cl = document.createElement("label"); cl.htmlFor = "c" + i + "-coilsDrawn"; cl.textContent = "Coils IN: coils you drew this shift";
       var st = document.createElement("div"); st.className = "stepper";
       var minus = document.createElement("button"); minus.textContent = "\u2212"; minus.setAttribute("aria-label", "One less coil");
       var plus = document.createElement("button"); plus.textContent = "+"; plus.setAttribute("aria-label", "One more coil");
       var ci = document.createElement("input"); ci.id = "c" + i + "-coilsDrawn"; ci.inputMode = "decimal"; ci.autocomplete = "off";
       ci.value = row.coilsDrawn || "";
-      ci.addEventListener("input", function () { row.coilsDrawn = ci.value; update(); });
-      function bump(d) { var n = ProdCalc.num(ci.value) || 0; n = Math.max(0, n + d); ci.value = n ? String(n) : ""; row.coilsDrawn = ci.value; update(); }
+      function syncOut() {
+        if (!row.halfCut) return;
+        var n = ProdCalc.num(row.coilsDrawn); row.coilsOut = n && n > 0 ? String(n * 2) : "";
+        var o = document.getElementById("c" + i + "-coilsOut"); if (o) o.value = row.coilsOut;
+      }
+      ci.addEventListener("input", function () { row.coilsDrawn = ci.value; syncOut(); update(); });
+      function bump(d) { var n = ProdCalc.num(ci.value) || 0; n = Math.max(0, n + d); ci.value = n ? String(n) : ""; row.coilsDrawn = ci.value; syncOut(); update(); }
       minus.addEventListener("click", function () { bump(-1); });
       plus.addEventListener("click", function () { bump(1); });
       st.appendChild(minus); st.appendChild(ci); st.appendChild(plus);
-      var hint = document.createElement("span"); hint.className = "hint"; hint.textContent = "Count whole work-order coils, not half pieces";
+      var hint = document.createElement("span"); hint.className = "hint"; hint.textContent = "Count the coils you put on, not the cut pieces. Weight uses this number.";
       cw.appendChild(cl); cw.appendChild(st); cw.appendChild(hint); p.appendChild(cw);
-      var hc = document.createElement("label"); hc.className = "check";
+      var ow = document.createElement("div"); ow.className = "grid2";
+      var of = document.createElement("div"); of.className = "f";
+      var ol = document.createElement("label"); ol.htmlFor = "c" + i + "-coilsOut"; ol.textContent = "Coils OUT (optional)";
+      var oi = document.createElement("input"); oi.id = "c" + i + "-coilsOut"; oi.inputMode = "decimal"; oi.autocomplete = "off";
+      oi.value = row.coilsOut || ""; oi.placeholder = "same as IN";
+      var oh = document.createElement("span"); oh.className = "hint"; oh.textContent = "Pieces after cutting. Sheet shows IN=OUT, like 2=4";
+      of.appendChild(ol); of.appendChild(oi); of.appendChild(oh);
+      var hc = document.createElement("label"); hc.className = "check"; hc.style.alignSelf = "center";
       var hcb = document.createElement("input"); hcb.type = "checkbox"; hcb.checked = !!row.halfCut;
-      hcb.addEventListener("change", function () { row.halfCut = hcb.checked; update(); });
-      hc.appendChild(hcb); hc.appendChild(document.createTextNode("Half cut coils (writes 2=4 on the sheet)"));
-      p.appendChild(hc);
+      hcb.addEventListener("change", function () {
+        row.halfCut = hcb.checked;
+        if (hcb.checked) syncOut(); else { row.coilsOut = ""; oi.value = ""; }
+        update();
+      });
+      oi.addEventListener("input", function () {
+        row.coilsOut = oi.value;
+        var n = ProdCalc.num(row.coilsDrawn), o = ProdCalc.num(oi.value);
+        row.halfCut = !!(n && o === n * 2); hcb.checked = row.halfCut; update();
+      });
+      hc.appendChild(hcb); hc.appendChild(document.createTextNode("Half-cut \u00d72"));
+      ow.appendChild(of); ow.appendChild(hc); p.appendChild(ow);
       p.appendChild(outLine("WEIGHT (this card)", "c" + i + "-weight"));
       var det = document.createElement("details");
       var sum = document.createElement("summary"); sum.textContent = "MORE: size, grade, compound, package, weighed coils";
