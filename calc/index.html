@@ -163,7 +163,10 @@ body.noscroll{overflow:hidden}
 
 <h2>3. Your shift: breaks and downtime</h2>
 <div class="panel">
-  <div class="f"><label for="shiftHours">Shift length (hours)</label><input id="shiftHours" inputmode="decimal" autocomplete="off"><span class="hint">Remembered for next time</span></div>
+  <div class="grid2">
+    <div class="f"><label for="shiftHours">Shift length (hr)</label><input id="shiftHours" inputmode="decimal" autocomplete="off"><span class="hint">Remembered</span></div>
+    <div class="f"><label for="shiftStart">Shift starts at</label><input id="shiftStart" type="time" autocomplete="off"><span class="hint">Only needed for times</span></div>
+  </div>
   <b style="color:var(--white)">Breaks</b>
   <div id="breaks"></div>
   <button id="add-break" type="button" style="width:100%">+ ADD BREAK</button>
@@ -364,6 +367,31 @@ var ProdCalc = (function () {
     steps.push(line);
     return [goal10, text, gsum];
   }
+  function clock(s) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(s === null || s === undefined ? "" : s).trim());
+    if (!m || parseInt(m[1], 10) > 23 || parseInt(m[2], 10) > 59) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function fmtClock(m) { return pad2(Math.floor(m / 60) % 24) + ":" + pad2(m % 60); }
+  function mod(a, n) { return ((a % n) + n) % n; }
+  /* Merge overlapping [start, end] minute intervals so overlaps count once (same as the tracker). */
+  function mergeIv(ivs) {
+    var out = [];
+    ivs.slice().sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; }).forEach(function (r) {
+      var l = out[out.length - 1];
+      if (l && r[0] <= l[1]) l[1] = Math.max(l[1], r[1]); else out.push([r[0], r[1]]);
+    });
+    return out;
+  }
+  /* Minutes of iv inside the shift [0, end] and outside the (merged) breaks (the tracker's worked()). */
+  function workedMin(iv, end, breaks) {
+    var a = Math.max(iv[0], 0), b = Math.min(iv[1], end);
+    if (b <= a) return 0;
+    var m = b - a;
+    breaks.forEach(function (r) { var o = Math.min(b, r[1]) - Math.max(a, r[0]); if (o > 0) m -= o; });
+    return m;
+  }
   function compute(shift) {
     var machines = shift.machines || [], runs = shift.runs || [];
     var rowsIn = shift.rows || [];
@@ -394,20 +422,35 @@ var ProdCalc = (function () {
       if (r.weight !== null) { seen[k].weights.push(r.weight); seen[k].lbs += r.weight; }
     });
 
-    var problems = [], tagged = {}, allDown = 0;
+    // downtime: with clock times (and a shift start time) an entry becomes a [start, end] interval in
+    // minutes after the shift start; minutes-only entries are plain subtraction.
+    var startC = clock(shift.start);
+    var problems = [], dts = [];
     (shift.downtime || []).forEach(function (d) {
-      var v = num(d.minutes); if (v === null || v <= 0) return;
-      var mins = rhu(v);
+      var cs = clock(d.start), ce = clock(d.end), iv = null, when = "", mins;
+      if (cs !== null && ce !== null) {
+        mins = mod(ce - cs, 1440);
+        when = " (" + fmtClock(cs) + " to " + fmtClock(ce) + ")";
+        if (startC !== null) { var st = mod(cs - startC, 1440); if (st + mins > 1440) st -= 1440; iv = [st, st + mins]; }
+      } else { var v = num(d.minutes); mins = v !== null && v > 0 ? rhu(v) : 0; }
+      if (mins <= 0) return;
       var mn = String(d.machine || "").trim();
       var m = findMachine(machines, mn); if (m) mn = mname(m);
       var k = mkey(mn);
-      if (k === "" || k === "all machines") allDown += mins;
-      else tagged[k] = (Object.prototype.hasOwnProperty.call(tagged, k) ? tagged[k] : 0) + mins;
+      dts.push({ key: k === "" || k === "all machines" ? "" : k, mins: mins, iv: iv });
       var reason = String(d.reason || "").trim() || "reason not given";
-      problems.push((mn ? mn + ": " : "") + fmtHm(mins) + ", " + reason);
+      problems.push((mn ? mn + ": " : "") + fmtHm(mins) + ", " + reason + when);
     });
-
-    var breaks = minutesList(shift.breaks), downs = minutesList(shift.downtime);
+    var breaks = [], brkRaw = [], brkPlain = 0;
+    (shift.breaks || []).forEach(function (b) {
+      var isObj = b !== null && typeof b === "object";
+      var v = num(isObj ? b.minutes : b); if (v === null || v <= 0) return;
+      var mins = rhu(v); breaks.push(mins);
+      var cb = isObj ? clock(b.start) : null;
+      if (cb !== null && startC !== null) { var st = mod(cb - startC, 1440); if (st + mins > 1440) st -= 1440; brkRaw.push([st, st + mins]); }
+      else brkPlain += mins;
+    });
+    var downs = dts.map(function (x) { return x.mins; });
     var breakMin = sum(breaks), downMin = sum(downs);
     var shIn = num(shift.shiftHours);
     var shiftHours = shIn !== null && shIn > 0 ? shIn : null;
@@ -423,7 +466,34 @@ var ProdCalc = (function () {
     if (breaks.length > 1) steps.push("Breaks: " + breaks.join(" + ") + " = " + fmtInt(breakMin) + " min");
     if (downs.length > 1) steps.push("Downtime: " + downs.join(" + ") + " = " + fmtInt(downMin) + " min");
     if (shiftHours === null) { warnings.push("Enter the shift length (hours)."); res.headline = "Enter the shift length"; return res; }
-    var shiftMin = rhu(shiftHours * 60), avail = shiftMin - breakMin, netMin = avail - downMin;
+    var shiftMin = rhu(shiftHours * 60);
+    var brkIv = mergeIv(brkRaw.filter(function (r) { return Math.min(r[1], shiftMin) > Math.max(r[0], 0); })
+      .map(function (r) { return [Math.max(r[0], 0), Math.min(r[1], shiftMin)]; }));
+    breakMin = brkPlain + sum(brkIv.map(function (r) { return r[1] - r[0]; }));
+    if (breakMin !== sum(breaks)) steps.push("Breaks with clock times overlap or run past the end of the shift, so breaks count as " + fmtInt(breakMin) + " min.");
+    /* Downtime minutes that count: minutes-only entries add up; entries with clock times are merged
+       (overlaps count once) and only minutes inside the shift and outside breaks count. */
+    function downFor(sel) {
+      var plain = sum(sel.filter(function (x) { return x.iv === null; }).map(function (x) { return x.mins; }));
+      var ivs = sel.filter(function (x) { return x.iv !== null; }).map(function (x) { return x.iv; });
+      return plain + sum(mergeIv(ivs).map(function (iv) { return workedMin(iv, shiftMin, brkIv); }));
+    }
+    var timed = dts.filter(function (x) { return x.iv !== null; });
+    downMin = downFor(dts);
+    if (timed.length && downMin !== sum(downs)) {
+      var rawT = sum(timed.map(function (x) { return x.mins; }));
+      var merged = mergeIv(timed.map(function (x) { return x.iv; }));
+      var mlen = sum(merged.map(function (r) { return r[1] - r[0]; }));
+      var inwin = sum(merged.map(function (r) { return Math.max(0, Math.min(r[1], shiftMin) - Math.max(r[0], 0)); }));
+      var counted = downMin - sum(dts.filter(function (x) { return x.iv === null; }).map(function (x) { return x.mins; }));
+      var parts = [];
+      if (inwin - counted) parts.push(fmtInt(inwin - counted) + " min was during breaks");
+      if (rawT - mlen) parts.push(fmtInt(rawT - mlen) + " min overlapped other downtime (counted once)");
+      if (mlen - inwin) parts.push(fmtInt(mlen - inwin) + " min was outside the shift");
+      steps.push("Downtime with clock times: " + fmtInt(rawT) + " min entered; " + parts.join(", ") + ", so " + fmtInt(counted) + " min counts.");
+    }
+    res.breakMin = breakMin; res.downMin = downMin;
+    var avail = shiftMin - breakMin, netMin = avail - downMin;
     res.shiftMin = shiftMin; res.netMin = netMin;
     if (netMin <= 0) {
       warnings.push("Breaks and downtime add up to the whole shift or more. Check the minutes.");
@@ -447,7 +517,7 @@ var ProdCalc = (function () {
         if (m.mode === "custom") warnings.push(m.name + ": type how long it ran (like 5:30). Using all shift for now.");
         base = avail; label = "all shift";
       }
-      var dm = (Object.prototype.hasOwnProperty.call(tagged, m.key) ? tagged[m.key] : 0) + allDown;
+      var dm = downFor(dts.filter(function (x) { return x.key === "" || x.key === m.key; }));
       m.baseMin = base; m.downMin = dm; m.runMin = Math.max(0, base - dm);
       if (m.goal !== null) m.goalLbs = rhu(m.goal * m.runMin / 60);
       if (m.runMin > 0) m.rate10 = rhu(m.lbs * 600 / m.runMin);
@@ -553,18 +623,27 @@ var ProdCalc = (function () {
     items.forEach(function (x) { x = (x === null || x === undefined ? "" : String(x)).trim(); if (x && out.indexOf(x) < 0) out.push(x); });
     return out;
   }
-  function fromTracker(state, nowIso) {
-    var out = { ok: false, name: "", date: "", shiftHours: null, breaks: [], downtime: [], machines: [], rows: [], summary: [], warnings: [] };
+  function fromTracker(state, nowIso, tzMin) {
+    var out = { ok: false, name: "", date: "", start: "", shiftHours: null, breaks: [], downtime: [], machines: [], rows: [], summary: [], warnings: [] };
     if (!state || typeof state !== "object" || state.schema !== "draw-rate/v5") { out.warnings.push("No tracker data found."); return out; }
     var sh = state.shift || {};
     out.name = String(sh.operator || "").trim();
     out.date = ymdToSheet(sh.date);
-    var a = hhmm(sh.start), b = hhmm(sh.end);
-    if (a !== null && b !== null) { if (b <= a) b += 1440; out.shiftHours = (b - a) / 60; }
+    var a = clock(sh.start), b = clock(sh.end);
+    if (a !== null) out.start = fmtClock(a);
+    if (a !== null && b !== null && a !== b) { if (b <= a) b += 1440; out.shiftHours = (b - a) / 60; }
     if (sh.breakMode === "list") {
-      out.breaks = (sh.breaks || []).map(function (br) { return num((br || {}).minutes); })
-        .filter(function (x) { return x !== null && x > 0; }).map(rhu);
-    } else { var t = num(sh.breakTotalMin); out.breaks = t !== null && t > 0 ? [rhu(t)] : []; }
+      (sh.breaks || []).forEach(function (br) {
+        var x = num((br || {}).minutes); if (x === null || x <= 0) return;
+        var c = clock((br || {}).start);
+        out.breaks.push({ minutes: rhu(x), start: c !== null ? fmtClock(c) : "" });
+      });
+    } else {
+      var t = num(sh.breakTotalMin);
+      if (t !== null && t > 0) {   // the tracker centres a total break on the middle of the shift
+        out.breaks = [{ minutes: rhu(t), start: out.shiftHours !== null ? fmtClock(mod(rhu(a + (b - a) / 2 - t / 2), 1440)) : "" }];
+      }
+    }
     var names = {}, order = [];
     (state.machines || []).forEach(function (m, i) {
       var nm = String(m.name || "").trim() || ("Machine " + (m.slot || (i + 1)));
@@ -597,26 +676,29 @@ var ProdCalc = (function () {
     });
     var now = isoMs(nowIso);
     (state.downtime || []).forEach(function (d) {
-      var mins = num(d.minutes), reason = String(d.reason || "").trim();
-      if (mins === null || mins <= 0) {
-        var s = isoMs(d.startAt), e = d.endAt ? isoMs(d.endAt) : now;
-        if (d.endAt === null || d.endAt === undefined) reason = (reason + " (still down)").trim();
-        mins = s !== null && e !== null ? rhu((e - s) / 60000) : null;
-      }
+      var reason = String(d.reason || "").trim(), mins, st = "", en = "";
+      var s = d.startAt ? isoMs(d.startAt) : null;
+      var e = s !== null ? (d.endAt ? isoMs(d.endAt) : now) : null;
+      if (s !== null && e !== null && e > s) {
+        var tz = tzMin !== undefined && tzMin !== null ? tzMin : -new Date(s).getTimezoneOffset();
+        var cs = mod(rhu(s / 60000 + tz), 1440), ce = mod(rhu(e / 60000 + tz), 1440);
+        st = fmtClock(cs); en = fmtClock(ce); mins = mod(ce - cs, 1440);
+        if (!d.endAt) reason = (reason + " (still down)").trim();
+      } else mins = num(d.minutes);
       if (mins === null || mins <= 0) return;
       var mid = String(d.machineId || "");
       var mn = mid === "all" ? "All machines" : (has(mid) ? names[mid] : "");
-      out.downtime.push({ minutes: rhu(mins), reason: reason, machine: mn });
+      out.downtime.push({ minutes: rhu(mins), reason: reason, machine: mn, start: st, end: en });
     });
     if (out.shiftHours !== null) out.summary.push("Shift: " + fmtNum(out.shiftHours) + " hr (" + sh.start + " to " + sh.end + ")");
-    if (out.breaks.length) out.summary.push("Breaks: " + out.breaks.length + " (" + fmtInt(sum(out.breaks)) + " min)");
+    if (out.breaks.length) out.summary.push("Breaks: " + out.breaks.length + " (" + fmtInt(sum(out.breaks.map(function (x) { return x.minutes; }))) + " min)");
     if (out.downtime.length) out.summary.push("Downtime: " + out.downtime.length + " (" + fmtInt(sum(out.downtime.map(function (d) { return d.minutes; }))) + " min)");
     out.ok = !!(out.rows.length || out.downtime.length || out.breaks.length || out.shiftHours !== null);
     if (!out.rows.length) out.warnings.push("No coils logged in the tracker yet.");
     return out;
   }
   return { compute: compute, computeRow: computeRow, reportLines: reportLines, sheetCells: sheetCells, quick: quick,
-    fromTracker: fromTracker, goalPlan: goalPlan, parseHm: parseHm, findRun: findRun, findMachine: findMachine, mkey: mkey, num: num,
+    fromTracker: fromTracker, goalPlan: goalPlan, parseHm: parseHm, clock: clock, findRun: findRun, findMachine: findMachine, mkey: mkey, num: num,
     fmtInt: fmtInt, fmtTenths: fmtTenths, fmtNum: fmtNum, fmtHm: fmtHm };
 })();
 if (typeof module !== "undefined") module.exports = ProdCalc;
@@ -633,8 +715,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   var SEED = [{ name: "West Vaughn", goal: 2050 }, { name: "Showa", goal: 849 }];
   function defaults() { return { shiftHours: 10, breaks: [], machines: SEED.map(function (m) { return { name: m.name, goal: m.goal }; }) }; }
   function fresh(st) {
-    return { name: "", date: today(), shift: "", shiftHours: String(st.shiftHours || 10),
-      breaks: (st.breaks || []).map(function (m) { return { minutes: String(m) }; }),
+    return { name: "", date: today(), shift: "", shiftHours: String(st.shiftHours || 10), start: st.shiftStart || "",
+      breaks: (st.breaks || []).map(function (m) { return m && typeof m === "object" ? { minutes: String(m.minutes), start: m.start || "" } : { minutes: String(m), start: "" }; }),
       downtime: [], runs: [], rows: [blankRow()], maintenance: "" };
   }
   var state;
@@ -668,7 +750,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function coreShift() {
     var s = state.shift;
-    return { name: s.name, date: s.date, shift: s.shift, shiftHours: s.shiftHours, breaks: s.breaks, downtime: s.downtime,
+    return { name: s.name, date: s.date, shift: s.shift, shiftHours: s.shiftHours, start: s.start || "", breaks: s.breaks, downtime: s.downtime,
       machines: S.machines, maintenance: s.maintenance,
       runs: s.runs.map(function (r) { return { machine: r.machine, mode: r.mode, minutes: P.parseHm(r.custom) }; }),
       rows: s.rows.map(function (r) { var o = {}; for (var k in r) o[k] = r[k]; o.actualWeights = splitWeighed(r.weighed); return o; }) };
@@ -871,7 +953,10 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var box = $("breaks"); box.innerHTML = "";
     state.shift.breaks.forEach(function (b, i) {
       var r = el("div", "brow");
-      r.appendChild(field(b, "minutes", "Break " + (i + 1) + " (minutes)", "", "numeric", "b" + i + "-min", saveBreakDefault));
+      var g = el("div", "grid2");
+      g.appendChild(field(b, "minutes", "Break " + (i + 1) + " (min)", "", "numeric", "b" + i + "-min", saveBreakDefault));
+      var tf = field(b, "start", "Starts at", "", "text", "b" + i + "-start", saveBreakDefault);
+      tf.querySelector("input").type = "time"; g.appendChild(tf); r.appendChild(g);
       var del = el("button", "warn", "\u2715"); del.setAttribute("aria-label", "Remove break " + (i + 1));
       del.addEventListener("click", function () { state.shift.breaks.splice(i, 1); saveBreakDefault(); renderBreaks(); update(); });
       r.appendChild(del); box.appendChild(r);
@@ -879,17 +964,32 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (!state.shift.breaks.length) box.appendChild(el("p", "muted", "No breaks entered."));
   }
   function saveBreakDefault() {
-    S.breaks = state.shift.breaks.map(function (b) { return P.num(b.minutes); }).filter(function (x) { return x && x > 0; });
+    S.breaks = state.shift.breaks.filter(function (b) { var n = P.num(b.minutes); return n && n > 0; })
+      .map(function (b) { return { minutes: P.num(b.minutes), start: b.start || "" }; });
   }
   function renderDowntime() {
     var box = $("downtime"); box.innerHTML = "";
     state.shift.downtime.forEach(function (d, i) {
       var p = el("div", "drow");
       var top = el("div", "grid2");
-      top.appendChild(field(d, "minutes", "Minutes down", "", "numeric", "d" + i + "-min"));
+      var minF = field(d, "minutes", "Minutes down", "", "numeric", "d" + i + "-min");
+      top.appendChild(minF);
       var mf = el("div", "f"); var ml = el("label", "", "Machine (optional)"); ml.htmlFor = "d" + i + "-machine";
       var ms = machineSelect(d, "d" + i + "-machine", "\u2014 none \u2014", true); ms.className = "msel";
       mf.appendChild(ml); mf.appendChild(ms); top.appendChild(mf); p.appendChild(top);
+      var tm = el("div", "grid2");
+      function syncMin() {
+        var a = P.clock(d.start), b = P.clock(d.end), inp = minF.querySelector("input");
+        if (a !== null && b !== null) { d.minutes = String(((b - a) % 1440 + 1440) % 1440); inp.value = d.minutes; inp.readOnly = true; }
+        else inp.readOnly = false;
+      }
+      [["start", "From (optional)"], ["end", "To"]].forEach(function (x) {
+        var f = field(d, x[0], x[1], "", "text", "d" + i + "-" + x[0], syncMin);
+        f.querySelector("input").type = "time"; tm.appendChild(f);
+      });
+      p.appendChild(tm);
+      p.appendChild(el("span", "hint", "With times, downtime during a break or overlapping other downtime only counts once."));
+      syncMin();
       var rf = field(d, "reason", "Reason", "Tap a reason or type your own", "text", "d" + i + "-reason");
       rf.querySelector("input").setAttribute("list", "reasons"); p.appendChild(rf);
       var del = el("button", "warn", "REMOVE DOWNTIME"); del.style.width = "100%";
@@ -1023,6 +1123,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     $("summary").value = lines.join("\n");
     if (!$("sheetview").hidden) renderSheetView();
     var shh = P.num(state.shift.shiftHours); if (shh && shh > 0) S.shiftHours = shh;
+    if (P.clock(state.shift.start) !== null) S.shiftStart = state.shift.start;
     save();
   }
 
@@ -1069,7 +1170,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     pending = P.fromTracker(t, new Date().toISOString());
     var ul = $("fill-list"); ul.innerHTML = "";
     pending.summary.forEach(function (s) { ul.appendChild(el("li", "", s)); });
-    pending.downtime.forEach(function (d) { ul.appendChild(el("li", "muted", "Downtime: " + (d.machine ? d.machine + ": " : "") + d.minutes + " min, " + (d.reason || "reason not given"))); });
+    pending.downtime.forEach(function (d) { ul.appendChild(el("li", "muted", "Downtime: " + (d.machine ? d.machine + ": " : "") + d.minutes + " min, " + (d.reason || "reason not given") + (d.start ? " (" + d.start + " to " + d.end + ")" : ""))); });
     pending.warnings.forEach(function (w) { ul.appendChild(el("li", "warnli", w)); });
     $("fill-preview").hidden = false; $("fill-preview").scrollIntoView({ block: "start" });
   }
@@ -1081,11 +1182,12 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       else if (!P.num(ex.goal) && m.goal) ex.goal = m.goal;
     });
     var rows = t.rows.map(function (r) { var o = blankRow(); o.machine = r.machine; o.coilsDrawn = String(r.coilsDrawn); o.weighed = r.actualWeights.join(" "); o.finish = r.finish; o.note = r.note; return o; });
-    var downs = t.downtime.map(function (d) { return { minutes: String(d.minutes), reason: d.reason, machine: d.machine }; });
+    var downs = t.downtime.map(function (d) { return { minutes: String(d.minutes), reason: d.reason, machine: d.machine, start: d.start || "", end: d.end || "" }; });
     var s = state.shift;
     if (mode === "replace") {
       s.rows = rows.length ? rows : [blankRow()]; s.downtime = downs; s.runs = [];
-      s.breaks = t.breaks.map(function (m) { return { minutes: String(m) }; });
+      s.breaks = t.breaks.map(function (m) { return { minutes: String(m.minutes), start: m.start || "" }; });
+      s.start = t.start || s.start || "";
       if (t.shiftHours !== null) s.shiftHours = String(t.shiftHours);
       if (t.name) s.name = t.name; if (t.date) s.date = t.date;
     } else {
@@ -1101,7 +1203,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
 
   /* ---------- wiring ---------- */
   function bindHeader() {
-    [["h-name", "name"], ["h-date", "date"], ["h-shift", "shift"], ["shiftHours", "shiftHours"], ["maint", "maintenance"]].forEach(function (p) {
+    [["h-name", "name"], ["h-date", "date"], ["h-shift", "shift"], ["shiftHours", "shiftHours"], ["shiftStart", "start"], ["maint", "maintenance"]].forEach(function (p) {
       var e = $(p[0]); e.value = state.shift[p[1]] || "";
       if (!e._bound) { e._bound = true; e.addEventListener("input", function () { state.shift[p[1]] = e.value; update(); }); }
     });
