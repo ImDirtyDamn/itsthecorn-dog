@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <!--
-  DRAW RATE TRACKER v4 - PHONE APP (PWA). Same logic, math and saved data as the v4 page;
+  DRAW RATE TRACKER v5 - PHONE APP (PWA). Same logic, math and saved data as the v5 page;
   phone-first layout, bottom log dock, install prompt, offline via sw.js.
+  v5: downtime comes off the target and pace car by weight (see DOWNTIME below).
 
-  SAVED DATA  (localStorage key "drawRateV5"; the v4 page's "drawRateV4" and the older
-  "drawRateMulti" are read once for import and never modified). The same shape is used for the JSON export,
+  SAVED DATA  (localStorage key "drawRateV5", shared by this page and the phone app at /app/;
+  the v4 key "drawRateV4" and the older "drawRateMulti" are read once for import and never modified). The same shape is used for the JSON export,
   plus "exportedAt" and a computed "summary". Every record has a string id and
   ISO-8601 timestamps so it can be loaded straight into a database.
 
@@ -36,7 +37,11 @@
       { "id": "d_...", "machineId": "m_..." | "all", "loggedAt": ISO,
         "startAt": ISO, "endAt": ISO | null,    // null = still down (running)
         "minutes": 15 | null, "reason": "" }   // minutes = endAt - startAt (null while running)
-    ]                                     // coil.downtimeMin is a note only; it does not change totals
+    ],                                    // coil.downtimeMin is a note only; it does not change totals
+    "settings": {                         // per device, kept across shifts
+      "confirmUnderLb": 3000,             // ask "is that right?" for a coil under this
+      "confirmOverLb": 5000               // ask "coil weight, not the coil ID?" for a coil over this
+    }
   }
 
   The math lives in one place: the "CALC MODULE" in the script below. The same formulas are
@@ -169,7 +174,9 @@
   .mc-rate { color: var(--fg-dim); font-size: 0.8rem; white-space: nowrap; }
   .mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.9rem; }
   .mc-stats b { display: block; color: var(--white); font-size: 1.2rem; font-variant-numeric: tabular-nums; margin-top: 0.15rem; }
-  .mc-log { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; }
+  .mc-log { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
+  .mc-log .in::placeholder { font-size: 0.85em; }
+  .wt-lbl { display: block; font-size: 0.75rem; letter-spacing: 0.12em; color: var(--white); margin: 0.6rem 0 0.3rem; font-weight: 700; }
   .mc-log .btn { padding: 0.5rem 1.1rem; }
   .mc-last { margin-top: 0.5rem; min-height: 1.2em; }
   .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 2.5rem; }
@@ -206,6 +213,55 @@
     .delta { font-size: 1.7rem; }
     .delta .pct { font-size: 1.2rem; }
   }
+  /* downtime */
+  .down-line { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.6rem; color: var(--amber); font-size: 0.9rem; }
+  .down-line .red { color: var(--red); font-weight: 700; }
+  .mc-down { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; margin-top: 0.6rem; }
+  .mc-down-txt { font-size: 0.85rem; color: var(--amber); }
+  .mc-down-txt.red { color: var(--red); font-weight: 700; }
+  .mc.down { border-left-color: var(--red); }
+  #dtp { padding-bottom: 1rem; }
+  #dtp h3 { color: var(--white); font-size: 1rem; margin: 1.5rem 0 0.6rem; letter-spacing: 0.06em; }
+  #dtp .btn.full { width: 100%; }
+  select.in { background: #000; }
+  .dt-past { display: grid; grid-template-columns: 5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
+  .dt-past .field { margin-bottom: 0; }
+  .dt-past .in { height: 3rem; font-size: 1.1rem; }
+  .dt-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.9rem; color: var(--white); }
+  .dt-entry.run { color: var(--red); font-weight: 700; }
+  .dt-tot > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.4rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.95rem; }
+  .dt-tot > div span:last-child { color: var(--amber); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .dt-tot > div.all span:last-child { color: var(--white); }
+  /* fat-finger: confirm, readback, recent coils */
+  .top-r { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+  #rc-open { min-height: 3rem; font-size: 0.8rem; letter-spacing: 0.06em; padding: 0.3rem 0.6rem; }
+  .ask { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.82); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .ask-box { width: 100%; max-width: 28rem; background: var(--panel); border: 2px solid var(--amber); padding: 1.25rem; }
+  .ask-msg { color: var(--white); font-size: 1.3rem; line-height: 1.35; margin: 0 0 1.25rem; font-weight: 700; }
+  .ask-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .ask-btns .btn { min-height: 3.75rem; font-size: 1.1rem; text-transform: none; padding: 0.4rem 0.5rem; white-space: nowrap; }
+  @media (max-width: 380px) { .ask-btns .btn { font-size: 1rem; } .ask-box { padding: 1rem; } }
+  .readback { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 40;
+              width: calc(100% - 2rem); max-width: 30rem; background: #000; border: 2px solid var(--fg); box-shadow: 0 0 24px rgba(57, 255, 106, 0.35); padding: 0.75rem 1rem; }
+  .readback.undone { border-color: var(--amber); }
+  .rb-top { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.85rem; letter-spacing: 0.1em; }
+  .rb-lbl { color: var(--fg); font-weight: 700; } .rb-mach { color: var(--white); text-align: right; overflow-wrap: anywhere; }
+  .rb-w { font-size: clamp(2.4rem, 11vw, 3.4rem); font-weight: 700; color: var(--white); line-height: 1.1; margin: 0.2rem 0 0.5rem; font-variant-numeric: tabular-nums; text-shadow: 0 0 8px rgba(57, 255, 106, 0.5); }
+  .rb-act { display: grid; grid-template-columns: 1fr 1.4fr 0.8fr; gap: 0.5rem; }
+  .rb-act .btn { min-height: 3rem; padding: 0.3rem 0.4rem; font-size: 0.95rem; }
+  #rcp { padding-bottom: 1rem; }
+  .rc-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+  .rc-filter .btn { min-height: 3rem; padding: 0.3rem 0.8rem; }
+  .rc-filter .btn.on { background: var(--fg); color: #000; border-color: var(--fg); }
+  .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); }
+  .rc-row .rc-w { color: var(--white); font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rc-row .rc-meta { display: block; color: var(--fg-dim); font-size: 0.85rem; }
+  .rc-row.hl { background: rgba(57, 255, 106, 0.08); }
+  .rc-edit { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem; align-items: end; padding: 0.5rem 0 0.25rem; }
+  .rc-edit .field { margin-bottom: 0; }
+  .rc-edit .in { height: 3rem; }
+  .rc-edit .rc-btns { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .rc-edit .err { grid-column: 1 / -1; margin: 0; }
 
   /* ================= PHONE APP LAYER (PWA) ================= */
   html { touch-action: manipulation; }
@@ -248,7 +304,7 @@
   /* machine cards: tap a card to pick it in the dock; per-card log row lives in the dock */
   .mc { cursor: pointer; }
   .mc.sel { border-left-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg-faint); }
-  .mc .mc-log { display: none; }
+  .mc .mc-log, .mc .wt-lbl { display: none; }
   .mc-sel-tag { color: #000; background: var(--fg); font-size: 0.65rem; letter-spacing: 0.1em; padding: 0.1rem 0.35rem; margin-left: 0.4rem; vertical-align: middle; }
   .actions { margin-top: 2rem; }
   /* advanced on a phone */
@@ -262,25 +318,6 @@
   .edit-grid { grid-template-columns: 1fr; }
   .edit-grid .in, .dt-form .in { height: 3rem; }
   .dt-form { grid-template-columns: 4.5rem minmax(0, 1fr) auto; margin-bottom: 0.75rem; }
-  /* downtime */
-  .down-line { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.6rem; color: var(--amber); font-size: 0.9rem; }
-  .down-line .red { color: var(--red); font-weight: 700; }
-  .mc-down { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; margin-top: 0.6rem; }
-  .mc-down-txt { font-size: 0.85rem; color: var(--amber); }
-  .mc-down-txt.red { color: var(--red); font-weight: 700; }
-  .mc.down { border-left-color: var(--red); }
-  #dtp { padding-bottom: 1rem; }
-  #dtp h3 { color: var(--white); font-size: 1rem; margin: 1.5rem 0 0.6rem; letter-spacing: 0.06em; }
-  #dtp .btn.full { width: 100%; }
-  select.in { background: #000; }
-  .dt-past { display: grid; grid-template-columns: 5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
-  .dt-past .field { margin-bottom: 0; }
-  .dt-past .in { height: 3rem; font-size: 1.1rem; }
-  .dt-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.9rem; color: var(--white); }
-  .dt-entry.run { color: var(--red); font-weight: 700; }
-  .dt-tot > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.4rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.95rem; }
-  .dt-tot > div span:last-child { color: var(--amber); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-  .dt-tot > div.all span:last-child { color: var(--white); }
   /* bottom log dock */
   .dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--panel);
           border-top: 2px solid var(--fg-dim); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
@@ -294,11 +331,17 @@
   .chip.on { background: var(--fg); color: #000; border-color: var(--fg); }
   .dock-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
   .dock-row .in { height: 3.5rem; font-size: 1.5rem; }
+  .dock-row .in::placeholder { font-size: 1.15rem; }
+  .dock-lbl { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.8rem; letter-spacing: 0.1em; font-weight: 700; color: var(--white); margin-bottom: 0.3rem; }
+  .dock-lbl span:first-child { white-space: nowrap; }
+  .dock-for { color: var(--fg); font-weight: 400; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .dock-row .btn { min-height: 3.5rem; padding: 0.5rem 1.1rem; font-size: 1.05rem; }
   .dock-msg { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--fg); margin-bottom: 0.4rem; min-height: 0; }
   .dock-msg:empty { display: none; }
   .dock-msg.red { color: var(--red); } .dock-msg.amber { color: var(--amber); }
   .dock-msg .link { min-height: 2.75rem; padding: 0 0.5rem; font-weight: 700; }
+  .dock .readback { position: static; transform: none; width: auto; max-width: none; margin: 0 0 0.6rem; padding: 0.6rem 0.75rem; box-shadow: none; }
+  .dock .rb-w { font-size: clamp(2.2rem, 11vw, 3rem); margin: 0.1rem 0 0.4rem; }
   /* install + update banners, footer */
   .banner { background: var(--panel); border: 1px solid var(--fg-dim); padding: 0.75rem; margin-bottom: 1rem; }
   .banner p { margin: 0 0 0.6rem; color: var(--white); font-size: 0.95rem; }
@@ -347,7 +390,10 @@
         <div class="brand glow">DRAW RATE</div>
         <div class="sub" id="d-shift"></div>
       </div>
-      <div class="clock" id="d-clock"></div>
+      <div class="top-r">
+        <div class="clock" id="d-clock"></div>
+        <button type="button" class="btn small" id="rc-open">RECENT COILS</button>
+      </div>
     </header>
     <p class="phase" id="d-phase"></p>
 
@@ -390,6 +436,8 @@
     </section>
 
     <section class="block">
+      <button type="button" class="adv-toggle" id="rc-toggle" aria-expanded="false">+ RECENT COILS</button>
+      <div id="rcp" hidden></div>
       <button type="button" class="adv-toggle" id="dt-toggle" aria-expanded="false">+ DOWNTIME</button>
       <div id="dtp" hidden></div>
       <button type="button" class="adv-toggle" id="adv-toggle" aria-expanded="false">+ ADVANCED</button>
@@ -406,14 +454,26 @@
       <div class="dock-inner">
         <div class="dock-msg" id="dock-msg" aria-live="polite"></div>
         <div class="dock-mach" id="dock-mach" role="group" aria-label="Machine"></div>
+        <label class="dock-lbl" for="dock-in"><span>COIL WEIGHT (LBS)</span><span class="dock-for" id="dock-for"></span></label>
         <div class="dock-row">
-          <input class="in" id="dock-in" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Coil lb" enterkeyhint="done" autocomplete="off" aria-label="Coil weight in lb">
+          <input class="in" id="dock-in" type="text" inputmode="decimal" placeholder="Weight (lbs)" enterkeyhint="done" autocomplete="off" aria-label="Coil weight in lbs">
           <button type="button" class="btn solid" id="dock-log">LOG COIL</button>
         </div>
       </div>
     </div>
   </section>
 
+</div>
+<div class="readback" id="readback" role="status" aria-live="assertive" hidden>
+  <div class="rb-top"><span class="rb-lbl">LOGGED</span><span class="rb-mach" id="rb-mach"></span></div>
+  <div class="rb-w" id="rb-w"></div>
+  <div class="rb-act"><button type="button" class="btn solid" id="rb-undo">UNDO</button><button type="button" class="btn" id="rb-fix">FIX / RECENT</button><button type="button" class="btn" id="rb-x" aria-label="Hide">OK</button></div>
+</div>
+<div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
+  <div class="ask-box">
+    <p class="ask-msg" id="ask-msg"></p>
+    <div class="ask-btns"><button type="button" class="btn solid" id="ask-yes">Yes, log it</button><button type="button" class="btn warn" id="ask-no">Fix it</button></div>
+  </div>
 </div>
 <script>
 /* =====================================================================
@@ -680,7 +740,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 <script>
 (function () {
   "use strict";
-  var KEY = "drawRateV5", V4_KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v5";
+  var KEY = "drawRateV5", V4_KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v5", MERGED_FLAG = "drawRateV4Imported";
   var MAX_MACHINES = 6, DEFAULT_RATE = 2800;
 
   /* ---------- small helpers ---------- */
@@ -736,13 +796,22 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function defaultMachine(i) {
     return { id: uid("m"), slot: i + 1, name: "Machine " + (i + 1), needRate: DEFAULT_RATE, timerStartedAt: null, timerAccumMs: 0 };
   }
+  var DEFAULT_CONFIRM_UNDER_LB = 3000, DEFAULT_CONFIRM_OVER_LB = 5000;   // fat-finger checks (Advanced > Settings)
+  function defaultSettings() { return { confirmUnderLb: DEFAULT_CONFIRM_UNDER_LB, confirmOverLb: DEFAULT_CONFIRM_OVER_LB }; }
+  function cleanSettings(x) {
+    var d = defaultSettings(); x = x && typeof x === "object" ? x : {};
+    var u = num(x.confirmUnderLb), o = num(x.confirmOverLb);
+    if (u >= 0 && u < 1e6) d.confirmUnderLb = u;
+    if (o > 0 && o < 1e7) d.confirmOverLb = o;
+    return d;
+  }
   function defaultState() {
     var now = Date.now();
     return {
       schema: SCHEMA, setupDone: false,
       shift: { id: uid("s"), date: todayStr(), operator: "", start: "", end: "", breakMode: "total",
         breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now) },
-      machines: [defaultMachine(0)], coils: [], downtime: []
+      machines: [defaultMachine(0)], coils: [], downtime: [], settings: defaultSettings()
     };
   }
 
@@ -797,7 +866,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       return { id: str(d.id, 64) || uid("d"), machineId: d.machineId, loggedAt: d.loggedAt, startAt: startAt, endAt: endAt,
         minutes: endAt ? (Date.parse(endAt) - Date.parse(startAt)) / 60000 : null, reason: str(d.reason, 200) };
     }).filter(Boolean) : [];
-    var st = { schema: SCHEMA, setupDone: setupDone, shift: s, machines: machines, coils: coils, downtime: downtime };
+    var st = { schema: SCHEMA, setupDone: setupDone, shift: s, machines: machines, coils: coils, downtime: downtime, settings: cleanSettings(p.settings) };
     if (st.setupDone && !Calc.shiftWindow(s)) st.setupDone = false;
     return st;
   }
@@ -835,15 +904,50 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return st;
   }
 
-  function load() {
+  function parseKey(k) {
+    try { var raw = window.localStorage.getItem(k); return raw ? sanitize(JSON.parse(raw)) : null; } catch (e) { return null; }
+  }
+  function lastActivity(st) {
+    var t = Date.parse(st.shift.updatedAt) || 0;
+    st.coils.forEach(function (c) { t = Math.max(t, Date.parse(c.loggedAt) || 0); });
+    st.downtime.forEach(function (d) { t = Math.max(t, Date.parse(d.endAt || d.startAt) || 0); });
+    return t;
+  }
+  function unionById(a, b) {
+    var seen = {}, out = a.slice();
+    a.forEach(function (x) { seen[x.id] = 1; });
+    b.forEach(function (x) { if (!seen[x.id]) out.push(x); });
+    return out;
+  }
+  // One time per browser: bring in v4 data ("drawRateV4" is only read, never changed).
+  //   no v5 yet            -> v4 becomes v5
+  //   same shift in both   -> coils + downtime merged by id (v5 wins on the same id)
+  //   different shifts     -> the one with the most recent activity is kept as v5
+  function importV4(v5) {
+    var done = false;
+    try { done = window.localStorage.getItem(MERGED_FLAG) === "1"; } catch (e) {}
+    if (done) return v5;
+    var v4 = parseKey(V4_KEY), out = v5;
+    if (v4) {
+      if (!v5) out = v4;
+      else if (v4.shift.id === v5.shift.id) {
+        var ids = {}; v5.machines.forEach(function (m) { ids[m.id] = 1; });
+        var ok = function (x) { return ids[x.machineId] || x.machineId === "all"; };
+        v5.coils = unionById(v5.coils, v4.coils.filter(ok));
+        v5.downtime = unionById(v5.downtime, v4.downtime.filter(ok));
+        out = v5;
+      } else if (lastActivity(v4) > lastActivity(v5)) out = v4;
+    }
     try {
-      var raw = window.localStorage.getItem(KEY);
-      if (raw) { var s = sanitize(JSON.parse(raw)); if (s) return s; }
-    } catch (e) { /* fall through */ }
-    try {                                          // first run: import the v4 page's data (read only)
-      var v4 = window.localStorage.getItem(V4_KEY);
-      if (v4) { var s4 = sanitize(JSON.parse(v4)); if (s4) return s4; }
-    } catch (e4) { /* fall through */ }
+      if (out && out !== v5) { out.schema = SCHEMA; window.localStorage.setItem(KEY, JSON.stringify(out)); }
+      else if (out && v4) window.localStorage.setItem(KEY, JSON.stringify(out));
+      window.localStorage.setItem(MERGED_FLAG, "1");
+    } catch (e) {}
+    return out;
+  }
+  function load() {
+    var s = importV4(parseKey(KEY));
+    if (s) return s;
     try {
       var old = window.localStorage.getItem(OLD_KEY);
       if (old) { var m = migrateOld(old); if (m) { m.migrated = true; return m; } }
@@ -853,7 +957,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function save() {
     try {
       state.shift.updatedAt = iso(Date.now());
-      var out = { schema: SCHEMA, setupDone: state.setupDone, shift: state.shift, machines: state.machines, coils: state.coils, downtime: state.downtime };
+      var out = { schema: SCHEMA, setupDone: state.setupDone, shift: state.shift, machines: state.machines, coils: state.coils, downtime: state.downtime, settings: state.settings };
       window.localStorage.setItem(KEY, JSON.stringify(out));
     } catch (e) { /* storage blocked or full: keep working in memory */ }
   }
@@ -1145,8 +1249,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var mk = function (label) { var dv = el("div"); dv.appendChild(el("span", "lbl", label)); var b = el("b", null, "—"); dv.appendChild(b); stats.appendChild(dv); return b; };
       var ran = mk("Ran"), pc = mk("Pace car"), dl = mk("+/-");
       c.appendChild(stats);
+      var wl = el("label", "wt-lbl", "COIL WEIGHT (LBS)"); wl.setAttribute("for", "log-" + i); c.appendChild(wl);
       var log = el("div", "mc-log");
-      var inp = input("number", "log-" + i, "", { inputmode: "decimal", min: "0", step: "0.1", placeholder: "Coil lb", "aria-label": "Coil weight for " + m.name });
+      var inp = input("text", "log-" + i, "", { inputmode: "decimal", autocomplete: "off", enterkeyhint: "done", placeholder: "Weight (lbs)", "aria-label": "Coil weight in lbs for " + m.name });
       var btn = el("button", "btn solid", "LOG COIL"); btn.type = "button"; btn.id = "logbtn-" + i;
       var last = el("div", "mc-last sub");
       btn.addEventListener("click", function () { logCoil(m.id, inp, last); });
@@ -1164,20 +1269,68 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     setText($("d-shift"), s.date + " · " + fmtHHMM(s.start) + " – " + fmtHHMM(s.end) + (s.operator ? " · " + s.operator : ""));
     if (advOpen) renderAdvanced();
     if (dtOpen) renderDowntime();
+    if (rcOpen) renderRecent();
     buildDock();
   }
 
+  // A coil WEIGHT typed by an operator. Asks first (in-page, [Yes, log it] / [Fix it]) when it
+  // looks like a coil ID (letters, dashes, a leading-zero tag like 004512), or is over
+  // settings.confirmOverLb or under settings.confirmUnderLb. onOk(weight) runs only once it's OK.
+  function fmtLb(w) { return w % 1 ? fmtInt(Math.floor(w)) + "." + String(Math.round(w * 10) % 10) : fmtInt(w); }
+  function checkCoilWeight(raw, inp, showErr, onOk) {
+    var t = String(raw == null ? "" : raw).trim(), set = state.settings || defaultSettings();
+    if (!t) { showErr("Enter the coil weight in lbs."); return; }
+    var clean = t.replace(/,/g, "").replace(/\s*lbs?\.?$/i, "");
+    var plain = /^(\d+\.?\d*|\.\d+)$/.test(clean);
+    var w = parseFloat(plain ? clean : clean.replace(/[^0-9.]/g, ""));
+    if (!(w > 0) || w >= 1e7) { showErr(plain ? "Enter a coil weight greater than 0." : "That looks like a coil ID, not a weight. Enter the coil weight in lbs."); return; }
+    w = Math.round(w * 10) / 10;
+    var q = null;
+    if (!plain || /^0\d{3,}/.test(clean)) q = "That looks like a coil ID, not a weight. Log " + fmtLb(w) + " lb anyway?";
+    else if (w > set.confirmOverLb) q = fmtLb(w) + " lb is over " + fmtInt(set.confirmOverLb) + " lb. Is that the coil weight (not the coil ID)?";
+    else if (w < set.confirmUnderLb) q = fmtLb(w) + " lb is under " + fmtInt(set.confirmUnderLb) + " lb. Is that right?";
+    if (!q) { onOk(w); return; }
+    askConfirm(q, "Yes, log it", "Fix it", function () { onOk(w); }, function () {
+      showErr("Not logged. Fix the weight and log it again.");
+      if (inp) { try { inp.focus(); inp.select(); } catch (e) {} }
+    });
+  }
+
+  // in-page confirm (big buttons; window.confirm can't label them)
+  var askOpen = null;
+  function askConfirm(msg, yesText, noText, onYes, onNo) {
+    var box = $("ask"); if (askOpen) closeAsk(false);
+    setText($("ask-msg"), msg); setText($("ask-yes"), yesText); setText($("ask-no"), noText);
+    askOpen = { yes: onYes, no: onNo, back: document.activeElement };
+    box.hidden = false;
+    try { $("ask-yes").focus(); } catch (e) {}
+  }
+  function closeAsk(ok) {
+    var a = askOpen; askOpen = null; $("ask").hidden = true;
+    if (!a) return;
+    if (ok) { if (a.yes) a.yes(); } else if (a.no) a.no();
+  }
+  $("ask-yes").addEventListener("click", function () { closeAsk(true); });
+  $("ask-no").addEventListener("click", function () { closeAsk(false); });
+  document.addEventListener("keydown", function (e) { if (askOpen && e.key === "Escape") { e.preventDefault(); closeAsk(false); } });
+
   function logCoil(machineId, inp, lastEl) {
-    var w = num(inp.value);
-    if (!(w > 0) || w >= 1e6) { setText(lastEl, "Enter a coil weight greater than 0."); setCls(lastEl, "mc-last red"); return; }
+    checkCoilWeight(inp.value, inp, function (msg) { setText(lastEl, msg); setCls(lastEl, "mc-last red"); },
+      function (w) { addCoil(machineId, w); inp.value = ""; try { inp.blur(); } catch (e) {} });
+  }
+  // the one place a new coil is added (machine cards, phone dock)
+  function addCoil(machineId, w) {
     var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
       size: "", notes: "", downtimeMin: null, downtimeReason: "" };
     state.coils.push(c);
     lastLogged[machineId] = c.id;
-    inp.value = "";
     save();
     tick();
     if (advOpen) renderAdvanced();
+    if (rcOpen) renderRecent();
+    showReadback(c);
+    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+    return c;
   }
 
   function colorFor(pct) { return pct == null ? "white" : pct >= 0 ? "green" : pct > -5 ? "amber" : "red"; }
@@ -1348,6 +1501,26 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       adv.appendChild(sec);
     });
 
+    // settings: fat-finger checks
+    var st = el("div", "adv-mach"); st.id = "adv-settings";
+    st.appendChild(el("h3", null, "Settings · weight checks"));
+    st.appendChild(el("p", "sub", "Logging a coil under or over these asks the operator to confirm before it counts."));
+    var sg = el("div", "row2");
+    var smin = input("text", "set-min", String(state.settings.confirmUnderLb), { inputmode: "decimal", autocomplete: "off" });
+    var smax = input("text", "set-max", String(state.settings.confirmOverLb), { inputmode: "decimal", autocomplete: "off" });
+    sg.appendChild(field("Ask if under (lb)", smin)); sg.appendChild(field("Ask if over (lb)", smax));
+    st.appendChild(sg);
+    var serr = el("p", "err"); serr.id = "set-err";
+    var sb = smallBtn("SAVE CHECKS", "", function () {
+      var u = num(smin.value.replace(/,/g, "")), o = num(smax.value.replace(/,/g, ""));
+      if (!(u >= 0) || !(o > 0) || u >= o) { setText(serr, "Under must be less than over, both in lb."); setCls(serr, "err"); return; }
+      state.settings = cleanSettings({ confirmUnderLb: u, confirmOverLb: o }); save();
+      setCls(serr, "err green"); setText(serr, "Saved: asks under " + fmtInt(u) + " lb and over " + fmtInt(o) + " lb.");
+    }); sb.id = "set-save";
+    var sr = smallBtn("DEFAULTS", "", function () { smin.value = DEFAULT_CONFIRM_UNDER_LB; smax.value = DEFAULT_CONFIRM_OVER_LB; });
+    var sl = el("div", "adv-line"); sl.appendChild(sb); sl.appendChild(sr); st.appendChild(sl); st.appendChild(serr);
+    adv.appendChild(st);
+
     // export
     var ex = el("div", "adv-mach");
     ex.appendChild(el("h3", null, "Export this shift"));
@@ -1369,7 +1542,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var w = field(label, i, full ? "full" : ""); w.style.marginBottom = "0";
       g.appendChild(w); return i;
     };
-    var iw = f("Weight lb", "weight", "number", { inputmode: "decimal", min: "0", step: "0.1" });
+    var iw = f("Coil weight (lbs)", "weight", "text", { inputmode: "decimal", autocomplete: "off" });
     var icn = f("Coil #", "coilNo", "text", { maxlength: "40" });
     var ih = f("Heat #", "heatNo", "text", { maxlength: "40" });
     var is = f("Size / gauge", "size", "text", { maxlength: "40" });
@@ -1380,11 +1553,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var err = el("p", "err"); box.appendChild(err);
     var line = el("div", "adv-line");
     line.appendChild(smallBtn("SAVE", "", function () {
-      var w = num(iw.value);
-      if (!(w > 0)) { setText(err, "Weight must be greater than 0."); return; }
-      c.weight = w; c.coilNo = str(icn.value, 40); c.heatNo = str(ih.value, 40); c.size = str(is.value, 40);
-      var dm = num(idm.value); c.downtimeMin = dm >= 0 ? dm : null; c.downtimeReason = str(idr.value, 200); c.notes = str(ino.value, 500);
-      editingCoil = null; save(); tick(); renderAdvanced();
+      var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: str(is.value, 40), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500) };
+      checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
+      c.weight = w;
+      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size;
+      c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
+      editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
+      });
     }));
     line.appendChild(smallBtn("DELETE COIL", "warn", function () {
       if (!window.confirm("Delete this " + fmtW(c.weight) + " lb coil?")) return;
@@ -1408,7 +1583,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
   function exportJSON() {
     return JSON.stringify({ schema: SCHEMA, exportedAt: iso(Date.now()), shift: state.shift, machines: state.machines,
-      coils: state.coils, downtime: state.downtime, summary: summary() }, null, 2);
+      coils: state.coils, downtime: state.downtime, settings: state.settings, summary: summary() }, null, 2);
   }
   function csvCell(v) {
     if (v == null) return "";
@@ -1653,6 +1828,107 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (dtOpen) renderDowntime();
   });
 
+  /* ========================= READBACK + RECENT COILS ========================= */
+  var rbCoil = null, rbTimer = null, rcOpen = false, rcFilter = "all", rcEdit = null, rcHl = null;
+  var RB_MS = 12000;
+  function showReadback(c) {
+    var m = machineById(c.machineId);
+    rbCoil = c.id;
+    setText($("rb-w"), fmtLb(c.weight) + " lb");
+    setText($("rb-mach"), (m ? m.name : "") + " · " + fmtClock(Date.parse(c.loggedAt)));
+    setText($("rb-undo"), "UNDO"); $("rb-undo").disabled = false; setCls($("readback"), "readback");
+    setText(document.querySelector("#readback .rb-lbl"), "LOGGED");
+    $("readback").hidden = false;
+    if (rbTimer) clearTimeout(rbTimer);
+    rbTimer = setTimeout(hideReadback, RB_MS);
+    if (window.__onReadback) window.__onReadback();
+  }
+  function hideReadback() { if (rbTimer) clearTimeout(rbTimer); rbTimer = null; rbCoil = null; $("readback").hidden = true; if (window.__onReadback) window.__onReadback(); }
+  $("rb-x").addEventListener("click", hideReadback);
+  $("rb-undo").addEventListener("click", function () {
+    var id = rbCoil; if (!id) return;
+    var c = coilById(id);
+    state.coils = state.coils.filter(function (x) { return x.id !== id; });
+    save(); tick(); if (advOpen) renderAdvanced(); if (rcOpen) renderRecent();
+    setText(document.querySelector("#readback .rb-lbl"), "REMOVED"); setCls($("readback"), "readback undone");
+    $("rb-undo").disabled = true; rbCoil = null;
+    if (rbTimer) clearTimeout(rbTimer); rbTimer = setTimeout(hideReadback, 4000);
+    void c;
+  });
+  $("rb-fix").addEventListener("click", function () { var id = rbCoil; hideReadback(); openRecent(id); });
+
+  function coilById(id) { for (var i = 0; i < state.coils.length; i++) if (state.coils[i].id === id) return state.coils[i]; return null; }
+  function recentCoils() {
+    return state.coils.filter(function (c) { return rcFilter === "all" || c.machineId === rcFilter; })
+      .slice().sort(function (a, b) { return Date.parse(b.loggedAt) - Date.parse(a.loggedAt); }).slice(0, 10);
+  }
+  function openRecent(hlId) {
+    rcOpen = true; rcHl = hlId || null; rcEdit = hlId || null;
+    if (hlId) { var c = coilById(hlId); if (c && rcFilter !== "all" && c.machineId !== rcFilter) rcFilter = "all"; }
+    $("rcp").hidden = false; setText($("rc-toggle"), "- RECENT COILS"); $("rc-toggle").setAttribute("aria-expanded", "true");
+    renderRecent();
+    try { $("rc-toggle").scrollIntoView({ block: "start" }); } catch (e) {}
+  }
+  function closeRecent() {
+    rcOpen = false; rcEdit = null; $("rcp").hidden = true;
+    setText($("rc-toggle"), "+ RECENT COILS"); $("rc-toggle").setAttribute("aria-expanded", "false");
+  }
+  function renderRecent() {
+    var box = $("rcp"); box.textContent = "";
+    if (rcFilter !== "all" && !machineById(rcFilter)) rcFilter = "all";
+    box.appendChild(el("p", "sub", "Last 10 coils, newest first. Fix a wrong weight or machine here; every total, the pace car and the projection update."));
+    if (state.machines.length > 1) {
+      var f = el("div", "rc-filter");
+      [["all", "All"]].concat(state.machines.map(function (m) { return [m.id, m.name]; })).forEach(function (o, k) {
+        var b = el("button", "btn" + (rcFilter === o[0] ? " on" : ""), o[1]); b.type = "button"; b.id = "rc-f-" + (k ? k - 1 : "all");
+        b.addEventListener("click", function () { rcFilter = o[0]; rcEdit = null; renderRecent(); });
+        f.appendChild(b);
+      });
+      box.appendChild(f);
+    }
+    var list = recentCoils();
+    if (!list.length) { box.appendChild(el("p", "empty", "No coils logged yet.")); return; }
+    list.forEach(function (c, k) {
+      var m = machineById(c.machineId);
+      var row = el("div", "rc-row" + (c.id === rcHl ? " hl" : "")); row.id = "rc-" + k;
+      var info = el("div");
+      info.appendChild(el("span", "rc-w", fmtLb(c.weight) + " lb"));
+      info.appendChild(el("span", "rc-meta", fmtClock(Date.parse(c.loggedAt)) + " · " + (m ? m.name : "?") + (c.coilNo ? " · coil " + c.coilNo : "")));
+      row.appendChild(info);
+      var eb = smallBtn(rcEdit === c.id ? "CLOSE" : "EDIT", "", function () { rcEdit = rcEdit === c.id ? null : c.id; renderRecent(); }); eb.id = "rc-edit-" + k;
+      var db = smallBtn("DELETE", "warn", function () {
+        askConfirm("Delete the " + fmtLb(c.weight) + " lb coil on " + (m ? m.name : "?") + " (" + fmtClock(Date.parse(c.loggedAt)) + ")?", "Delete it", "Keep it", function () {
+          state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
+          if (rbCoil === c.id) hideReadback();
+          rcEdit = null; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
+        });
+      }); db.id = "rc-del-" + k;
+      row.appendChild(eb); row.appendChild(db);
+      if (rcEdit === c.id) {
+        var ed = el("div", "rc-edit");
+        var wi = input("text", "rc-w-" + k, String(c.weight), { inputmode: "decimal", autocomplete: "off", "aria-label": "Coil weight in lbs" });
+        var ms = el("select", "in"); ms.id = "rc-m-" + k;
+        state.machines.forEach(function (mm) { var op = el("option", null, mm.name); op.value = mm.id; ms.appendChild(op); });
+        ms.value = c.machineId;
+        ed.appendChild(field("Coil weight (lbs)", wi)); ed.appendChild(field("Machine", ms));
+        var er = el("p", "err"); er.id = "rc-err-" + k;
+        var bs = el("div", "rc-btns");
+        var sv = smallBtn("SAVE", "solid", function () {
+          checkCoilWeight(wi.value, wi, function (msg) { setText(er, msg); }, function (w) {
+            c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
+            rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
+          });
+        }); sv.id = "rc-save-" + k;
+        var cx = smallBtn("CANCEL", "", function () { rcEdit = null; renderRecent(); });
+        bs.appendChild(sv); bs.appendChild(cx); ed.appendChild(bs); ed.appendChild(er);
+        row.appendChild(ed);
+      }
+      box.appendChild(row);
+    });
+  }
+  $("rc-toggle").addEventListener("click", function () { if (rcOpen) closeRecent(); else openRecent(null); });
+  $("rc-open").addEventListener("click", function () { openRecent(null); });
+
   /* ========================= PHONE DOCK ========================= */
   var dockSel = null, dockUndoId = null, dockMsgTimer = null;
   function buildDock() {
@@ -1687,7 +1963,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var m = machineById(dockSel);
     if (m) {
-      $("dock-in").setAttribute("aria-label", "Coil weight in lb for " + m.name);
+      $("dock-in").setAttribute("aria-label", "Coil weight in lbs for " + m.name);
+      $("dock-for").textContent = state.machines.length > 1 ? "for " + m.name : "";
     }
   }
   function sizeDock() {
@@ -1700,16 +1977,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (dockMsgTimer) { clearTimeout(dockMsgTimer); dockMsgTimer = null; }
     if (text) {
       box.appendChild(el("span", null, text));
-      if (undo) {
-        var u = el("button", "link", "UNDO"); u.type = "button"; u.id = "dock-undo";
-        u.addEventListener("click", function () {
-          var id = dockUndoId; dockUndoId = null;
-          state.coils = state.coils.filter(function (c) { return c.id !== id; });
-          save(); tick(); if (advOpen) renderAdvanced();
-          dockMsg("Removed that coil.", "amber");
-        });
-        box.appendChild(u);
-      }
       dockMsgTimer = setTimeout(function () { dockMsg(""); }, undo ? 12000 : 6000);
     }
     sizeDock();
@@ -1717,19 +1984,15 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function dockLog() {
     var inp = $("dock-in"), m = machineById(dockSel) || state.machines[0];
     if (!m) return;
-    var w = num(inp.value);
-    if (!(w > 0) || w >= 1e6) { dockMsg("Enter a coil weight greater than 0.", "red"); try { inp.focus(); } catch (e) {} return; }
-    var c = { id: uid("c"), machineId: m.id, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
-      size: "", notes: "", downtimeMin: null, downtimeReason: "" };
-    state.coils.push(c);
-    lastLogged[m.id] = c.id;
-    inp.value = "";
-    save(); tick(); if (advOpen) renderAdvanced();
-    dockUndoId = c.id;
-    dockMsg("Logged " + fmtW(w) + " lb · " + m.name + " · " + fmtClock(Date.now()), "", true);
-    try { inp.blur(); } catch (e) {}
-    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+    checkCoilWeight(inp.value, inp, function (msg) { dockMsg(msg, "red"); }, function (w) {
+      inp.value = ""; dockMsg("");
+      try { inp.blur(); } catch (e) {}
+      addCoil(m.id, w);                 // big LOGGED readback + 12 s UNDO sits on top of the dock
+    });
   }
+  // the readback lives in the dock on the phone, right above the weight box
+  (function () { var rb = $("readback"), di = document.querySelector("#dock .dock-inner"); if (rb && di) di.insertBefore(rb, di.firstChild); })();
+  window.__onReadback = function () { sizeDock(); };
   $("dock-log").addEventListener("click", dockLog);
   $("dock-in").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); dockLog(); } });
   $("dock-in").addEventListener("input", function () { if ($("dock-msg").className.indexOf("red") >= 0) dockMsg(""); });

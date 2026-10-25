@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <!--
-  DRAW RATE TRACKER v4 - single self-contained offline file (no network, no CDN).
+  DRAW RATE TRACKER v5 - single self-contained offline file (no network, no CDN).
+  v5: downtime comes off the target and pace car by weight (see DOWNTIME below).
 
-  SAVED DATA  (localStorage key "drawRateV4"; old key "drawRateMulti" is read once
-  for migration and never modified). The same shape is used for the JSON export,
+  SAVED DATA  (localStorage key "drawRateV5", shared by this page and the phone app at /app/;
+  the v4 key "drawRateV4" and the older "drawRateMulti" are read once for import and never modified). The same shape is used for the JSON export,
   plus "exportedAt" and a computed "summary". Every record has a string id and
   ISO-8601 timestamps so it can be loaded straight into a database.
 
   {
-    "schema": "draw-rate/v4",
+    "schema": "draw-rate/v5",
     "setupDone": true,                    // false = show the setup wizard
     "shift": {                            // table: shifts
       "id": "s_lx2k9a_ab12c",
@@ -31,9 +32,15 @@
         "coilNo": "", "heatNo": "", "size": "", "notes": "",
         "downtimeMin": null | number, "downtimeReason": "" }
     ],
-    "downtime": [                         // table: downtime (FK machines.id)
-      { "id": "d_...", "machineId": "m_...", "loggedAt": ISO, "minutes": 15, "reason": "" }
-    ]
+    "downtime": [                         // table: downtime (FK machines.id, or "all")
+      { "id": "d_...", "machineId": "m_..." | "all", "loggedAt": ISO,
+        "startAt": ISO, "endAt": ISO | null,    // null = still down (running)
+        "minutes": 15 | null, "reason": "" }   // minutes = endAt - startAt (null while running)
+    ],                                    // coil.downtimeMin is a note only; it does not change totals
+    "settings": {                         // per device, kept across shifts
+      "confirmUnderLb": 3000,             // ask "is that right?" for a coil under this
+      "confirmOverLb": 5000               // ask "coil weight, not the coil ID?" for a coil over this
+    }
   }
 
   The math lives in one place: the "CALC MODULE" in the script below. The same formulas are
@@ -158,7 +165,9 @@
   .mc-rate { color: var(--fg-dim); font-size: 0.8rem; white-space: nowrap; }
   .mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.9rem; }
   .mc-stats b { display: block; color: var(--white); font-size: 1.2rem; font-variant-numeric: tabular-nums; margin-top: 0.15rem; }
-  .mc-log { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; }
+  .mc-log { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
+  .mc-log .in::placeholder { font-size: 0.85em; }
+  .wt-lbl { display: block; font-size: 0.75rem; letter-spacing: 0.12em; color: var(--white); margin: 0.6rem 0 0.3rem; font-weight: 700; }
   .mc-log .btn { padding: 0.5rem 1.1rem; }
   .mc-last { margin-top: 0.5rem; min-height: 1.2em; }
   .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 2.5rem; }
@@ -195,6 +204,55 @@
     .delta { font-size: 1.7rem; }
     .delta .pct { font-size: 1.2rem; }
   }
+  /* downtime */
+  .down-line { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.6rem; color: var(--amber); font-size: 0.9rem; }
+  .down-line .red { color: var(--red); font-weight: 700; }
+  .mc-down { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; margin-top: 0.6rem; }
+  .mc-down-txt { font-size: 0.85rem; color: var(--amber); }
+  .mc-down-txt.red { color: var(--red); font-weight: 700; }
+  .mc.down { border-left-color: var(--red); }
+  #dtp { padding-bottom: 1rem; }
+  #dtp h3 { color: var(--white); font-size: 1rem; margin: 1.5rem 0 0.6rem; letter-spacing: 0.06em; }
+  #dtp .btn.full { width: 100%; }
+  select.in { background: #000; }
+  .dt-past { display: grid; grid-template-columns: 5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
+  .dt-past .field { margin-bottom: 0; }
+  .dt-past .in { height: 3rem; font-size: 1.1rem; }
+  .dt-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.9rem; color: var(--white); }
+  .dt-entry.run { color: var(--red); font-weight: 700; }
+  .dt-tot > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.4rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.95rem; }
+  .dt-tot > div span:last-child { color: var(--amber); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .dt-tot > div.all span:last-child { color: var(--white); }
+  /* fat-finger: confirm, readback, recent coils */
+  .top-r { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+  #rc-open { min-height: 3rem; font-size: 0.8rem; letter-spacing: 0.06em; padding: 0.3rem 0.6rem; }
+  .ask { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.82); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .ask-box { width: 100%; max-width: 28rem; background: var(--panel); border: 2px solid var(--amber); padding: 1.25rem; }
+  .ask-msg { color: var(--white); font-size: 1.3rem; line-height: 1.35; margin: 0 0 1.25rem; font-weight: 700; }
+  .ask-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .ask-btns .btn { min-height: 3.75rem; font-size: 1.1rem; text-transform: none; padding: 0.4rem 0.5rem; white-space: nowrap; }
+  @media (max-width: 380px) { .ask-btns .btn { font-size: 1rem; } .ask-box { padding: 1rem; } }
+  .readback { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 40;
+              width: calc(100% - 2rem); max-width: 30rem; background: #000; border: 2px solid var(--fg); box-shadow: 0 0 24px rgba(57, 255, 106, 0.35); padding: 0.75rem 1rem; }
+  .readback.undone { border-color: var(--amber); }
+  .rb-top { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.85rem; letter-spacing: 0.1em; }
+  .rb-lbl { color: var(--fg); font-weight: 700; } .rb-mach { color: var(--white); text-align: right; overflow-wrap: anywhere; }
+  .rb-w { font-size: clamp(2.4rem, 11vw, 3.4rem); font-weight: 700; color: var(--white); line-height: 1.1; margin: 0.2rem 0 0.5rem; font-variant-numeric: tabular-nums; text-shadow: 0 0 8px rgba(57, 255, 106, 0.5); }
+  .rb-act { display: grid; grid-template-columns: 1fr 1.4fr 0.8fr; gap: 0.5rem; }
+  .rb-act .btn { min-height: 3rem; padding: 0.3rem 0.4rem; font-size: 0.95rem; }
+  #rcp { padding-bottom: 1rem; }
+  .rc-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+  .rc-filter .btn { min-height: 3rem; padding: 0.3rem 0.8rem; }
+  .rc-filter .btn.on { background: var(--fg); color: #000; border-color: var(--fg); }
+  .rc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); }
+  .rc-row .rc-w { color: var(--white); font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rc-row .rc-meta { display: block; color: var(--fg-dim); font-size: 0.85rem; }
+  .rc-row.hl { background: rgba(57, 255, 106, 0.08); }
+  .rc-edit { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem; align-items: end; padding: 0.5rem 0 0.25rem; }
+  .rc-edit .field { margin-bottom: 0; }
+  .rc-edit .in { height: 3rem; }
+  .rc-edit .rc-btns { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .rc-edit .err { grid-column: 1 / -1; margin: 0; }
 </style>
 </head>
 <body>
@@ -223,7 +281,10 @@
         <div class="brand glow">DRAW RATE</div>
         <div class="sub" id="d-shift"></div>
       </div>
-      <div class="clock" id="d-clock"></div>
+      <div class="top-r">
+        <div class="clock" id="d-clock"></div>
+        <button type="button" class="btn small" id="rc-open">RECENT COILS</button>
+      </div>
     </header>
     <p class="phase" id="d-phase"></p>
 
@@ -240,6 +301,7 @@
     </div>
     <div class="bar" aria-hidden="true"><div class="fill" id="d-fill"></div><div class="mark" id="d-mark"></div></div>
     <div class="legend"><span id="d-of-target"></span><span id="d-target"></span></div>
+    <div class="down-line" id="d-down" hidden></div>
 
     <section class="block">
       <span class="lbl" id="d-delta-lbl">Deficit / surplus</span>
@@ -265,6 +327,10 @@
     </section>
 
     <section class="block">
+      <button type="button" class="adv-toggle" id="rc-toggle" aria-expanded="false">+ RECENT COILS</button>
+      <div id="rcp" hidden></div>
+      <button type="button" class="adv-toggle" id="dt-toggle" aria-expanded="false">+ DOWNTIME</button>
+      <div id="dtp" hidden></div>
       <button type="button" class="adv-toggle" id="adv-toggle" aria-expanded="false">+ ADVANCED</button>
       <div id="adv" hidden></div>
     </section>
@@ -276,6 +342,17 @@
   </section>
 
   <p class="text-center"><a class="link" href="app/">Phone app (installable, works offline)</a></p>
+</div>
+<div class="readback" id="readback" role="status" aria-live="assertive" hidden>
+  <div class="rb-top"><span class="rb-lbl">LOGGED</span><span class="rb-mach" id="rb-mach"></span></div>
+  <div class="rb-w" id="rb-w"></div>
+  <div class="rb-act"><button type="button" class="btn solid" id="rb-undo">UNDO</button><button type="button" class="btn" id="rb-fix">FIX / RECENT</button><button type="button" class="btn" id="rb-x" aria-label="Hide">OK</button></div>
+</div>
+<div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
+  <div class="ask-box">
+    <p class="ask-msg" id="ask-msg"></p>
+    <div class="ask-btns"><button type="button" class="btn solid" id="ask-yes">Yes, log it</button><button type="button" class="btn warn" id="ask-no">Fix it</button></div>
+  </div>
 </div>
 <script>
 /* =====================================================================
@@ -309,6 +386,17 @@
                     (breaks skipped; after the shift end time runs straight on).
                     early/late = hit time - end (negative = early).
      catch-up rate  (T - L) / left   (0 once the target is hit; blank when < 1 min left)
+     DOWNTIME (by weight)
+                    each entry is the interval [startAt, endAt] (endAt = now while running) for
+                    one machine or "all". Per machine: its own + "all" intervals are merged
+                    (overlaps count once) and only WORKED time inside them counts, so break and
+                    off-shift time is never deducted twice.
+                      downTotal_m = worked ms in the merged intervals
+                      downSoFar_m = the same, only up to t
+                      target_m    = W x rate_m - rate_m x downTotal_m
+                      paceCar_m   = w x rate_m - rate_m x downSoFar_m   (flat while the machine is down)
+                    T and PC above are the SUMS of these adjusted figures, and the deficit/surplus,
+                    projection, hit-target time and catch-up rate all use the adjusted T and PC.
    ===================================================================== */
 var Calc = (function () {
   "use strict";
@@ -407,20 +495,35 @@ var Calc = (function () {
 
   function coilTime(c) { var t = Date.parse(c.loggedAt); return isFinite(t) ? t : 0; }
 
+  function mergeIv(list) {
+    list = list.slice().sort(function (x, y) { return x[0] - y[0]; });
+    var out = [];
+    list.forEach(function (r) {
+      var l = out[out.length - 1];
+      if (l && r[0] <= l[1]) l[1] = Math.max(l[1], r[1]); else out.push([r[0], r[1]]);
+    });
+    return out;
+  }
+  function downIv(d, now) {
+    var a = Date.parse(d.startAt), b = d.endAt ? Date.parse(d.endAt) : now;
+    if (!isFinite(a) || !isFinite(b) || b <= a) return null;
+    return [a, b];
+  }
+
   function compute(state, now) {
-    var shift = state.shift || {}, machines = state.machines || [], coils = state.coils || [];
+    var shift = state.shift || {}, machines = state.machines || [], coils = state.coils || [], downtime = state.downtime || [];
     var byId = {};
     machines.forEach(function (m) { byId[m.id] = 0; });
     coils.forEach(function (c) { if (byId.hasOwnProperty(c.machineId)) byId[c.machineId] += c.weight; });
     var L = 0;
     machines.forEach(function (m) { L += byId[m.id]; });
 
-    var out = { phase: "invalid", lbsRan: L, machines: [] };
+    var out = { phase: "invalid", lbsRan: L, machines: [], downMs: 0, downLb: 0, downSoFarLb: 0, downEntries: {} };
     var win = shiftWindow(shift);
     var breaks = win ? breakIntervals(shift, win) : [];
     var Wms = win ? worked(win, breaks, win.start, win.end) : 0;
     if (!win || Wms <= 0) {
-      out.machines = machines.map(function (m) { return { id: m.id, lbs: byId[m.id], target: null, paceCar: null, delta: null, deltaPct: null }; });
+      out.machines = machines.map(function (m) { return { id: m.id, lbs: byId[m.id], target: null, paceCar: null, delta: null, deltaPct: null, downMs: 0, downLb: 0, downSoFarLb: 0 }; });
       return out;
     }
     var t = Math.min(Math.max(now, win.start), win.end);
@@ -428,10 +531,36 @@ var Calc = (function () {
     var leftMs = Wms - wms;
     var fraction = wms / Wms;
     var W = Wms / HOUR;
-    var rateSum = 0;
-    machines.forEach(function (m) { rateSum += m.needRate; });
-    var T = W * rateSum;
-    var PC = fraction * T;
+    var rateSum = 0, rateOf = {};
+    machines.forEach(function (m) { rateSum += m.needRate; rateOf[m.id] = m.needRate; });
+
+    // each entry's own lb impact (for the downtime list); totals below merge overlaps
+    downtime.forEach(function (d) {
+      var iv = downIv(d, now); if (!iv) return;
+      var ms = worked(win, breaks, iv[0], iv[1]);
+      var rate = d.machineId === "all" ? rateSum : (rateOf[d.machineId] || 0);
+      out.downEntries[d.id] = { ms: ms, lb: rate * ms / HOUR, rawMs: iv[1] - iv[0] };
+    });
+
+    var T = 0, PC = 0;
+    out.machines = machines.map(function (m) {
+      var ivs = [];
+      downtime.forEach(function (d) {
+        if (d.machineId !== m.id && d.machineId !== "all") return;
+        var iv = downIv(d, now); if (iv) ivs.push(iv);
+      });
+      var dTot = 0, dSo = 0;
+      mergeIv(ivs).forEach(function (iv) {
+        dTot += worked(win, breaks, iv[0], iv[1]);
+        dSo += worked(win, breaks, iv[0], Math.min(iv[1], t));
+      });
+      var dLb = m.needRate * dTot / HOUR, dSoLb = m.needRate * dSo / HOUR;
+      var tg = W * m.needRate - dLb, pc = fraction * W * m.needRate - dSoLb, lbs = byId[m.id];
+      T += tg; PC += pc;
+      out.downMs += dTot; out.downLb += dLb; out.downSoFarLb += dSoLb;
+      return { id: m.id, lbs: lbs, target: tg, paceCar: pc, delta: lbs - pc, deltaPct: pc > 0 ? (lbs - pc) / pc * 100 : null,
+        grossTarget: W * m.needRate, downMs: dTot, downLb: dLb, downSoFarLb: dSoLb };
+    });
     var D = L - PC;
 
     out.phase = now < win.start ? "before" : (now >= win.end ? "after" : "live");
@@ -443,6 +572,7 @@ var Calc = (function () {
     out.workedTotalMs = Wms; out.workedSoFarMs = wms; out.workedLeftMs = leftMs;
     out.fraction = fraction;
     out.rateSum = rateSum;
+    out.grossTarget = W * rateSum;
     out.target = T;
     out.paceCar = PC;
     out.delta = D;
@@ -451,7 +581,7 @@ var Calc = (function () {
     out.paceWaitMs = wms >= PACE_MIN_WORKED_MS ? 0 : PACE_MIN_WORKED_MS - wms;
     out.projected = out.pace == null ? null : L + out.pace * (leftMs / HOUR);
     out.projDelta = out.projected == null ? null : out.projected - T;
-    out.projPct = out.projected == null ? null : (out.projected - T) / T * 100;
+    out.projPct = out.projected == null || !(T > 0) ? null : (out.projected - T) / T * 100;
     out.targetHit = L >= T;
     out.hitAt = null; out.hitVsEndMs = null;
     if (!out.targetHit && out.pace != null && out.pace > 0 && out.phase !== "after") {
@@ -459,10 +589,6 @@ var Calc = (function () {
       out.hitVsEndMs = out.hitAt - win.end;
     }
     out.catchUp = out.targetHit ? 0 : (leftMs >= MIN ? (T - L) / (leftMs / HOUR) : null);
-    out.machines = machines.map(function (m) {
-      var tg = W * m.needRate, pc = fraction * tg, lbs = byId[m.id];
-      return { id: m.id, lbs: lbs, target: tg, paceCar: pc, delta: lbs - pc, deltaPct: pc > 0 ? (lbs - pc) / pc * 100 : null };
-    });
     return out;
   }
 
@@ -493,7 +619,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 <script>
 (function () {
   "use strict";
-  var KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v4";
+  var KEY = "drawRateV5", V4_KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v5", MERGED_FLAG = "drawRateV4Imported";
   var MAX_MACHINES = 6, DEFAULT_RATE = 2800;
 
   /* ---------- small helpers ---------- */
@@ -549,13 +675,22 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function defaultMachine(i) {
     return { id: uid("m"), slot: i + 1, name: "Machine " + (i + 1), needRate: DEFAULT_RATE, timerStartedAt: null, timerAccumMs: 0 };
   }
+  var DEFAULT_CONFIRM_UNDER_LB = 3000, DEFAULT_CONFIRM_OVER_LB = 5000;   // fat-finger checks (Advanced > Settings)
+  function defaultSettings() { return { confirmUnderLb: DEFAULT_CONFIRM_UNDER_LB, confirmOverLb: DEFAULT_CONFIRM_OVER_LB }; }
+  function cleanSettings(x) {
+    var d = defaultSettings(); x = x && typeof x === "object" ? x : {};
+    var u = num(x.confirmUnderLb), o = num(x.confirmOverLb);
+    if (u >= 0 && u < 1e6) d.confirmUnderLb = u;
+    if (o > 0 && o < 1e7) d.confirmOverLb = o;
+    return d;
+  }
   function defaultState() {
     var now = Date.now();
     return {
       schema: SCHEMA, setupDone: false,
       shift: { id: uid("s"), date: todayStr(), operator: "", start: "", end: "", breakMode: "total",
         breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now) },
-      machines: [defaultMachine(0)], coils: [], downtime: []
+      machines: [defaultMachine(0)], coils: [], downtime: [], settings: defaultSettings()
     };
   }
 
@@ -599,11 +734,18 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
     }) : [];
     var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
-      return d && typeof d === "object" && seen.hasOwnProperty(d.machineId) && num(d.minutes) > 0 && isIso(d.loggedAt);
+      return d && typeof d === "object" && (seen.hasOwnProperty(d.machineId) || d.machineId === "all") && isIso(d.loggedAt);
     }).map(function (d) {
-      return { id: str(d.id, 64) || uid("d"), machineId: d.machineId, loggedAt: d.loggedAt, minutes: num(d.minutes), reason: str(d.reason, 200) };
-    }) : [];
-    var st = { schema: SCHEMA, setupDone: setupDone, shift: s, machines: machines, coils: coils, downtime: downtime };
+      var startAt = isIso(d.startAt) ? d.startAt : null, endAt = isIso(d.endAt) ? d.endAt : null, mins = num(d.minutes);
+      if (!startAt) {                  // v4 entry (minutes only): it ended when it was logged
+        if (!(mins > 0)) return null;
+        endAt = d.loggedAt; startAt = iso(Date.parse(d.loggedAt) - mins * 60000);
+      }
+      if (endAt && Date.parse(endAt) <= Date.parse(startAt)) return null;
+      return { id: str(d.id, 64) || uid("d"), machineId: d.machineId, loggedAt: d.loggedAt, startAt: startAt, endAt: endAt,
+        minutes: endAt ? (Date.parse(endAt) - Date.parse(startAt)) / 60000 : null, reason: str(d.reason, 200) };
+    }).filter(Boolean) : [];
+    var st = { schema: SCHEMA, setupDone: setupDone, shift: s, machines: machines, coils: coils, downtime: downtime, settings: cleanSettings(p.settings) };
     if (st.setupDone && !Calc.shiftWindow(s)) st.setupDone = false;
     return st;
   }
@@ -641,11 +783,50 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return st;
   }
 
-  function load() {
+  function parseKey(k) {
+    try { var raw = window.localStorage.getItem(k); return raw ? sanitize(JSON.parse(raw)) : null; } catch (e) { return null; }
+  }
+  function lastActivity(st) {
+    var t = Date.parse(st.shift.updatedAt) || 0;
+    st.coils.forEach(function (c) { t = Math.max(t, Date.parse(c.loggedAt) || 0); });
+    st.downtime.forEach(function (d) { t = Math.max(t, Date.parse(d.endAt || d.startAt) || 0); });
+    return t;
+  }
+  function unionById(a, b) {
+    var seen = {}, out = a.slice();
+    a.forEach(function (x) { seen[x.id] = 1; });
+    b.forEach(function (x) { if (!seen[x.id]) out.push(x); });
+    return out;
+  }
+  // One time per browser: bring in v4 data ("drawRateV4" is only read, never changed).
+  //   no v5 yet            -> v4 becomes v5
+  //   same shift in both   -> coils + downtime merged by id (v5 wins on the same id)
+  //   different shifts     -> the one with the most recent activity is kept as v5
+  function importV4(v5) {
+    var done = false;
+    try { done = window.localStorage.getItem(MERGED_FLAG) === "1"; } catch (e) {}
+    if (done) return v5;
+    var v4 = parseKey(V4_KEY), out = v5;
+    if (v4) {
+      if (!v5) out = v4;
+      else if (v4.shift.id === v5.shift.id) {
+        var ids = {}; v5.machines.forEach(function (m) { ids[m.id] = 1; });
+        var ok = function (x) { return ids[x.machineId] || x.machineId === "all"; };
+        v5.coils = unionById(v5.coils, v4.coils.filter(ok));
+        v5.downtime = unionById(v5.downtime, v4.downtime.filter(ok));
+        out = v5;
+      } else if (lastActivity(v4) > lastActivity(v5)) out = v4;
+    }
     try {
-      var raw = window.localStorage.getItem(KEY);
-      if (raw) { var s = sanitize(JSON.parse(raw)); if (s) return s; }
-    } catch (e) { /* fall through */ }
+      if (out && out !== v5) { out.schema = SCHEMA; window.localStorage.setItem(KEY, JSON.stringify(out)); }
+      else if (out && v4) window.localStorage.setItem(KEY, JSON.stringify(out));
+      window.localStorage.setItem(MERGED_FLAG, "1");
+    } catch (e) {}
+    return out;
+  }
+  function load() {
+    var s = importV4(parseKey(KEY));
+    if (s) return s;
     try {
       var old = window.localStorage.getItem(OLD_KEY);
       if (old) { var m = migrateOld(old); if (m) { m.migrated = true; return m; } }
@@ -655,7 +836,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function save() {
     try {
       state.shift.updatedAt = iso(Date.now());
-      var out = { schema: SCHEMA, setupDone: state.setupDone, shift: state.shift, machines: state.machines, coils: state.coils, downtime: state.downtime };
+      var out = { schema: SCHEMA, setupDone: state.setupDone, shift: state.shift, machines: state.machines, coils: state.coils, downtime: state.downtime, settings: state.settings };
       window.localStorage.setItem(KEY, JSON.stringify(out));
     } catch (e) { /* storage blocked or full: keep working in memory */ }
   }
@@ -910,7 +1091,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var ids = {}; state.machines.forEach(function (m) { ids[m.id] = true; });
     state.coils = state.coils.filter(function (c) { return ids[c.machineId]; });
-    state.downtime = state.downtime.filter(function (x) { return ids[x.machineId]; });
+    state.downtime = state.downtime.filter(function (x) { return ids[x.machineId] || x.machineId === "all"; });
     var s = state.shift;
     s.date = d.date; s.start = d.start; s.end = d.end; s.operator = str(d.operator, 60).replace(/^\s+|\s+$/g, "");
     s.breakMode = d.breakMode === "list" ? "list" : "total";
@@ -947,33 +1128,87 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var mk = function (label) { var dv = el("div"); dv.appendChild(el("span", "lbl", label)); var b = el("b", null, "—"); dv.appendChild(b); stats.appendChild(dv); return b; };
       var ran = mk("Ran"), pc = mk("Pace car"), dl = mk("+/-");
       c.appendChild(stats);
+      var wl = el("label", "wt-lbl", "COIL WEIGHT (LBS)"); wl.setAttribute("for", "log-" + i); c.appendChild(wl);
       var log = el("div", "mc-log");
-      var inp = input("number", "log-" + i, "", { inputmode: "decimal", min: "0", step: "0.1", placeholder: "Coil lb", "aria-label": "Coil weight for " + m.name });
+      var inp = input("text", "log-" + i, "", { inputmode: "decimal", autocomplete: "off", enterkeyhint: "done", placeholder: "Weight (lbs)", "aria-label": "Coil weight in lbs for " + m.name });
       var btn = el("button", "btn solid", "LOG COIL"); btn.type = "button"; btn.id = "logbtn-" + i;
       var last = el("div", "mc-last sub");
       btn.addEventListener("click", function () { logCoil(m.id, inp, last); });
       inp.addEventListener("input", function () { if (last.className.indexOf("red") >= 0) { setCls(last, "mc-last sub"); lastLogged[m.id] = true; tick(); } });
       inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); logCoil(m.id, inp, last); } });
       log.appendChild(inp); log.appendChild(btn); c.appendChild(log); c.appendChild(last);
+      var drow = el("div", "mc-down"), dtx = el("span", "mc-down-txt", ""), dbt = el("button", "btn small warn", "START DOWNTIME");
+      dbt.type = "button"; dbt.id = "down-" + i;
+      dbt.addEventListener("click", function () { toggleMachineDown(m.id); });
+      drow.appendChild(dtx); drow.appendChild(dbt); c.appendChild(drow);
       box.appendChild(c);
-      cards[m.id] = { ran: ran, pc: pc, dl: dl, last: last };
+      cards[m.id] = { ran: ran, pc: pc, dl: dl, last: last, dtx: dtx, dbt: dbt };
     });
     var s = state.shift;
     setText($("d-shift"), s.date + " · " + fmtHHMM(s.start) + " – " + fmtHHMM(s.end) + (s.operator ? " · " + s.operator : ""));
     if (advOpen) renderAdvanced();
+    if (dtOpen) renderDowntime();
+    if (rcOpen) renderRecent();
   }
 
+  // A coil WEIGHT typed by an operator. Asks first (in-page, [Yes, log it] / [Fix it]) when it
+  // looks like a coil ID (letters, dashes, a leading-zero tag like 004512), or is over
+  // settings.confirmOverLb or under settings.confirmUnderLb. onOk(weight) runs only once it's OK.
+  function fmtLb(w) { return w % 1 ? fmtInt(Math.floor(w)) + "." + String(Math.round(w * 10) % 10) : fmtInt(w); }
+  function checkCoilWeight(raw, inp, showErr, onOk) {
+    var t = String(raw == null ? "" : raw).trim(), set = state.settings || defaultSettings();
+    if (!t) { showErr("Enter the coil weight in lbs."); return; }
+    var clean = t.replace(/,/g, "").replace(/\s*lbs?\.?$/i, "");
+    var plain = /^(\d+\.?\d*|\.\d+)$/.test(clean);
+    var w = parseFloat(plain ? clean : clean.replace(/[^0-9.]/g, ""));
+    if (!(w > 0) || w >= 1e7) { showErr(plain ? "Enter a coil weight greater than 0." : "That looks like a coil ID, not a weight. Enter the coil weight in lbs."); return; }
+    w = Math.round(w * 10) / 10;
+    var q = null;
+    if (!plain || /^0\d{3,}/.test(clean)) q = "That looks like a coil ID, not a weight. Log " + fmtLb(w) + " lb anyway?";
+    else if (w > set.confirmOverLb) q = fmtLb(w) + " lb is over " + fmtInt(set.confirmOverLb) + " lb. Is that the coil weight (not the coil ID)?";
+    else if (w < set.confirmUnderLb) q = fmtLb(w) + " lb is under " + fmtInt(set.confirmUnderLb) + " lb. Is that right?";
+    if (!q) { onOk(w); return; }
+    askConfirm(q, "Yes, log it", "Fix it", function () { onOk(w); }, function () {
+      showErr("Not logged. Fix the weight and log it again.");
+      if (inp) { try { inp.focus(); inp.select(); } catch (e) {} }
+    });
+  }
+
+  // in-page confirm (big buttons; window.confirm can't label them)
+  var askOpen = null;
+  function askConfirm(msg, yesText, noText, onYes, onNo) {
+    var box = $("ask"); if (askOpen) closeAsk(false);
+    setText($("ask-msg"), msg); setText($("ask-yes"), yesText); setText($("ask-no"), noText);
+    askOpen = { yes: onYes, no: onNo, back: document.activeElement };
+    box.hidden = false;
+    try { $("ask-yes").focus(); } catch (e) {}
+  }
+  function closeAsk(ok) {
+    var a = askOpen; askOpen = null; $("ask").hidden = true;
+    if (!a) return;
+    if (ok) { if (a.yes) a.yes(); } else if (a.no) a.no();
+  }
+  $("ask-yes").addEventListener("click", function () { closeAsk(true); });
+  $("ask-no").addEventListener("click", function () { closeAsk(false); });
+  document.addEventListener("keydown", function (e) { if (askOpen && e.key === "Escape") { e.preventDefault(); closeAsk(false); } });
+
   function logCoil(machineId, inp, lastEl) {
-    var w = num(inp.value);
-    if (!(w > 0) || w >= 1e6) { setText(lastEl, "Enter a coil weight greater than 0."); setCls(lastEl, "mc-last red"); return; }
+    checkCoilWeight(inp.value, inp, function (msg) { setText(lastEl, msg); setCls(lastEl, "mc-last red"); },
+      function (w) { addCoil(machineId, w); inp.value = ""; try { inp.blur(); } catch (e) {} });
+  }
+  // the one place a new coil is added (machine cards, phone dock)
+  function addCoil(machineId, w) {
     var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
       size: "", notes: "", downtimeMin: null, downtimeReason: "" };
     state.coils.push(c);
     lastLogged[machineId] = c.id;
-    inp.value = "";
     save();
     tick();
     if (advOpen) renderAdvanced();
+    if (rcOpen) renderRecent();
+    showReadback(c);
+    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+    return c;
   }
 
   function colorFor(pct) { return pct == null ? "white" : pct >= 0 ? "green" : pct > -5 ? "amber" : "red"; }
@@ -1063,6 +1298,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       lastLogged[mr.id] = null;
     });
 
+    updateDowntimeUI(r, now);
+
     // advanced timers
     state.machines.forEach(function (m, i) {
       var te = $("timer-" + i);
@@ -1139,37 +1376,28 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         tbl.appendChild(tb); sec.appendChild(tbl);
       }
 
-      // downtime log
-      var dl = el("div", "adv-line"); dl.style.marginTop = "1rem";
-      dl.appendChild(el("span", "lbl", "Downtime"));
-      sec.appendChild(dl);
-      var form = el("div", "dt-form");
-      var dm = input("number", "dt-min-" + i, "", { inputmode: "numeric", min: "1", placeholder: "Min" });
-      var dr = input("text", "dt-reason-" + i, "", { placeholder: "Reason", maxlength: "200" });
-      var da = smallBtn("ADD", "", function () {
-        var mins = num(dm.value);
-        if (!(mins > 0)) { dm.focus(); return; }
-        state.downtime.push({ id: uid("d"), machineId: m.id, loggedAt: iso(Date.now()), minutes: mins, reason: str(dr.value, 200) });
-        save(); renderAdvanced();
-      });
-      da.id = "dt-add-" + i;
-      form.appendChild(dm); form.appendChild(dr); form.appendChild(da);
-      sec.appendChild(form);
-      var dts = state.downtime.filter(function (x) { return x.machineId === m.id; });
-      var tot = 0;
-      dts.forEach(function (x) {
-        tot += x.minutes;
-        var line = el("div", "adv-line");
-        line.appendChild(el("span", "white", fmtClock(Date.parse(x.loggedAt)) + " · " + x.minutes + " min" + (x.reason ? " · " + x.reason : "")));
-        line.appendChild(smallBtn("DELETE", "warn", function () {
-          if (!window.confirm("Delete this downtime entry?")) return;
-          state.downtime = state.downtime.filter(function (y) { return y.id !== x.id; }); save(); renderAdvanced();
-        }));
-        sec.appendChild(line);
-      });
-      if (dts.length) sec.appendChild(el("p", "sub", "Total downtime " + tot + " min (logged for records; it does not change the target)."));
       adv.appendChild(sec);
     });
+
+    // settings: fat-finger checks
+    var st = el("div", "adv-mach"); st.id = "adv-settings";
+    st.appendChild(el("h3", null, "Settings · weight checks"));
+    st.appendChild(el("p", "sub", "Logging a coil under or over these asks the operator to confirm before it counts."));
+    var sg = el("div", "row2");
+    var smin = input("text", "set-min", String(state.settings.confirmUnderLb), { inputmode: "decimal", autocomplete: "off" });
+    var smax = input("text", "set-max", String(state.settings.confirmOverLb), { inputmode: "decimal", autocomplete: "off" });
+    sg.appendChild(field("Ask if under (lb)", smin)); sg.appendChild(field("Ask if over (lb)", smax));
+    st.appendChild(sg);
+    var serr = el("p", "err"); serr.id = "set-err";
+    var sb = smallBtn("SAVE CHECKS", "", function () {
+      var u = num(smin.value.replace(/,/g, "")), o = num(smax.value.replace(/,/g, ""));
+      if (!(u >= 0) || !(o > 0) || u >= o) { setText(serr, "Under must be less than over, both in lb."); setCls(serr, "err"); return; }
+      state.settings = cleanSettings({ confirmUnderLb: u, confirmOverLb: o }); save();
+      setCls(serr, "err green"); setText(serr, "Saved: asks under " + fmtInt(u) + " lb and over " + fmtInt(o) + " lb.");
+    }); sb.id = "set-save";
+    var sr = smallBtn("DEFAULTS", "", function () { smin.value = DEFAULT_CONFIRM_UNDER_LB; smax.value = DEFAULT_CONFIRM_OVER_LB; });
+    var sl = el("div", "adv-line"); sl.appendChild(sb); sl.appendChild(sr); st.appendChild(sl); st.appendChild(serr);
+    adv.appendChild(st);
 
     // export
     var ex = el("div", "adv-mach");
@@ -1192,22 +1420,24 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var w = field(label, i, full ? "full" : ""); w.style.marginBottom = "0";
       g.appendChild(w); return i;
     };
-    var iw = f("Weight lb", "weight", "number", { inputmode: "decimal", min: "0", step: "0.1" });
+    var iw = f("Coil weight (lbs)", "weight", "text", { inputmode: "decimal", autocomplete: "off" });
     var icn = f("Coil #", "coilNo", "text", { maxlength: "40" });
     var ih = f("Heat #", "heatNo", "text", { maxlength: "40" });
     var is = f("Size / gauge", "size", "text", { maxlength: "40" });
-    var idm = f("Downtime min", "downtimeMin", "number", { inputmode: "numeric", min: "0" });
+    var idm = f("Downtime min (note only)", "downtimeMin", "number", { inputmode: "numeric", min: "0" });
     var idr = f("Downtime reason", "downtimeReason", "text", { maxlength: "200" });
     var ino = f("Notes", "notes", "text", { maxlength: "500" }, true);
     box.appendChild(g);
     var err = el("p", "err"); box.appendChild(err);
     var line = el("div", "adv-line");
     line.appendChild(smallBtn("SAVE", "", function () {
-      var w = num(iw.value);
-      if (!(w > 0)) { setText(err, "Weight must be greater than 0."); return; }
-      c.weight = w; c.coilNo = str(icn.value, 40); c.heatNo = str(ih.value, 40); c.size = str(is.value, 40);
-      var dm = num(idm.value); c.downtimeMin = dm >= 0 ? dm : null; c.downtimeReason = str(idr.value, 200); c.notes = str(ino.value, 500);
-      editingCoil = null; save(); tick(); renderAdvanced();
+      var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: str(is.value, 40), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500) };
+      checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
+      c.weight = w;
+      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size;
+      c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
+      editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
+      });
     }));
     line.appendChild(smallBtn("DELETE COIL", "warn", function () {
       if (!window.confirm("Delete this " + fmtW(c.weight) + " lb coil?")) return;
@@ -1226,11 +1456,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       dayTargetLb: r.target != null ? r.target : null, lbsRan: r.lbsRan, paceCarLb: r.paceCar != null ? r.paceCar : null,
       deltaLb: r.delta != null ? r.delta : null, deltaPct: r.deltaPct != null ? r.deltaPct : null,
       currentPaceLbHr: r.pace != null ? r.pace : null, projectedLb: r.projected != null ? r.projected : null,
-      hitTargetAt: r.hitAt != null ? iso(r.hitAt) : null, catchUpLbHr: r.catchUp != null ? r.catchUp : null };
+      hitTargetAt: r.hitAt != null ? iso(r.hitAt) : null, catchUpLbHr: r.catchUp != null ? r.catchUp : null,
+      grossTargetLb: r.grossTarget != null ? r.grossTarget : null, downtimeMachineMin: r.downMs / 60000, downtimeLbOffTarget: r.downLb, downtimeLbOffPaceCar: r.downSoFarLb };
   }
   function exportJSON() {
     return JSON.stringify({ schema: SCHEMA, exportedAt: iso(Date.now()), shift: state.shift, machines: state.machines,
-      coils: state.coils, downtime: state.downtime, summary: summary() }, null, 2);
+      coils: state.coils, downtime: state.downtime, settings: state.settings, summary: summary() }, null, 2);
   }
   function csvCell(v) {
     if (v == null) return "";
@@ -1238,23 +1469,31 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
   function exportCSV() {
-    var s = state.shift;
+    var s = state.shift, r = Calc.compute(state, Date.now()), imp = r.downEntries || {};
     var breaks = s.breakMode === "list" ? s.breaks.map(function (b) { return b.start + "/" + b.minutes; }).join(" ") : s.breakTotalMin + " total";
     var head = ["record_type", "shift_id", "shift_date", "operator", "shift_start", "shift_end", "breaks", "machine_id", "machine_slot",
-      "machine_name", "need_rate_lb_hr", "record_id", "logged_at", "weight_lb", "coil_no", "heat_no", "size", "notes", "downtime_min", "downtime_reason"];
+      "machine_name", "need_rate_lb_hr", "record_id", "logged_at", "weight_lb", "coil_no", "heat_no", "size", "notes", "downtime_min", "downtime_reason",
+      "downtime_start", "downtime_end", "downtime_lb_deducted"];
     var rows = [head];
     var mrow = function (type, m, rec) {
       return [type, s.id, s.date, s.operator, s.start, s.end, breaks, m.id, m.slot, m.name, m.needRate].concat(rec);
     };
+    var drow = function (m, d) {
+      var x = imp[d.id];
+      return mrow("downtime", m, [d.id, d.loggedAt, "", "", "", "", "", d.minutes == null ? "" : Math.round(d.minutes * 10) / 10, d.reason,
+        d.startAt, d.endAt || "running", x ? Math.round(x.lb) : ""]);
+    };
+    var rateSum = 0;
     state.machines.forEach(function (m) {
-      rows.push(mrow("machine", m, ["", "", "", "", "", "", "", "", ""]));
+      rateSum += m.needRate;
+      rows.push(mrow("machine", m, ["", "", "", "", "", "", "", "", "", "", "", ""]));
       coilsOf(m.id).forEach(function (c) {
-        rows.push(mrow("coil", m, [c.id, c.loggedAt, c.weight, c.coilNo, c.heatNo, c.size, c.notes, c.downtimeMin, c.downtimeReason]));
+        rows.push(mrow("coil", m, [c.id, c.loggedAt, c.weight, c.coilNo, c.heatNo, c.size, c.notes, c.downtimeMin, c.downtimeReason, "", "", ""]));
       });
-      state.downtime.filter(function (d) { return d.machineId === m.id; }).forEach(function (d) {
-        rows.push(mrow("downtime", m, [d.id, d.loggedAt, "", "", "", "", "", d.minutes, d.reason]));
-      });
+      state.downtime.filter(function (d) { return d.machineId === m.id; }).forEach(function (d) { rows.push(drow(m, d)); });
     });
+    var allM = { id: "all", slot: "", name: "All machines", needRate: rateSum };
+    state.downtime.filter(function (d) { return d.machineId === "all"; }).forEach(function (d) { rows.push(drow(allM, d)); });
     return rows.map(function (r) { return r.map(csvCell).join(","); }).join("\r\n") + "\r\n";
   }
   function download(name, text, type) {
@@ -1303,6 +1542,270 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     save();
     openWizard(false);
   });
+
+  /* ========================= DOWNTIME (by weight) ========================= */
+  var dtOpen = false, dtTarget = "all";
+  var MINUS = "\u2212";
+  function dtName(id) { if (id === "all") return "All machines"; var m = machineById(id); return m ? m.name : "?"; }
+  function runningFor(id) {
+    for (var i = 0; i < state.downtime.length; i++) { var d = state.downtime[i]; if (d.machineId === id && !d.endAt) return d; }
+    return null;
+  }
+  function startDown(id, reason) {
+    if (runningFor(id)) return;
+    var n = iso(Date.now());
+    state.downtime.push({ id: uid("d"), machineId: id, loggedAt: n, startAt: n, endAt: null, minutes: null, reason: str(reason || "", 200) });
+    save(); tick(); if (dtOpen) renderDowntime();
+  }
+  function endDown(d) {
+    var a = Date.parse(d.startAt), e = Math.max(Date.now(), a + 1000);
+    d.endAt = iso(e); d.minutes = (e - a) / 60000;
+    save(); tick(); if (dtOpen) renderDowntime();
+  }
+  function toggleMachineDown(id) {
+    var own = runningFor(id), all = runningFor("all");
+    if (own) endDown(own); else if (all) endDown(all); else startDown(id, "");
+  }
+  function lbOff(lb) { return MINUS + fmtInt(lb) + " lb"; }
+  function entryText(d, r, now) {
+    var a = Date.parse(d.startAt), b = d.endAt ? Date.parse(d.endAt) : now, x = (r.downEntries || {})[d.id] || { ms: 0, lb: 0 };
+    var t = (d.endAt ? "" : "DOWN NOW · ") + fmtClock(a) + "–" + (d.endAt ? fmtClock(b) : "now") + " · " + dtName(d.machineId) + " · " + fmtDur(b - a) + " · " + lbOff(x.lb);
+    if (r.phase !== "invalid" && b - a - x.ms > 30000) t += " (" + fmtDur(b - a - x.ms) + " on break / off shift not counted)";
+    if (d.reason) t += " · " + d.reason;
+    return t;
+  }
+  function sortedDowntime() { return state.downtime.slice().sort(function (x, y) { return Date.parse(y.startAt) - Date.parse(x.startAt); }); }
+
+  function renderDowntime() {
+    var box = $("dtp"), now = Date.now(), r = Calc.compute(state, now);
+    box.textContent = "";
+    if (dtTarget !== "all" && !machineById(dtTarget)) dtTarget = "all";
+    box.appendChild(el("p", "sub", "Downtime comes off the day target and the pace car at the machine's need rate (All machines = every need rate added up). Time that falls on a break is never taken twice."));
+    var sel = el("select", "in"); sel.id = "dt-target";
+    [["all", "All machines"]].concat(state.machines.map(function (m) { return [m.id, m.name + " · " + fmtInt(m.needRate) + " lb/hr"]; })).forEach(function (o) {
+      var op = el("option", null, o[1]); op.value = o[0]; sel.appendChild(op);
+    });
+    sel.value = dtTarget;
+    sel.addEventListener("change", function () { dtTarget = sel.value; renderDowntime(); });
+    box.appendChild(field("Machine", sel));
+    var reason = input("text", "dt-reason", "", { maxlength: "200", placeholder: "Reason (optional)", autocomplete: "off" });
+    box.appendChild(field("Reason", reason));
+    var runNow = runningFor(dtTarget);
+    var sb = el("button", "btn warn full", runNow ? dtName(dtTarget).toUpperCase() + " IS DOWN · END IT BELOW" : "START DOWNTIME NOW");
+    sb.type = "button"; sb.id = "dt-start"; sb.disabled = !!runNow;
+    sb.addEventListener("click", function () { startDown(dtTarget, reason.value); });
+    box.appendChild(sb);
+
+    box.appendChild(el("h3", null, "Log past downtime"));
+    var g = el("div", "dt-past");
+    var mi = input("number", "dt-min", "", { inputmode: "numeric", min: "1", step: "1", placeholder: "Min" });
+    var ti = input("time", "dt-from", "");
+    var add = el("button", "btn small", "ADD"); add.type = "button"; add.id = "dt-add";
+    g.appendChild(field("Minutes", mi)); g.appendChild(field("Started at (blank = just ended)", ti)); g.appendChild(add);
+    box.appendChild(g);
+    var err = el("p", "err"); err.id = "dt-err"; box.appendChild(err);
+    add.addEventListener("click", function () {
+      var mins = num(mi.value), n = Date.now(), a;
+      if (!(mins > 0) || mins > 24 * 60) { setText(err, "Enter the minutes it was down."); return; }
+      if (ti.value) {
+        var c = Calc.parseClock(ti.value), dd = Calc.parseDate(state.shift.date), win = Calc.shiftWindow(state.shift);
+        if (!c || !dd) { setText(err, "Check the start time."); return; }
+        a = new Date(dd.y, dd.mo - 1, dd.d, c.h, c.m).getTime();
+        if (win && a < win.start) a = new Date(dd.y, dd.mo - 1, dd.d + 1, c.h, c.m).getTime();
+      } else a = n - mins * 60000;
+      var b = a + mins * 60000;
+      if (b > n + 60000) { setText(err, "That ends in the future. For downtime that's still going, use START DOWNTIME NOW."); return; }
+      state.downtime.push({ id: uid("d"), machineId: dtTarget, loggedAt: iso(n), startAt: iso(a), endAt: iso(b), minutes: mins, reason: str(reason.value, 200) });
+      save(); tick(); renderDowntime();
+    });
+
+    var list = sortedDowntime();
+    box.appendChild(el("h3", null, "Downtime this shift · " + list.length));
+    if (!list.length) box.appendChild(el("p", "empty", "No downtime logged."));
+    list.forEach(function (d, k) {
+      var row = el("div", "dt-entry" + (d.endAt ? "" : " run"));
+      var tx = el("span", null, entryText(d, r, now)); tx.id = "dtent-" + d.id;
+      row.appendChild(tx);
+      if (!d.endAt) {
+        var eb = el("button", "btn small solid", "END"); eb.type = "button"; eb.id = "dt-end-" + k;
+        eb.addEventListener("click", function () { endDown(d); });
+        row.appendChild(eb);
+      } else {
+        var xb = el("button", "btn small warn", "DELETE"); xb.type = "button"; xb.id = "dt-del-" + k;
+        xb.addEventListener("click", function () {
+          if (!window.confirm("Delete this downtime entry? Its lb go back on the target.")) return;
+          state.downtime = state.downtime.filter(function (y) { return y.id !== d.id; }); save(); tick(); renderDowntime();
+        });
+        row.appendChild(xb);
+      }
+      box.appendChild(row);
+    });
+
+    box.appendChild(el("h3", null, "Totals (taken off the target)"));
+    var tot = el("div", "dt-tot");
+    state.machines.forEach(function (m, i) {
+      var line = el("div"); line.appendChild(el("span", null, m.name));
+      var v = el("span", null, ""); v.id = "dttot-" + i; line.appendChild(v); tot.appendChild(line);
+    });
+    var al = el("div", "all"); al.appendChild(el("span", null, "TOTAL"));
+    var av = el("span", null, ""); av.id = "dttot-all"; al.appendChild(av); tot.appendChild(al);
+    box.appendChild(tot);
+    box.appendChild(el("p", "sub", "Overlapping entries on the same machine count once in the totals."));
+    updateDowntimeUI(r, now);
+  }
+
+  function updateDowntimeUI(r, now) {
+    // dashboard line under the target
+    var line = $("d-down");
+    if (line) {
+      var downNames = state.machines.filter(function (m) { return runningFor(m.id) || runningFor("all"); });
+      if (!(r.downMs > 0) && !downNames.length) { if (!line.hidden) line.hidden = true; }
+      else {
+        line.hidden = false; line.textContent = "";
+        if (r.downMs > 0) {
+          var tx = "Downtime " + MINUS + fmtDur(r.downMs) + " · " + lbOff(r.downLb);
+          if (r.grossTarget) tx += " (target " + fmtInt(r.grossTarget) + " → " + fmtInt(r.target) + ")";
+          line.appendChild(el("span", null, tx));
+        }
+        downNames.forEach(function (m) {
+          var d = runningFor(m.id) || runningFor("all");
+          line.appendChild(el("span", "red", m.name.toUpperCase() + " DOWN · " + fmtDur(now - Date.parse(d.startAt)) + " · pace car paused"));
+        });
+      }
+    }
+    // machine cards
+    (r.machines || []).forEach(function (mr, i) {
+      var c = cards[mr.id]; if (!c || !c.dtx) return;
+      var own = runningFor(mr.id), all = runningFor("all"), d = own || all;
+      var t = "", cls = "mc-down-txt";
+      if (d) { t = "DOWN " + fmtDur(now - Date.parse(d.startAt)) + " now" + (own ? "" : " (all)") + " · " + lbOff(mr.downLb || 0) + " total"; cls += " red"; }
+      else if (mr.downMs > 0) t = "Down " + fmtDur(mr.downMs) + " · " + lbOff(mr.downLb) + " deducted";
+      else t = "No downtime";
+      setText(c.dtx, t); setCls(c.dtx, cls);
+      setText(c.dbt, own ? "BACK UP" : all ? "END ALL DOWN" : "START DOWNTIME");
+      setCls(c.dbt, own || all ? "btn small solid" : "btn small warn");
+      var card = $("mc-" + i);
+      if (card) { var want = d ? " down" : ""; if (card.className.indexOf(" down") >= 0 !== !!d) card.className = card.className.replace(" down", "") + want; }
+    });
+    // downtime page (live while open)
+    if (dtOpen) {
+      state.downtime.forEach(function (d) { var e = $("dtent-" + d.id); if (e) setText(e, entryText(d, r, now)); });
+      state.machines.forEach(function (m, i) {
+        var mr = (r.machines || [])[i], e = $("dttot-" + i);
+        if (e && mr) setText(e, fmtDur(mr.downMs || 0) + " · " + lbOff(mr.downLb || 0));
+      });
+      var ea = $("dttot-all"); if (ea) setText(ea, fmtDur(r.downMs || 0) + " · " + lbOff(r.downLb || 0));
+    }
+  }
+
+  $("dt-toggle").addEventListener("click", function () {
+    dtOpen = !dtOpen;
+    $("dtp").hidden = !dtOpen;
+    setText($("dt-toggle"), (dtOpen ? "- " : "+ ") + "DOWNTIME");
+    $("dt-toggle").setAttribute("aria-expanded", dtOpen ? "true" : "false");
+    if (dtOpen) renderDowntime();
+  });
+
+  /* ========================= READBACK + RECENT COILS ========================= */
+  var rbCoil = null, rbTimer = null, rcOpen = false, rcFilter = "all", rcEdit = null, rcHl = null;
+  var RB_MS = 12000;
+  function showReadback(c) {
+    var m = machineById(c.machineId);
+    rbCoil = c.id;
+    setText($("rb-w"), fmtLb(c.weight) + " lb");
+    setText($("rb-mach"), (m ? m.name : "") + " · " + fmtClock(Date.parse(c.loggedAt)));
+    setText($("rb-undo"), "UNDO"); $("rb-undo").disabled = false; setCls($("readback"), "readback");
+    setText(document.querySelector("#readback .rb-lbl"), "LOGGED");
+    $("readback").hidden = false;
+    if (rbTimer) clearTimeout(rbTimer);
+    rbTimer = setTimeout(hideReadback, RB_MS);
+    if (window.__onReadback) window.__onReadback();
+  }
+  function hideReadback() { if (rbTimer) clearTimeout(rbTimer); rbTimer = null; rbCoil = null; $("readback").hidden = true; if (window.__onReadback) window.__onReadback(); }
+  $("rb-x").addEventListener("click", hideReadback);
+  $("rb-undo").addEventListener("click", function () {
+    var id = rbCoil; if (!id) return;
+    var c = coilById(id);
+    state.coils = state.coils.filter(function (x) { return x.id !== id; });
+    save(); tick(); if (advOpen) renderAdvanced(); if (rcOpen) renderRecent();
+    setText(document.querySelector("#readback .rb-lbl"), "REMOVED"); setCls($("readback"), "readback undone");
+    $("rb-undo").disabled = true; rbCoil = null;
+    if (rbTimer) clearTimeout(rbTimer); rbTimer = setTimeout(hideReadback, 4000);
+    void c;
+  });
+  $("rb-fix").addEventListener("click", function () { var id = rbCoil; hideReadback(); openRecent(id); });
+
+  function coilById(id) { for (var i = 0; i < state.coils.length; i++) if (state.coils[i].id === id) return state.coils[i]; return null; }
+  function recentCoils() {
+    return state.coils.filter(function (c) { return rcFilter === "all" || c.machineId === rcFilter; })
+      .slice().sort(function (a, b) { return Date.parse(b.loggedAt) - Date.parse(a.loggedAt); }).slice(0, 10);
+  }
+  function openRecent(hlId) {
+    rcOpen = true; rcHl = hlId || null; rcEdit = hlId || null;
+    if (hlId) { var c = coilById(hlId); if (c && rcFilter !== "all" && c.machineId !== rcFilter) rcFilter = "all"; }
+    $("rcp").hidden = false; setText($("rc-toggle"), "- RECENT COILS"); $("rc-toggle").setAttribute("aria-expanded", "true");
+    renderRecent();
+    try { $("rc-toggle").scrollIntoView({ block: "start" }); } catch (e) {}
+  }
+  function closeRecent() {
+    rcOpen = false; rcEdit = null; $("rcp").hidden = true;
+    setText($("rc-toggle"), "+ RECENT COILS"); $("rc-toggle").setAttribute("aria-expanded", "false");
+  }
+  function renderRecent() {
+    var box = $("rcp"); box.textContent = "";
+    if (rcFilter !== "all" && !machineById(rcFilter)) rcFilter = "all";
+    box.appendChild(el("p", "sub", "Last 10 coils, newest first. Fix a wrong weight or machine here; every total, the pace car and the projection update."));
+    if (state.machines.length > 1) {
+      var f = el("div", "rc-filter");
+      [["all", "All"]].concat(state.machines.map(function (m) { return [m.id, m.name]; })).forEach(function (o, k) {
+        var b = el("button", "btn" + (rcFilter === o[0] ? " on" : ""), o[1]); b.type = "button"; b.id = "rc-f-" + (k ? k - 1 : "all");
+        b.addEventListener("click", function () { rcFilter = o[0]; rcEdit = null; renderRecent(); });
+        f.appendChild(b);
+      });
+      box.appendChild(f);
+    }
+    var list = recentCoils();
+    if (!list.length) { box.appendChild(el("p", "empty", "No coils logged yet.")); return; }
+    list.forEach(function (c, k) {
+      var m = machineById(c.machineId);
+      var row = el("div", "rc-row" + (c.id === rcHl ? " hl" : "")); row.id = "rc-" + k;
+      var info = el("div");
+      info.appendChild(el("span", "rc-w", fmtLb(c.weight) + " lb"));
+      info.appendChild(el("span", "rc-meta", fmtClock(Date.parse(c.loggedAt)) + " · " + (m ? m.name : "?") + (c.coilNo ? " · coil " + c.coilNo : "")));
+      row.appendChild(info);
+      var eb = smallBtn(rcEdit === c.id ? "CLOSE" : "EDIT", "", function () { rcEdit = rcEdit === c.id ? null : c.id; renderRecent(); }); eb.id = "rc-edit-" + k;
+      var db = smallBtn("DELETE", "warn", function () {
+        askConfirm("Delete the " + fmtLb(c.weight) + " lb coil on " + (m ? m.name : "?") + " (" + fmtClock(Date.parse(c.loggedAt)) + ")?", "Delete it", "Keep it", function () {
+          state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
+          if (rbCoil === c.id) hideReadback();
+          rcEdit = null; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
+        });
+      }); db.id = "rc-del-" + k;
+      row.appendChild(eb); row.appendChild(db);
+      if (rcEdit === c.id) {
+        var ed = el("div", "rc-edit");
+        var wi = input("text", "rc-w-" + k, String(c.weight), { inputmode: "decimal", autocomplete: "off", "aria-label": "Coil weight in lbs" });
+        var ms = el("select", "in"); ms.id = "rc-m-" + k;
+        state.machines.forEach(function (mm) { var op = el("option", null, mm.name); op.value = mm.id; ms.appendChild(op); });
+        ms.value = c.machineId;
+        ed.appendChild(field("Coil weight (lbs)", wi)); ed.appendChild(field("Machine", ms));
+        var er = el("p", "err"); er.id = "rc-err-" + k;
+        var bs = el("div", "rc-btns");
+        var sv = smallBtn("SAVE", "solid", function () {
+          checkCoilWeight(wi.value, wi, function (msg) { setText(er, msg); }, function (w) {
+            c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
+            rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
+          });
+        }); sv.id = "rc-save-" + k;
+        var cx = smallBtn("CANCEL", "", function () { rcEdit = null; renderRecent(); });
+        bs.appendChild(sv); bs.appendChild(cx); ed.appendChild(bs); ed.appendChild(er);
+        row.appendChild(ed);
+      }
+      box.appendChild(row);
+    });
+  }
+  $("rc-toggle").addEventListener("click", function () { if (rcOpen) closeRecent(); else openRecent(null); });
+  $("rc-open").addEventListener("click", function () { openRecent(null); });
 
   /* ---------- start ---------- */
   if (state.setupDone) { $("dash").hidden = false; buildDashboard(); tick(); }

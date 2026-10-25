@@ -1,7 +1,7 @@
 /* Draw Rate Tracker phone app - service worker.
    Cache-first, versioned. The version is a hash of the app files, so any change
    to them makes a new cache and the old one is deleted on activate. */
-var CACHE = "draw-rate-app-09f1611045";
+var CACHE = "draw-rate-app-95f9893b6c";
 var ASSETS = [
   "./",
   "./index.html",
