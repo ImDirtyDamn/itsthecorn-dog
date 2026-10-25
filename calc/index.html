@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<!--
+  PRODUCTION REPORT CALCULATOR  (Daily Draw Operator Production Report, P-310)
+  Self-contained, no outside files. Saves to localStorage key "drawCalcV1" (separate from the tracker).
+  The math lives in the "calc-core" script below and is a line-for-line port of
+  production_calc.py; a parity test runs both on the same cases and checks every number and sentence match.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#030a03">
+<meta name="robots" content="noindex">
+<title>Production Report Calculator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23030a03'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%2339ff6a' font-family='monospace'%3E%3D%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#030a03;--panel:#061206;--fg:#39ff6a;--fg-dim:#1f9a3e;--fg-faint:rgba(57,255,106,.16);--amber:#ffc23d;--red:#ff5f56;--white:#eaffea;
+--font:"Courier New",Courier,"Noto Sans Mono","DejaVu Sans Mono","Droid Sans Mono",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;-webkit-text-size-adjust:100%}
+body{padding:0 12px calc(24px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;overflow-x:hidden}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 0 10px;border-bottom:1px solid var(--fg-faint)}
+h1{font-size:18px;margin:0;letter-spacing:.06em;color:var(--white);text-shadow:0 0 8px rgba(57,255,106,.4)}
+h1 small{display:block;font-size:12px;color:var(--fg-dim);letter-spacing:.04em;font-weight:normal}
+a.back{color:var(--fg);text-decoration:none;border:1px solid var(--fg-dim);padding:12px 12px;min-height:48px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap}
+h2{font-size:14px;letter-spacing:.12em;color:var(--fg-dim);margin:22px 0 8px;text-transform:uppercase}
+.panel{background:var(--panel);border:1px solid var(--fg-faint);padding:12px;margin:10px 0}
+label{display:block;font-size:13px;color:var(--fg-dim);margin:0 0 4px;letter-spacing:.04em}
+.hint{display:block;font-size:12px;color:var(--amber);margin-top:2px}
+input{width:100%;min-height:48px;font:inherit;font-size:18px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px 10px;border-radius:0}
+input:focus{outline:2px solid var(--fg);border-color:var(--fg)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.f{min-width:0;margin-bottom:10px}
+button{font:inherit;font-size:16px;min-height:48px;min-width:48px;cursor:pointer;background:#000;color:var(--fg);border:1px solid var(--fg);padding:10px 14px;letter-spacing:.06em}
+button:active{background:var(--fg);color:#000}
+button.big{width:100%;font-size:18px;font-weight:bold}
+button.solid{background:var(--fg);color:#000}
+button.warn{border-color:var(--red);color:var(--red)}
+.cardhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cardhead b{color:var(--white);font-size:16px;letter-spacing:.06em}
+.out{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-top:1px dashed var(--fg-faint);padding:8px 0 2px;flex-wrap:wrap}
+.out span{color:var(--fg-dim);font-size:13px}
+.out b{color:var(--white);font-size:22px}
+.out em{font-style:normal;color:var(--fg-dim);font-size:12px;width:100%}
+.stepper{display:grid;grid-template-columns:48px 1fr 48px;gap:6px}
+.stepper input{text-align:center;font-size:22px}
+.check{display:flex;align-items:center;gap:10px;min-height:48px;color:var(--fg);font-size:15px;margin:0}
+.check input{width:28px;min-height:28px;height:28px;accent-color:var(--fg)}
+details{margin-top:6px}
+summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:var(--fg-dim);font-size:16px;letter-spacing:.06em}
+.warnbox{color:var(--amber);font-size:14px;margin:6px 0 0}
+.form .line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid var(--fg-faint);padding:10px 0;flex-wrap:wrap}
+.form .line span{color:var(--fg-dim);font-size:14px;flex:1 1 150px}
+.form .line b{color:var(--white);font-size:26px;text-align:right}
+.form .line.rate b{font-size:34px;color:var(--fg);text-shadow:0 0 10px rgba(57,255,106,.5)}
+.form .line.rate{cursor:pointer}
+.banner{margin:12px 0 0;padding:12px;border:2px solid var(--fg);font-weight:bold;font-size:18px;color:var(--fg)}
+.banner small{display:block;font-weight:normal;font-size:14px;margin-top:4px;color:var(--white)}
+.banner.notmet{border-color:var(--red);color:var(--red)}
+.banner.incomplete{border-color:var(--amber);color:var(--amber)}
+.sheetrow{border:1px solid var(--fg-faint);padding:8px;margin:8px 0;font-size:14px}
+.sheetrow .t{color:var(--white);font-weight:bold;margin-bottom:4px;overflow-wrap:anywhere}
+.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.cells div{min-width:0;overflow-wrap:anywhere}
+.cells i{display:block;font-style:normal;color:var(--fg-dim);font-size:11px}
+.cells b{color:var(--white);font-size:17px}
+ol.math{padding-left:26px;margin:8px 0}
+ol.math li{margin:0 0 10px;line-height:1.35;color:var(--white);overflow-wrap:anywhere}
+ol.math li.bad{color:var(--red);font-weight:bold}
+ol.math li.good{color:var(--fg);font-weight:bold}
+textarea{width:100%;min-height:160px;font:inherit;font-size:14px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 140px}
+.muted{color:var(--fg-dim);font-size:13px;line-height:1.4}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<header>
+  <h1>PRODUCTION REPORT CALC<small>fills out the P-310 sheet for you</small></h1>
+  <a class="back" href="../">&larr; TRACKER</a>
+</header>
+
+<h2>1. Top of the sheet <span style="text-transform:none;letter-spacing:0">(optional)</span></h2>
+<div class="panel">
+  <div class="f"><label for="h-name">Name</label><input id="h-name" autocomplete="off"></div>
+  <div class="grid2">
+    <div class="f"><label for="h-date">Date</label><input id="h-date" autocomplete="off"></div>
+    <div class="f"><label for="h-shift">Shift</label><input id="h-shift" placeholder="8a-6p" autocomplete="off"></div>
+  </div>
+</div>
+
+<h2>2. One box per work order (card)</h2>
+<p class="muted">Copy the numbers off each work order. The calculator works out Avg. Wgt. and Weight for you.</p>
+<div id="cards"></div>
+<button class="big" id="add">+ ADD CARD</button>
+
+<h2>3. Your shift</h2>
+<div class="panel grid2">
+  <div class="f"><label for="hours">Hours per shift</label><input id="hours" inputmode="decimal" autocomplete="off"></div>
+  <div class="f"><label for="goal">Goal: Lbs/Hour</label><input id="goal" inputmode="numeric" autocomplete="off"><span class="hint">Remembered for next time</span></div>
+</div>
+
+<h2 id="sheet-h">4. Copy this onto the sheet</h2>
+<div class="panel form" id="result">
+  <div id="sheetrows"></div>
+  <div class="line"><span>Total Weight Produced</span><b id="r-total">0</b></div>
+  <div class="line"><span>Hours per shift</span><b id="r-hours"></b></div>
+  <div class="line"><span>Goal: Lbs/Hour</span><b id="r-goal"></b></div>
+  <div class="line rate" id="rate-line" title="Tap to see the math"><span>Average Lbs/per Hour<br><small>(Total Weight &divide; hours) &middot; tap for math</small></span><b id="r-rate">&ndash;</b></div>
+  <div class="banner incomplete" id="banner">Fill in a card to start</div>
+  <div class="warnbox" id="warnings"></div>
+</div>
+
+<button class="big solid" id="mathbtn" aria-expanded="false">SHOW THE MATH</button>
+<div class="panel" id="mathpanel" hidden>
+  <p class="muted">Every step, with your numbers. Anyone can check it with a phone calculator.</p>
+  <ol class="math" id="steps"></ol>
+</div>
+
+<h2>5. Summary to copy or text</h2>
+<div class="panel">
+  <textarea id="summary" readonly></textarea>
+  <div class="row" style="margin-top:10px"><button id="copy">COPY SUMMARY</button></div>
+</div>
+
+<div class="row" style="margin-top:22px"><button class="big warn" id="clear">CLEAR / NEW SHIFT</button></div>
+<p class="muted" style="margin-top:16px">Saved on this phone automatically. Works without signal once it has loaded.</p>
+<div class="toast" id="toast"></div>
+
+<script id="calc-core">
+/* ===== CALC CORE: line-for-line port of production_calc.py. Keep the two in sync. ===== */
+var ProdCalc = (function () {
+  var NUM_RE = /^-?(\d+\.?\d*|\.\d+)$/;
+  function rhu(x) { return Math.floor(x + 0.5); }
+  function fmtInt(n) {
+    var neg = n < 0, s = String(Math.abs(n)), out = "";
+    while (s.length > 3) { out = "," + s.slice(-3) + out; s = s.slice(0, -3); }
+    return (neg ? "-" : "") + s + out;
+  }
+  function fmtTenths(t) {
+    var sign = t < 0 ? "-" : "", a = Math.abs(t);
+    return sign + fmtInt(Math.floor(a / 10)) + "." + String(a % 10);
+  }
+  function fmtNum(x) {
+    var h = rhu(x * 100), sign = h < 0 ? "-" : "", a = Math.abs(h);
+    var whole = Math.floor(a / 100), frac = a % 100;
+    if (frac === 0) return sign + fmtInt(whole);
+    var f = String(frac); while (f.length < 2) f = "0" + f; f = f.replace(/0+$/, "");
+    return sign + fmtInt(whole) + "." + f;
+  }
+  function plural(n, one, many) { return n === 1 ? one : many; }
+  function num(v) {
+    if (v === null || v === undefined || typeof v === "boolean") return null;
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    var s = String(v).trim().replace(/,/g, "");
+    if (!NUM_RE.test(s)) return null;
+    return parseFloat(s);
+  }
+  function computeRow(row, index) {
+    var label = String(row.card || "").trim() || ("Row " + (index + 1));
+    var woCoils = num(row.woCoils), woTotal = num(row.woTotal), avgIn = num(row.avgWgt);
+    var drawn = num(row.coilsDrawn), half = !!row.halfCut;
+    var weighed = (row.actualWeights || []).map(num).filter(function (w) { return w !== null && w > 0; });
+    var steps = [], warnings = [], avg = null, avgSource = "none";
+    if (woCoils !== null && woTotal !== null && woCoils > 0 && woTotal > 0) {
+      avg = rhu(woTotal / woCoils); avgSource = "workorder";
+      steps.push("Card " + label + ": work order " + fmtInt(rhu(woTotal)) + " lb \u00f7 " + fmtNum(woCoils) + " " +
+        plural(woCoils, "coil", "coils") + " = " + fmtInt(avg) + " lb avg per coil");
+    } else if (avgIn !== null && avgIn > 0) {
+      avg = rhu(avgIn); avgSource = "entered";
+      steps.push("Card " + label + ": avg weight " + fmtInt(avg) + " lb per coil (typed in)");
+    }
+    var weight = null, weightSource = "none";
+    if (weighed.length) {
+      var parts = weighed.map(rhu);
+      weight = parts.reduce(function (a, b) { return a + b; }, 0); weightSource = "weighed";
+      if (parts.length === 1) steps.push("Card " + label + ": weighed coil = " + fmtInt(weight) + " lb");
+      else steps.push("Card " + label + ": weighed coils " + parts.map(fmtInt).join(" + ") + " = " + fmtInt(weight) + " lb");
+    } else if (avg !== null && drawn !== null && drawn > 0) {
+      weight = rhu(avg * drawn); weightSource = "avg";
+      steps.push("Card " + label + ": " + fmtInt(avg) + " lb \u00d7 " + fmtNum(drawn) + " " +
+        plural(drawn, "coil", "coils") + " drawn = " + fmtInt(weight) + " lb");
+    }
+    var coilsText;
+    if (drawn !== null && drawn > 0) coilsText = fmtNum(drawn) + (half ? "=" + fmtNum(drawn * 2) : "");
+    else if (weighed.length) coilsText = fmtInt(weighed.length);
+    else coilsText = "";
+    if (woCoils !== null && drawn !== null && drawn > woCoils)
+      warnings.push("Card " + label + ": " + fmtNum(drawn) + " coils drawn but the work order only has " + fmtNum(woCoils) + ". Check the numbers.");
+    if (weight === null) {
+      if (avg === null) warnings.push("Card " + label + ": needs the work order coils and Tot Avg Wgt (or an avg weight).");
+      else warnings.push("Card " + label + ": how many coils did you draw?");
+    }
+    return { label: label, avg: avg, avgSource: avgSource, weight: weight, weightSource: weightSource,
+      coilsText: coilsText, steps: steps, warnings: warnings };
+  }
+  function compute(shift) {
+    var rows = (shift.rows || []).map(computeRow);
+    var hoursIn = num(shift.hours), goalIn = num(shift.goal);
+    var hours = hoursIn !== null && hoursIn > 0 ? hoursIn : null;
+    var goal = goalIn !== null && goalIn > 0 ? rhu(goalIn) : null;
+    var steps = [], warnings = [];
+    rows.forEach(function (r) { steps.push.apply(steps, r.steps); warnings.push.apply(warnings, r.warnings); });
+    var counted = rows.filter(function (r) { return r.weight !== null; }).map(function (r) { return r.weight; });
+    var total = counted.reduce(function (a, b) { return a + b; }, 0);
+    if (counted.length === 0) steps.push("Total Weight Produced: no rows with a weight yet");
+    else if (counted.length === 1) steps.push("Total Weight Produced = " + fmtInt(total) + " lb");
+    else steps.push("Total Weight Produced: " + counted.map(fmtInt).join(" + ") + " = " + fmtInt(total) + " lb");
+    var res = { rows: rows, total: total, hours: hours, goal: goal, rate10: null, rateText: "", status: "incomplete",
+      diff10: null, pct10: null, shiftGoal: null, overShort: null, minutesEquiv: null, headline: "",
+      steps: steps, warnings: warnings };
+    if (hours === null) { warnings.push("Enter the hours per shift."); res.headline = "Enter hours per shift"; return res; }
+    var rate10 = rhu(total * 10 / hours);
+    res.rate10 = rate10; res.rateText = fmtTenths(rate10);
+    steps.push("Average Lbs/Hour: " + fmtInt(total) + " lb \u00f7 " + fmtNum(hours) + " " + plural(hours, "hour", "hours") +
+      " = " + fmtTenths(rate10) + " lb per hour");
+    if (goal === null) { warnings.push("Enter the goal (lbs per hour)."); res.headline = "Enter the goal"; return res; }
+    var diff10 = rate10 - goal * 10;
+    var pct10 = rhu(total * 1000 / (goal * hours));
+    var shiftGoal = rhu(goal * hours);
+    var overShort = total - shiftGoal;
+    var minutes = rhu(Math.abs(overShort) * 60 / goal);
+    res.diff10 = diff10; res.pct10 = pct10; res.shiftGoal = shiftGoal; res.overShort = overShort; res.minutesEquiv = minutes;
+    var hrs = fmtNum(hours) + " " + plural(hours, "hour", "hours");
+    if (diff10 >= 0) {
+      res.status = "met";
+      steps.push("Goal: " + fmtInt(goal) + " lb/hr. You ran " + fmtTenths(rate10) + ", that is " + fmtTenths(diff10) +
+        " lb/hr OVER goal (" + fmtTenths(pct10) + "% of goal). GOAL MET.");
+      steps.push("Whole shift: " + fmtInt(goal) + " lb/hr \u00d7 " + hrs + " = " + fmtInt(shiftGoal) + " lb goal. You made " +
+        fmtInt(total) + " lb, " + fmtInt(overShort) + " lb over.");
+      res.headline = "GOAL MET +" + fmtTenths(diff10) + " lb/hr";
+    } else {
+      res.status = "notmet";
+      steps.push("Goal: " + fmtInt(goal) + " lb/hr. You ran " + fmtTenths(rate10) + ", that is " + fmtTenths(-diff10) +
+        " lb/hr UNDER goal (" + fmtTenths(pct10) + "% of goal).");
+      steps.push("Whole shift: " + fmtInt(goal) + " lb/hr \u00d7 " + hrs + " = " + fmtInt(shiftGoal) + " lb goal. You made " +
+        fmtInt(total) + " lb, " + fmtInt(-overShort) + " lb short (about " + fmtInt(minutes) + " " +
+        plural(minutes, "minute", "minutes") + " of running at goal speed).");
+      steps.push("GOAL NOT MET: you must list the problems and downtime reasons on the sheet.");
+      res.headline = "GOAL NOT MET -" + fmtTenths(-diff10) + " lb/hr";
+    }
+    return res;
+  }
+  function reportLines(shift, res) {
+    res = res || compute(shift);
+    var L = [];
+    L.push("DAILY DRAW OPERATOR PRODUCTION REPORT (P-310)");
+    L.push("Name: " + (shift.name || "____") + "   Date: " + (shift.date || "____") + "   Shift: " + (shift.shift || "____"));
+    L.push("");
+    (shift.rows || []).forEach(function (row, i) {
+      var r = res.rows[i];
+      var cells = [["Card #", row.card || ""], ["Finish Size", row.finish || ""], ["Grade", row.grade || ""],
+        ["Draw Compound", row.compound || ""], ["Package", row.package || ""],
+        ["Avg. Wgt.", r.avg !== null ? fmtInt(r.avg) : ""], ["Coils Drawn", r.coilsText],
+        ["Weight", r.weight !== null ? fmtInt(r.weight) : ""], ["Machine", row.machine || ""]];
+      L.push(cells.map(function (c) { return c[0] + ": " + c[1]; }).join(" | "));
+    });
+    L.push("");
+    L.push("Total Weight Produced: " + fmtInt(res.total));
+    L.push("Hours per shift: " + (res.hours !== null ? fmtNum(res.hours) : ""));
+    L.push("Goal: Lbs/Hour: " + (res.goal !== null ? fmtInt(res.goal) : ""));
+    L.push("Average Lbs/per Hour: " + res.rateText);
+    if (res.status === "notmet") {
+      L.push("");
+      L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lb/hr under). List all problems and reasons for downtime on the sheet.");
+    } else if (res.status === "met") {
+      L.push("");
+      L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lb/hr over).");
+    }
+    return L;
+  }
+  return { compute: compute, computeRow: computeRow, reportLines: reportLines, num: num,
+    fmtInt: fmtInt, fmtTenths: fmtTenths, fmtNum: fmtNum };
+})();
+if (typeof module !== "undefined") module.exports = ProdCalc;
+</script>
+
+<script>
+(function () {
+  var KEY = "drawCalcV1";
+  var $ = function (id) { return document.getElementById(id); };
+  function today() { var d = new Date(); return (d.getMonth() + 1) + "/" + d.getDate() + "/" + String(d.getFullYear()).slice(2); }
+  function blankRow() { return { card: "", finish: "", grade: "", compound: "", package: "", machine: "", woCoils: "", woTotal: "",
+    avgWgt: "", coilsDrawn: "", halfCut: false, weighed: "" }; }
+  function fresh(settings) {
+    return { schema: "draw-calc/v1", shift: { name: "", date: today(), shift: "", hours: String(settings.hours || 10),
+      goal: String(settings.goal || 2800), rows: [blankRow()] }, settings: settings };
+  }
+  var state;
+  try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) { state = null; }
+  if (!state || !state.shift) state = fresh({ goal: 2800, hours: 10 });
+  if (!state.settings) state.settings = { goal: 2800, hours: 10 };
+  if (!state.shift.rows || !state.shift.rows.length) state.shift.rows = [blankRow()];
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  function splitWeighed(s) {
+    return String(s || "").split(/[\s;+\/]+/).filter(function (x) { return x !== ""; });
+  }
+  function coreShift() {
+    var s = state.shift;
+    return { name: s.name, date: s.date, shift: s.shift, hours: s.hours, goal: s.goal,
+      rows: s.rows.map(function (r) { var o = {}; for (var k in r) o[k] = r[k]; o.actualWeights = splitWeighed(r.weighed); return o; }) };
+  }
+
+  var FIELDS_MAIN = [
+    ["card", "Card #", "From work order: top left", "text"],
+    ["machine", "Machine", "Like Draw 3", "text"]
+  ];
+  var FIELDS_WO = [
+    ["woCoils", "Coils", "From work order: Coils", "numeric"],
+    ["woTotal", "Tot Avg Wgt", "From work order: Tot Avg Wgt (the total lb)", "numeric"]
+  ];
+  var FIELDS_MORE = [
+    ["finish", "Finish Size", "From work order: FINISH SIZE line", "text"],
+    ["grade", "Grade", "From work order: Grade", "text"],
+    ["compound", "Draw Compound", "", "text"],
+    ["package", "Package", "Like Batch or 1/2 Nylon", "text"],
+    ["avgWgt", "Avg wgt per coil (only if no work order total)", "Leave empty when Coils + Tot Avg Wgt are filled in", "decimal"],
+    ["weighed", "Weighed coils (optional)", "Real scale weights, separated by spaces, like 4600 4620. These replace avg x coils.", "text"]
+  ];
+  function field(i, f) {
+    var id = "c" + i + "-" + f[0];
+    var wrap = document.createElement("div"); wrap.className = "f";
+    var lab = document.createElement("label"); lab.htmlFor = id; lab.textContent = f[1];
+    var inp = document.createElement("input"); inp.id = id; inp.autocomplete = "off";
+    if (f[3] !== "text") inp.inputMode = f[3];
+    inp.value = state.shift.rows[i][f[0]] || "";
+    inp.addEventListener("input", function () { state.shift.rows[i][f[0]] = inp.value; update(); });
+    wrap.appendChild(lab); wrap.appendChild(inp);
+    if (f[2]) { var h = document.createElement("span"); h.className = "hint"; h.textContent = f[2]; wrap.appendChild(h); }
+    return wrap;
+  }
+  function outLine(text, id) {
+    var d = document.createElement("div"); d.className = "out";
+    var s = document.createElement("span"); s.textContent = text;
+    var b = document.createElement("b"); b.id = id; b.textContent = "\u2013";
+    var e = document.createElement("em"); e.id = id + "-why";
+    d.appendChild(s); d.appendChild(b); d.appendChild(e); return d;
+  }
+  function renderCards() {
+    var box = $("cards"); box.innerHTML = "";
+    state.shift.rows.forEach(function (row, i) {
+      var p = document.createElement("div"); p.className = "panel";
+      var head = document.createElement("div"); head.className = "cardhead";
+      var t = document.createElement("b"); t.textContent = "CARD " + (i + 1);
+      var del = document.createElement("button"); del.className = "warn"; del.textContent = "REMOVE";
+      del.setAttribute("aria-label", "Remove card " + (i + 1));
+      del.addEventListener("click", function () {
+        if (!confirm("Remove card " + (i + 1) + (row.card ? " (" + row.card + ")" : "") + "?")) return;
+        state.shift.rows.splice(i, 1); if (!state.shift.rows.length) state.shift.rows.push(blankRow());
+        renderCards(); update();
+      });
+      head.appendChild(t); head.appendChild(del); p.appendChild(head);
+      var g1 = document.createElement("div"); g1.className = "grid2";
+      FIELDS_MAIN.forEach(function (f) { g1.appendChild(field(i, f)); }); p.appendChild(g1);
+      var g2 = document.createElement("div"); g2.className = "grid2";
+      FIELDS_WO.forEach(function (f) { g2.appendChild(field(i, f)); }); p.appendChild(g2);
+      p.appendChild(outLine("AVG. WGT. (per coil)", "c" + i + "-avg"));
+      // coils drawn stepper
+      var cw = document.createElement("div"); cw.className = "f"; cw.style.marginTop = "10px";
+      var cl = document.createElement("label"); cl.htmlFor = "c" + i + "-coilsDrawn"; cl.textContent = "Coils drawn this shift (on this card)";
+      var st = document.createElement("div"); st.className = "stepper";
+      var minus = document.createElement("button"); minus.textContent = "\u2212"; minus.setAttribute("aria-label", "One less coil");
+      var plus = document.createElement("button"); plus.textContent = "+"; plus.setAttribute("aria-label", "One more coil");
+      var ci = document.createElement("input"); ci.id = "c" + i + "-coilsDrawn"; ci.inputMode = "decimal"; ci.autocomplete = "off";
+      ci.value = row.coilsDrawn || "";
+      ci.addEventListener("input", function () { row.coilsDrawn = ci.value; update(); });
+      function bump(d) { var n = ProdCalc.num(ci.value) || 0; n = Math.max(0, n + d); ci.value = n ? String(n) : ""; row.coilsDrawn = ci.value; update(); }
+      minus.addEventListener("click", function () { bump(-1); });
+      plus.addEventListener("click", function () { bump(1); });
+      st.appendChild(minus); st.appendChild(ci); st.appendChild(plus);
+      var hint = document.createElement("span"); hint.className = "hint"; hint.textContent = "Count whole work-order coils, not half pieces";
+      cw.appendChild(cl); cw.appendChild(st); cw.appendChild(hint); p.appendChild(cw);
+      var hc = document.createElement("label"); hc.className = "check";
+      var hcb = document.createElement("input"); hcb.type = "checkbox"; hcb.checked = !!row.halfCut;
+      hcb.addEventListener("change", function () { row.halfCut = hcb.checked; update(); });
+      hc.appendChild(hcb); hc.appendChild(document.createTextNode("Half cut coils (writes 2=4 on the sheet)"));
+      p.appendChild(hc);
+      p.appendChild(outLine("WEIGHT (this card)", "c" + i + "-weight"));
+      var det = document.createElement("details");
+      var sum = document.createElement("summary"); sum.textContent = "MORE: size, grade, compound, package, weighed coils";
+      det.appendChild(sum);
+      FIELDS_MORE.forEach(function (f) { det.appendChild(field(i, f)); });
+      if (row.finish || row.grade || row.compound || row.package || row.avgWgt || row.weighed) det.open = true;
+      p.appendChild(det);
+      var w = document.createElement("div"); w.className = "warnbox"; w.id = "c" + i + "-warn"; p.appendChild(w);
+      box.appendChild(p);
+    });
+  }
+  function cell(name, val) {
+    var d = document.createElement("div"); var i = document.createElement("i"); i.textContent = name;
+    var b = document.createElement("b"); b.textContent = val || "\u2013"; d.appendChild(i); d.appendChild(b); return d;
+  }
+  var last = null;
+  function update() {
+    var sh = coreShift(), res = ProdCalc.compute(sh); last = { sh: sh, res: res };
+    var F = ProdCalc;
+    res.rows.forEach(function (r, i) {
+      var a = $("c" + i + "-avg"), aw = $("c" + i + "-avg-why"), w = $("c" + i + "-weight"), ww = $("c" + i + "-weight-why");
+      if (!a) return;
+      a.textContent = r.avg !== null ? F.fmtInt(r.avg) + " lb" : "\u2013";
+      aw.textContent = r.avgSource === "workorder" ? r.steps[0].replace(/^Card [^:]*: /, "") : (r.avgSource === "entered" ? "typed in under MORE" : "fill in Coils + Tot Avg Wgt");
+      w.textContent = r.weight !== null ? F.fmtInt(r.weight) + " lb" : "\u2013";
+      var ws = r.steps[r.steps.length - 1];
+      ww.textContent = r.weight !== null && ws ? ws.replace(/^Card [^:]*: /, "") : "";
+      $("c" + i + "-warn").textContent = r.warnings.join(" ");
+    });
+    var sr = $("sheetrows"); sr.innerHTML = "";
+    sh.rows.forEach(function (row, i) {
+      var r = res.rows[i];
+      if (!row.card && r.weight === null) return;
+      var d = document.createElement("div"); d.className = "sheetrow";
+      var t = document.createElement("div"); t.className = "t";
+      t.textContent = "Card # " + (row.card || "?") + [row.finish, row.grade, row.compound, row.package, row.machine].filter(Boolean).map(function (x) { return " \u00b7 " + x; }).join("");
+      var c = document.createElement("div"); c.className = "cells";
+      c.appendChild(cell("Avg. Wgt.", r.avg !== null ? F.fmtInt(r.avg) : ""));
+      c.appendChild(cell("Coils Drawn", r.coilsText));
+      c.appendChild(cell("Weight", r.weight !== null ? F.fmtInt(r.weight) : ""));
+      d.appendChild(t); d.appendChild(c); sr.appendChild(d);
+    });
+    $("r-total").textContent = F.fmtInt(res.total);
+    $("r-hours").textContent = res.hours !== null ? F.fmtNum(res.hours) : "\u2013";
+    $("r-goal").textContent = res.goal !== null ? F.fmtInt(res.goal) : "\u2013";
+    $("r-rate").textContent = res.rateText || "\u2013";
+    var b = $("banner"); b.className = "banner " + (res.status === "incomplete" ? "incomplete" : res.status);
+    b.textContent = "";
+    if (res.status === "incomplete") b.textContent = res.total ? res.headline : "Fill in a card to start";
+    else {
+      b.appendChild(document.createTextNode(res.status === "met" ? "\u2714 GOAL MET" : "\u2716 GOAL NOT MET"));
+      var sm = document.createElement("small");
+      sm.textContent = res.status === "met"
+        ? F.fmtTenths(res.diff10) + " lb/hr over goal (" + F.fmtTenths(res.pct10) + "%). " + F.fmtInt(res.overShort) + " lb over for the shift."
+        : F.fmtTenths(-res.diff10) + " lb/hr under goal (" + F.fmtTenths(res.pct10) + "% of goal), " + F.fmtInt(-res.overShort) +
+          " lb short. You must list the problems and downtime reasons on the sheet.";
+      b.appendChild(sm);
+    }
+    var rowWarn = 0; res.rows.forEach(function (r) { rowWarn += r.warnings.length; });
+    $("warnings").textContent = res.warnings.slice(rowWarn).join(" ");
+    var ol = $("steps"); ol.innerHTML = "";
+    res.steps.forEach(function (s) {
+      var li = document.createElement("li"); li.textContent = s;
+      if (/^GOAL NOT MET/.test(s)) li.className = "bad"; else if (/GOAL MET\.$/.test(s)) li.className = "good";
+      ol.appendChild(li);
+    });
+    var lines = F.reportLines(sh, res);
+    lines.push(""); lines.push("THE MATH:");
+    res.steps.forEach(function (s, i) { lines.push((i + 1) + ". " + s); });
+    $("summary").value = lines.join("\n");
+    var g = ProdCalc.num(state.shift.goal), h = ProdCalc.num(state.shift.hours);
+    if (g && g > 0) state.settings.goal = g;
+    if (h && h > 0) state.settings.hours = h;
+    save();
+  }
+  function bindHeader(id, key) {
+    var el = $(id); el.value = state.shift[key] || "";
+    el.addEventListener("input", function () { state.shift[key] = el.value; update(); });
+  }
+  function bindAll() {
+    bindHeader("h-name", "name"); bindHeader("h-date", "date"); bindHeader("h-shift", "shift");
+    bindHeader("hours", "hours"); bindHeader("goal", "goal");
+  }
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 1800); }
+  function toggleMath(force) {
+    var p = $("mathpanel"), open = force !== undefined ? force : p.hidden;
+    p.hidden = !open; $("mathbtn").textContent = open ? "HIDE THE MATH" : "SHOW THE MATH";
+    $("mathbtn").setAttribute("aria-expanded", String(open));
+    if (open) p.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  $("mathbtn").addEventListener("click", function () { toggleMath(); });
+  $("rate-line").addEventListener("click", function () { toggleMath(true); });
+  $("add").addEventListener("click", function () {
+    var prev = state.shift.rows[state.shift.rows.length - 1] || {};
+    var r = blankRow(); r.machine = prev.machine || ""; state.shift.rows.push(r);
+    renderCards(); update();
+    var el = $("c" + (state.shift.rows.length - 1) + "-card"); if (el) { el.focus(); el.scrollIntoView({ block: "center" }); }
+  });
+  $("copy").addEventListener("click", function () {
+    var ta = $("summary");
+    function fallback() { ta.focus(); ta.select(); try { document.execCommand("copy"); toast("Copied"); } catch (e) { toast("Select the text and copy it"); } }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(function () { toast("Copied"); }, fallback);
+    else fallback();
+  });
+  $("clear").addEventListener("click", function () {
+    if (!confirm("Clear this shift and start a new one? Your goal and hours stay.")) return;
+    state = fresh(state.settings); save(); bindAll(); renderCards(); update(); toggleMath(false); window.scrollTo(0, 0);
+  });
+  bindAll(); renderCards(); update();
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>
