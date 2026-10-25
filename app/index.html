@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<!--
+  DRAW RATE TRACKER v4 - PHONE APP (PWA). Same logic, math and saved data as the v4 page;
+  phone-first layout, bottom log dock, install prompt, offline via sw.js.
+
+  SAVED DATA  (localStorage key "drawRateV4"; old key "drawRateMulti" is read once
+  for migration and never modified). The same shape is used for the JSON export,
+  plus "exportedAt" and a computed "summary". Every record has a string id and
+  ISO-8601 timestamps so it can be loaded straight into a database.
+
+  {
+    "schema": "draw-rate/v4",
+    "setupDone": true,                    // false = show the setup wizard
+    "shift": {                            // table: shifts
+      "id": "s_lx2k9a_ab12c",
+      "date": "2026-10-21",               // shift START date (YYYY-MM-DD, local)
+      "operator": "D. Smith / 1234",      // optional
+      "start": "06:00",                   // HH:MM local, 24h
+      "end": "18:00",                     // end <= start means it ends next morning
+      "breakMode": "total" | "list",
+      "breakTotalMin": 30,                // used when breakMode = "total"
+      "breaks": [ { "id": "b_...", "start": "12:00", "minutes": 30 } ],  // breakMode = "list"
+      "createdAt": "2026-10-21T10:00:00.000Z",
+      "updatedAt": "2026-10-21T10:05:00.000Z"
+    },
+    "machines": [                         // table: machines (FK shift.id)
+      { "id": "m_...", "slot": 1, "name": "Machine 1", "needRate": 2800,   // lb/hr
+        "timerStartedAt": null | ISO, "timerAccumMs": 0 }                 // optional run timer
+    ],
+    "coils": [                            // table: coils (FK machines.id)
+      { "id": "c_...", "machineId": "m_...", "loggedAt": ISO, "weight": 450.5,  // lb
+        "coilNo": "", "heatNo": "", "size": "", "notes": "",
+        "downtimeMin": null | number, "downtimeReason": "" }
+    ],
+    "downtime": [                         // table: downtime (FK machines.id)
+      { "id": "d_...", "machineId": "m_...", "loggedAt": ISO, "minutes": 15, "reason": "" }
+    ]
+  }
+
+  The math lives in one place: the "CALC MODULE" in the script below. The same formulas are
+  re-implemented independently in Python (drtest/calc_check.py) to cross-check them.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#030a03">
+<title>Draw Rate Tracker</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Draw Rate">
+<meta name="application-name" content="Draw Rate">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23030a03'/%3E%3Cpath d='M5 23 L12 15 L17 19 L27 8' stroke='%2339ff6a' stroke-width='3' fill='none'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #030a03;
+    --panel: #061206;
+    --fg: #39ff6a;
+    --fg-dim: #1f9a3e;
+    --fg-faint: rgba(57, 255, 106, 0.16);
+    --amber: #ffc23d;
+    --red: #ff5f56;
+    --white: #eaffea;
+    --font: "Courier New", Courier, "Noto Sans Mono", "DejaVu Sans Mono", "Droid Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); }
+  body { line-height: 1.4; }
+  [hidden] { display: none !important; }
+  button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 1rem 1rem 3rem; }
+  .glow { text-shadow: 0 0 6px rgba(57, 255, 106, 0.45); }
+  .amber { color: var(--amber); }
+  .red { color: var(--red); }
+  .green { color: var(--fg); }
+  .white { color: var(--white); }
+  .dim { color: var(--fg-dim); }
+  .lbl { color: var(--amber); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  .sub { color: var(--fg-dim); font-size: 0.85rem; }
+  .err { color: var(--red); min-height: 1.3em; margin: 0.75rem 0 0; }
+
+  /* inputs + buttons */
+  .in {
+    width: 100%; min-width: 0; height: 3.25rem; padding: 0 0.85rem;
+    background: #000; color: var(--white); border: 2px solid var(--fg-dim); border-radius: 3px;
+    font-size: 1.25rem; font-variant-numeric: tabular-nums; color-scheme: dark;
+    -webkit-appearance: none; appearance: none;
+  }
+  .in:focus { outline: none; border-color: var(--fg); box-shadow: 0 0 10px rgba(57, 255, 106, 0.35); }
+  .in::placeholder { color: rgba(57, 255, 106, 0.35); }
+  textarea.in { height: auto; padding: 0.6rem 0.85rem; font-size: 1rem; }
+  .btn {
+    min-height: 3.25rem; padding: 0.5rem 1rem; border: 2px solid var(--fg); border-radius: 3px;
+    background: transparent; color: var(--fg); font-weight: 700; letter-spacing: 0.08em;
+    cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { background: var(--fg); color: #000; }
+  .btn.solid { background: var(--fg); color: #000; }
+  .btn.solid:active { background: var(--white); }
+  .btn.warn { border-color: var(--red); color: var(--red); }
+  .btn.small { min-height: 2.5rem; padding: 0.3rem 0.7rem; font-size: 0.85rem; }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .link { background: none; border: 0; color: var(--amber); text-decoration: underline; cursor: pointer; padding: 0.5rem; font-size: 0.9rem; }
+
+  /* wizard */
+  .wz-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+  .wz-brand { color: var(--amber); font-weight: 700; letter-spacing: 0.2em; }
+  .wz-step { color: var(--fg-dim); font-size: 0.85rem; letter-spacing: 0.1em; }
+  .wz-progress { height: 4px; background: var(--fg-faint); margin-bottom: 2rem; }
+  .wz-progress > div { height: 100%; background: var(--fg); width: 0; }
+  #wz-title { color: var(--white); font-size: 1.5rem; margin: 0 0 0.5rem; letter-spacing: 0.04em; }
+  .help { color: var(--fg-dim); margin: 0 0 1.5rem; }
+  .field { margin-bottom: 1.25rem; }
+  .field > label { display: block; margin-bottom: 0.4rem; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
+  .seg .btn.on { background: var(--fg); color: #000; }
+  .count-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+  .count-grid .btn { min-height: 4.5rem; font-size: 1.75rem; }
+  .count-grid .btn.on { background: var(--fg); color: #000; }
+  .break-row { display: grid; grid-template-columns: 1fr 7rem 3.25rem; gap: 0.5rem; margin-bottom: 0.6rem; align-items: end; }
+  .mach-row { padding: 1rem 0; border-top: 1px solid var(--fg-faint); }
+  .mach-row:first-child { border-top: 0; padding-top: 0; }
+  .wz-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem; margin-top: 2rem; }
+  .calc-note { margin-top: 0.5rem; color: var(--amber); }
+  .review { width: 100%; border-collapse: collapse; }
+  .review td { padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); vertical-align: top; }
+  .review td:first-child { color: var(--amber); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; width: 40%; }
+  .review td:last-child { color: var(--white); text-align: right; }
+
+  /* dashboard */
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+  .brand { color: var(--amber); font-weight: 700; letter-spacing: 0.2em; font-size: 1.1rem; }
+  .clock { color: var(--white); font-size: 1.1rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .phase { margin: 1rem 0 1.5rem; padding: 0.5rem 0.75rem; background: var(--panel); color: var(--fg); font-size: 0.9rem; letter-spacing: 0.05em; }
+  .phase.amber { color: var(--amber); }
+  .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .big { font-size: 2.6rem; font-weight: 700; line-height: 1.1; color: var(--white); font-variant-numeric: tabular-nums; margin-top: 0.2rem; overflow-wrap: anywhere; }
+  .big.pc { color: var(--fg); }
+  .unit { font-size: 0.85rem; color: var(--fg-dim); }
+  .bar { position: relative; height: 10px; background: var(--fg-faint); margin: 1.25rem 0 0.4rem; }
+  .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg); width: 0; }
+  .bar .mark { position: absolute; top: -5px; bottom: -5px; width: 3px; background: var(--amber); left: 0; margin-left: -1px; }
+  .legend { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.8rem; color: var(--fg-dim); }
+  .block { margin-top: 2rem; }
+  .block > .lbl { display: block; margin-bottom: 0.6rem; }
+  .delta { font-size: 2.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .delta .pct { font-size: 1.5rem; margin-left: 0.75rem; }
+  .rows { margin: 0; }
+  .rows > div { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.6rem 0; border-bottom: 1px solid var(--fg-faint); }
+  .rows > div:last-child { border-bottom: 0; }
+  .rows dt { color: var(--fg-dim); font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .rows dd { margin: 0; color: var(--white); font-size: 1.15rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .rows dd.green, .mc-stats b.green { color: var(--fg); }
+  .rows dd.amber, .mc-stats b.amber { color: var(--amber); }
+  .rows dd.red, .mc-stats b.red { color: var(--red); }
+  .note { color: var(--amber); font-size: 0.85rem; margin: 0.6rem 0 0; }
+  .machines { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+  .mc { background: var(--panel); padding: 1rem; border-left: 3px solid var(--fg-dim); }
+  .mc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .mc-name { color: var(--white); font-weight: 700; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .mc-rate { color: var(--fg-dim); font-size: 0.8rem; white-space: nowrap; }
+  .mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.9rem; }
+  .mc-stats b { display: block; color: var(--white); font-size: 1.2rem; font-variant-numeric: tabular-nums; margin-top: 0.15rem; }
+  .mc-log { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; }
+  .mc-log .btn { padding: 0.5rem 1.1rem; }
+  .mc-last { margin-top: 0.5rem; min-height: 1.2em; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 2.5rem; }
+  .adv-toggle { width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--fg-faint); border-bottom: 1px solid var(--fg-faint); color: var(--amber); padding: 1rem 0; letter-spacing: 0.15em; font-weight: 700; cursor: pointer; }
+
+  /* advanced */
+  .adv-mach { margin-top: 1.5rem; }
+  .adv-mach h3 { color: var(--white); font-size: 1rem; margin: 0 0 0.6rem; letter-spacing: 0.06em; }
+  .adv-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .coil-tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+  .coil-tbl th { color: var(--amber); font-weight: 400; font-size: 0.7rem; letter-spacing: 0.1em; text-align: left; padding: 0.3rem 0.25rem; border-bottom: 1px solid var(--fg-faint); }
+  .coil-tbl td { padding: 0.45rem 0.25rem; border-bottom: 1px solid var(--fg-faint); vertical-align: top; }
+  .coil-tbl td.r, .coil-tbl th.r { text-align: right; }
+  .coil-tbl .meta { color: var(--fg-dim); font-size: 0.8rem; }
+  .edit-box { background: var(--panel); padding: 0.75rem; }
+  .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .edit-grid .full { grid-column: 1 / -1; }
+  .edit-grid .in { height: 2.75rem; font-size: 1rem; }
+  .dt-form { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.5rem; }
+  .dt-form .in { height: 2.75rem; font-size: 1rem; }
+  .export { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .empty { color: var(--fg-dim); padding: 0.6rem 0; }
+  .text-center { text-align: center; }
+
+  @media (min-width: 640px) {
+    .wrap { padding: 1.75rem 1.75rem 3rem; }
+    .big { font-size: 3.6rem; }
+    .delta { font-size: 2.6rem; }
+    .machines { grid-template-columns: 1fr 1fr; }
+    .count-grid { grid-template-columns: repeat(6, 1fr); }
+  }
+  @media (max-width: 360px) {
+    .big { font-size: 2.1rem; }
+    .delta { font-size: 1.7rem; }
+    .delta .pct { font-size: 1.2rem; }
+  }
+
+  /* ================= PHONE APP LAYER (PWA) ================= */
+  html { touch-action: manipulation; }
+  html, body { max-width: 100%; overflow-x: hidden; }
+  body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+  .wrap {
+    max-width: 30rem;
+    padding: calc(0.75rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+             calc(1.5rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+  }
+  @media (min-width: 640px) { .wrap { max-width: 44rem; } }
+  .btn.small { min-height: 3rem; padding: 0.4rem 0.85rem; font-size: 0.95rem; }
+  .link { min-height: 3rem; }
+  .big { font-size: clamp(2rem, 9vw, 3.6rem); }
+  .delta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.75rem; font-size: clamp(1.7rem, 8vw, 2.6rem); }
+  .delta .pct { margin-left: 0; font-size: 0.7em; }
+  .phase { margin: 0.75rem 0 1.25rem; }
+  .block { margin-top: 1.75rem; }
+  .top { position: sticky; top: 0; z-index: 4; background: var(--bg);
+         margin: calc(-0.75rem - env(safe-area-inset-top)) -1rem 0; padding: calc(0.6rem + env(safe-area-inset-top)) 1rem 0.5rem;
+         border-bottom: 1px solid var(--fg-faint); }
+  .clock { font-size: 1.25rem; }
+  /* wizard: sticky BACK / NEXT at the thumb */
+  #wizard { display: flex; flex-direction: column;
+             min-height: calc(100vh - 2.25rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+             min-height: calc(100svh - 2.25rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  #wizard .wz-nav { margin-top: auto; }
+  #wz-error { margin-bottom: 1rem; }
+  .rows > div { flex-wrap: wrap; row-gap: 0.15rem; }
+  .rows dt { white-space: nowrap; }
+  .rows dd { margin-left: auto; }
+  .wz-nav { position: sticky; bottom: 0; z-index: 4; margin: 1.5rem -1rem 0; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+            background: var(--bg); border-top: 1px solid var(--fg-faint); }
+  .wz-nav .btn { min-height: 3.5rem; font-size: 1.1rem; }
+  .count-grid .btn { min-height: 4.75rem; }
+  .row2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  input[type=time].in, input[type=date].in { padding: 0 0.6rem; }
+  .break-row { grid-template-columns: minmax(0, 1fr) 6rem 3.25rem; }
+  .break-row .btn { min-height: 3.25rem; margin-bottom: 1.25rem; }
+  /* machine cards: tap a card to pick it in the dock; per-card log row lives in the dock */
+  .mc { cursor: pointer; }
+  .mc.sel { border-left-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg-faint); }
+  .mc .mc-log { display: none; }
+  .mc-sel-tag { color: #000; background: var(--fg); font-size: 0.65rem; letter-spacing: 0.1em; padding: 0.1rem 0.35rem; margin-left: 0.4rem; vertical-align: middle; }
+  .actions { margin-top: 2rem; }
+  /* advanced on a phone */
+  .coil-tbl { table-layout: fixed; font-size: 0.85rem; }
+  .coil-tbl th:nth-child(1), .coil-tbl td:nth-child(1) { width: 1.75rem; }
+  .coil-tbl th:nth-child(3), .coil-tbl td:nth-child(3) { width: 4rem; white-space: nowrap; }
+  .coil-tbl th:nth-child(4), .coil-tbl td:nth-child(4) { width: 5.25rem; white-space: nowrap; }
+  .coil-tbl th:nth-child(5), .coil-tbl td:nth-child(5) { width: 4.25rem; }
+  .coil-tbl td { overflow-wrap: anywhere; }
+  .coil-tbl .btn.small { padding: 0.3rem 0.4rem; width: 100%; }
+  .edit-grid { grid-template-columns: 1fr; }
+  .edit-grid .in, .dt-form .in { height: 3rem; }
+  .dt-form { grid-template-columns: 4.5rem minmax(0, 1fr) auto; margin-bottom: 0.75rem; }
+  /* bottom log dock */
+  .dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--panel);
+          border-top: 2px solid var(--fg-dim); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+          padding: 0.6rem calc(0.75rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.75rem + env(safe-area-inset-left)); }
+  .dock-inner { max-width: 30rem; margin: 0 auto; }
+  @media (min-width: 640px) { .dock-inner { max-width: 44rem; } }
+  .dock-mach { display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .dock-mach::-webkit-scrollbar { display: none; }
+  .chip { flex: 1 0 6.5rem; min-height: 3rem; padding: 0.3rem 0.5rem; font-size: 0.95rem; letter-spacing: 0.04em;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-color: var(--fg-dim); color: var(--fg); }
+  .chip.on { background: var(--fg); color: #000; border-color: var(--fg); }
+  .dock-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
+  .dock-row .in { height: 3.5rem; font-size: 1.5rem; }
+  .dock-row .btn { min-height: 3.5rem; padding: 0.5rem 1.1rem; font-size: 1.05rem; }
+  .dock-msg { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--fg); margin-bottom: 0.4rem; min-height: 0; }
+  .dock-msg:empty { display: none; }
+  .dock-msg.red { color: var(--red); } .dock-msg.amber { color: var(--amber); }
+  .dock-msg .link { min-height: 2.75rem; padding: 0 0.5rem; font-weight: 700; }
+  /* install + update banners, footer */
+  .banner { background: var(--panel); border: 1px solid var(--fg-dim); padding: 0.75rem; margin-bottom: 1rem; }
+  .banner p { margin: 0 0 0.6rem; color: var(--white); font-size: 0.95rem; }
+  .banner .row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; }
+  .app-foot { text-align: center; margin-top: 1.5rem; font-size: 0.8rem; }
+  .app-foot a { color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner" id="install" hidden>
+    <p id="install-text"></p>
+    <div class="row">
+      <button type="button" class="btn solid" id="install-go">INSTALL</button>
+      <button type="button" class="btn" id="install-x">NOT NOW</button>
+    </div>
+  </div>
+  <div class="banner" id="update" hidden>
+    <p>A newer version of the app is ready.</p>
+    <div class="row">
+      <button type="button" class="btn solid" id="update-go">RELOAD NOW</button>
+      <button type="button" class="btn" id="update-x">LATER</button>
+    </div>
+  </div>
+
+  <section id="wizard" hidden>
+    <div class="wz-top">
+      <span class="wz-brand glow">DRAW RATE</span>
+      <span class="wz-step" id="wz-step"></span>
+    </div>
+    <div class="wz-progress"><div id="wz-bar"></div></div>
+    <h2 id="wz-title"></h2>
+    <p id="wz-help" class="help"></p>
+    <div id="wz-body"></div>
+    <p id="wz-error" class="err" role="alert"></p>
+    <div class="wz-nav">
+      <button type="button" class="btn" id="wz-back">BACK</button>
+      <button type="button" class="btn solid" id="wz-next">NEXT</button>
+    </div>
+    <p class="text-center"><button type="button" class="link" id="wz-cancel" hidden>Cancel, back to dashboard</button></p>
+  </section>
+
+  <section id="dash" hidden>
+    <header class="top">
+      <div>
+        <div class="brand glow">DRAW RATE</div>
+        <div class="sub" id="d-shift"></div>
+      </div>
+      <div class="clock" id="d-clock"></div>
+    </header>
+    <p class="phase" id="d-phase"></p>
+
+    <div class="hero">
+      <div>
+        <div class="lbl">Lbs ran</div>
+        <div class="big glow" id="d-ran">0</div>
+      </div>
+      <div>
+        <div class="lbl">Pace car</div>
+        <div class="big pc glow" id="d-pc">0</div>
+        <div class="unit">lb you should have by now</div>
+      </div>
+    </div>
+    <div class="bar" aria-hidden="true"><div class="fill" id="d-fill"></div><div class="mark" id="d-mark"></div></div>
+    <div class="legend"><span id="d-of-target"></span><span id="d-target"></span></div>
+
+    <section class="block">
+      <span class="lbl" id="d-delta-lbl">Deficit / surplus</span>
+      <div class="delta" id="d-delta"><span id="d-delta-lb">—</span><span class="pct" id="d-delta-pct"></span></div>
+      <div class="sub" id="d-delta-note"></div>
+    </section>
+
+    <section class="block">
+      <span class="lbl">Projection at current pace</span>
+      <dl class="rows">
+        <div><dt>Current pace</dt><dd id="p-pace">—</dd></div>
+        <div><dt>Projected finish</dt><dd id="p-proj">—</dd></div>
+        <div><dt>vs day target</dt><dd id="p-vs">—</dd></div>
+        <div><dt>Hit target at</dt><dd id="p-hit">—</dd></div>
+        <div><dt>Catch-up rate</dt><dd id="p-catch">—</dd></div>
+      </dl>
+      <p class="note" id="p-note"></p>
+    </section>
+
+    <section class="block">
+      <span class="lbl">Machines</span>
+      <div class="machines" id="d-machines"></div>
+    </section>
+
+    <section class="block">
+      <button type="button" class="adv-toggle" id="adv-toggle" aria-expanded="false">+ ADVANCED</button>
+      <div id="adv" hidden></div>
+    </section>
+
+    <div class="actions">
+      <button type="button" class="btn" id="btn-edit">EDIT SETUP</button>
+      <button type="button" class="btn warn" id="btn-new">NEW SHIFT</button>
+    </div>
+    <p class="app-foot sub"><span id="sw-status">Saved on this device</span> · <a href="../">full page version</a></p>
+
+    <div class="dock" id="dock" role="region" aria-label="Log a coil">
+      <div class="dock-inner">
+        <div class="dock-msg" id="dock-msg" aria-live="polite"></div>
+        <div class="dock-mach" id="dock-mach" role="group" aria-label="Machine"></div>
+        <div class="dock-row">
+          <input class="in" id="dock-in" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Coil lb" enterkeyhint="done" autocomplete="off" aria-label="Coil weight in lb">
+          <button type="button" class="btn solid" id="dock-log">LOG COIL</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script>
+/* =====================================================================
+   CALC MODULE - every number on the dashboard comes from Calc.compute().
+   Pure functions: no DOM, no storage. Mirrored in drtest/calc_check.py.
+
+   Definitions (all times are local wall-clock, ms since epoch):
+     shift window   start = shift.date @ shift.start
+                    end   = shift.date @ shift.end; if end <= start (clock-wise)
+                            the shift ends the NEXT day (overnight).
+     breaks         list mode : each break starts at its clock time inside the
+                                window (a time earlier than the start time means
+                                the next day) and lasts its minutes.
+                    total mode: one block of breakTotalMin centred on the
+                                middle of the shift.
+                    Breaks are clipped to the window and merged when they overlap.
+     worked(a,b)    ms between a and b that fall inside the window and outside breaks.
+     W              worked hours for the whole shift = worked(start, end)
+     t              now clamped into [start, end]
+     w              worked hours so far = worked(start, t);  left = W - w
+     fraction       w / W
+     day target     T  = W x sum(needRate of every configured machine)
+     pace car       PC = fraction x T                 (per machine: fraction x W x rate)
+     lbs ran        L  = sum of coil weights
+     deficit/surplus  D = L - PC;  D% = D / PC x 100   (blank while PC = 0)
+     current pace   P  = L / w   (only once w >= 10 min; blank before that)
+     projected      L + P x left                       (P must exist)
+     proj vs target (L + P x left) - T, and that / T x 100
+     hit target at  if L >= T: already hit. Else if P > 0 and shift not over:
+                    the clock time after (T - L) / P more WORKED hours from now
+                    (breaks skipped; after the shift end time runs straight on).
+                    early/late = hit time - end (negative = early).
+     catch-up rate  (T - L) / left   (0 once the target is hit; blank when < 1 min left)
+   ===================================================================== */
+var Calc = (function () {
+  "use strict";
+  var MIN = 60000, HOUR = 3600000;
+  var PACE_MIN_WORKED_MS = 10 * MIN;   // don't project from the first few minutes
+
+  function parseClock(s) {
+    if (typeof s !== "string") return null;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(s);
+    if (!m) return null;
+    var h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return { h: h, m: mi };
+  }
+  function parseDate(s) {
+    if (typeof s !== "string") return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return null;
+    var d = { y: +m[1], mo: +m[2], d: +m[3] };
+    if (d.mo < 1 || d.mo > 12 || d.d < 1 || d.d > 31) return null;
+    return d;
+  }
+  function at(d, c, plusDays) {
+    return new Date(d.y, d.mo - 1, d.d + (plusDays || 0), c.h, c.m, 0, 0).getTime();
+  }
+
+  function shiftWindow(shift) {
+    if (!shift) return null;
+    var d = parseDate(shift.date), s = parseClock(shift.start), e = parseClock(shift.end);
+    if (!d || !s || !e) return null;
+    if (s.h === e.h && s.m === e.m) return null;
+    var start = at(d, s), end = at(d, e);
+    var overnight = (e.h * 60 + e.m) < (s.h * 60 + s.m);
+    if (overnight) end = at(d, e, 1);
+    return { start: start, end: end, overnight: overnight };
+  }
+
+  function breakIntervals(shift, win) {
+    var raw = [], d = parseDate(shift.date);
+    if (shift.breakMode === "list") {
+      (shift.breaks || []).forEach(function (b) {
+        var c = parseClock(b && b.start), mins = Number(b && b.minutes);
+        if (!c || !(mins > 0)) return;
+        var t = at(d, c);
+        if (t < win.start) t = at(d, c, 1);
+        raw.push([t, t + mins * MIN]);
+      });
+    } else {
+      var len = Number(shift.breakTotalMin) * MIN;
+      if (len > 0) {
+        var mid = win.start + (win.end - win.start) / 2;
+        raw.push([mid - len / 2, mid + len / 2]);
+      }
+    }
+    var clipped = [];
+    raw.forEach(function (r) {
+      var a = Math.max(r[0], win.start), b = Math.min(r[1], win.end);
+      if (b > a) clipped.push([a, b]);
+    });
+    clipped.sort(function (x, y) { return x[0] - y[0]; });
+    var merged = [];
+    clipped.forEach(function (r) {
+      var last = merged[merged.length - 1];
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+      else merged.push([r[0], r[1]]);
+    });
+    return merged;
+  }
+
+  function worked(win, breaks, a, b) {
+    a = Math.max(a, win.start); b = Math.min(b, win.end);
+    if (b <= a) return 0;
+    var ms = b - a;
+    breaks.forEach(function (r) {
+      var o = Math.min(b, r[1]) - Math.max(a, r[0]);
+      if (o > 0) ms -= o;
+    });
+    return ms;
+  }
+
+  // Clock time reached after `workMs` more worked time starting at `from`.
+  function addWorked(win, breaks, from, workMs) {
+    var cursor = from;
+    for (var i = 0; i < breaks.length; i++) {
+      var r = breaks[i];
+      if (r[1] <= cursor) continue;
+      if (r[0] > cursor) {
+        var gap = r[0] - cursor;
+        if (workMs <= gap) return cursor + workMs;
+        workMs -= gap;
+      }
+      cursor = Math.max(cursor, r[1]);
+    }
+    return cursor + workMs;
+  }
+
+  function coilTime(c) { var t = Date.parse(c.loggedAt); return isFinite(t) ? t : 0; }
+
+  function compute(state, now) {
+    var shift = state.shift || {}, machines = state.machines || [], coils = state.coils || [];
+    var byId = {};
+    machines.forEach(function (m) { byId[m.id] = 0; });
+    coils.forEach(function (c) { if (byId.hasOwnProperty(c.machineId)) byId[c.machineId] += c.weight; });
+    var L = 0;
+    machines.forEach(function (m) { L += byId[m.id]; });
+
+    var out = { phase: "invalid", lbsRan: L, machines: [] };
+    var win = shiftWindow(shift);
+    var breaks = win ? breakIntervals(shift, win) : [];
+    var Wms = win ? worked(win, breaks, win.start, win.end) : 0;
+    if (!win || Wms <= 0) {
+      out.machines = machines.map(function (m) { return { id: m.id, lbs: byId[m.id], target: null, paceCar: null, delta: null, deltaPct: null }; });
+      return out;
+    }
+    var t = Math.min(Math.max(now, win.start), win.end);
+    var wms = worked(win, breaks, win.start, t);
+    var leftMs = Wms - wms;
+    var fraction = wms / Wms;
+    var W = Wms / HOUR;
+    var rateSum = 0;
+    machines.forEach(function (m) { rateSum += m.needRate; });
+    var T = W * rateSum;
+    var PC = fraction * T;
+    var D = L - PC;
+
+    out.phase = now < win.start ? "before" : (now >= win.end ? "after" : "live");
+    out.start = win.start; out.end = win.end; out.overnight = win.overnight;
+    out.breaks = breaks;
+    out.breakMs = (win.end - win.start) - Wms;
+    out.onBreakUntil = null;
+    if (out.phase === "live") breaks.forEach(function (r) { if (now >= r[0] && now < r[1]) out.onBreakUntil = r[1]; });
+    out.workedTotalMs = Wms; out.workedSoFarMs = wms; out.workedLeftMs = leftMs;
+    out.fraction = fraction;
+    out.rateSum = rateSum;
+    out.target = T;
+    out.paceCar = PC;
+    out.delta = D;
+    out.deltaPct = PC > 0 ? D / PC * 100 : null;
+    out.pace = wms >= PACE_MIN_WORKED_MS ? L / (wms / HOUR) : null;
+    out.paceWaitMs = wms >= PACE_MIN_WORKED_MS ? 0 : PACE_MIN_WORKED_MS - wms;
+    out.projected = out.pace == null ? null : L + out.pace * (leftMs / HOUR);
+    out.projDelta = out.projected == null ? null : out.projected - T;
+    out.projPct = out.projected == null ? null : (out.projected - T) / T * 100;
+    out.targetHit = L >= T;
+    out.hitAt = null; out.hitVsEndMs = null;
+    if (!out.targetHit && out.pace != null && out.pace > 0 && out.phase !== "after") {
+      out.hitAt = addWorked(win, breaks, t, (T - L) / out.pace * HOUR);
+      out.hitVsEndMs = out.hitAt - win.end;
+    }
+    out.catchUp = out.targetHit ? 0 : (leftMs >= MIN ? (T - L) / (leftMs / HOUR) : null);
+    out.machines = machines.map(function (m) {
+      var tg = W * m.needRate, pc = fraction * tg, lbs = byId[m.id];
+      return { id: m.id, lbs: lbs, target: tg, paceCar: pc, delta: lbs - pc, deltaPct: pc > 0 ? (lbs - pc) / pc * 100 : null };
+    });
+    return out;
+  }
+
+  // Split rate per coil: weight / worked hours since the machine's previous coil
+  // (or the shift start for its first coil). Blank under 1 worked minute.
+  function splitRates(state, machineId) {
+    var win = shiftWindow(state.shift);
+    var list = (state.coils || []).filter(function (c) { return c.machineId === machineId; })
+      .slice().sort(function (a, b) { return coilTime(a) - coilTime(b); });
+    var breaks = win ? breakIntervals(state.shift, win) : [];
+    var prev = win ? win.start : null;
+    return list.map(function (c) {
+      var tc = coilTime(c), rate = null;
+      if (win) {
+        var w = worked(win, breaks, prev, tc);
+        if (w >= MIN) rate = c.weight / (w / HOUR);
+        prev = Math.max(prev, tc);
+      }
+      return { id: c.id, rate: rate };
+    });
+  }
+
+  return { compute: compute, shiftWindow: shiftWindow, breakIntervals: breakIntervals, worked: worked,
+    splitRates: splitRates, parseClock: parseClock, parseDate: parseDate, HOUR: HOUR, MIN: MIN };
+})();
+if (typeof window !== "undefined") window.DrawRateCalc = Calc;
+</script>
+<script>
+(function () {
+  "use strict";
+  var KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v4";
+  var MAX_MACHINES = 6, DEFAULT_RATE = 2800;
+
+  /* ---------- small helpers ---------- */
+  function $(id) { return document.getElementById(id); }
+  function isNum(v) { return typeof v === "number" && isFinite(v); }
+  function num(v) { var n = typeof v === "number" ? v : parseFloat(v); return isFinite(n) ? n : NaN; }
+  function str(v, max) { return typeof v === "string" ? v.slice(0, max || 200) : ""; }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function uid(p) { return p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function iso(ms) { return new Date(ms).toISOString(); }
+  function isIso(v) { return typeof v === "string" && isFinite(Date.parse(v)); }
+  function todayStr() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function okClock(v) { return !!Calc.parseClock(v); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function setText(e, t) { if (e && e.textContent !== t) e.textContent = t; }
+  function setCls(e, c) { if (e && e.className !== c) e.className = c; }
+  function fmtInt(n) {
+    if (!isFinite(n)) return "—";
+    var neg = n < 0, s = String(Math.round(Math.abs(n)));
+    s = s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return (neg && s !== "0" ? "-" : "") + s;
+  }
+  function fmtSigned(n) { var s = fmtInt(n); return n > 0 && s !== "0" ? "+" + s : s; }
+  function fmtPct(n) { if (n == null || !isFinite(n)) return "—"; var s = Math.abs(n).toFixed(1); return (n > 0.05 ? "+" : n < -0.05 ? "-" : "") + s + "%"; }
+  function fmtW(n) { return isFinite(n) ? (Math.round(n * 10) / 10).toFixed(1) : "—"; }
+  function fmtDur(ms) {
+    ms = Math.max(0, Math.round(ms / 60000));
+    var h = Math.floor(ms / 60), m = ms % 60;
+    return h ? h + "h " + pad(m) + "m" : m + "m";
+  }
+  function fmtClock(ms, withSec) {
+    var d = new Date(ms), h = d.getHours(), ap = h < 12 ? "AM" : "PM";
+    h = h % 12 || 12;
+    return h + ":" + pad(d.getMinutes()) + (withSec ? ":" + pad(d.getSeconds()) : "") + " " + ap;
+  }
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function fmtClockDay(ms, refMs) {
+    var a = new Date(ms), b = new Date(refMs);
+    var same = a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    return (same ? "" : DAYS[a.getDay()] + " ") + fmtClock(ms);
+  }
+  function fmtHHMM(v) {
+    var c = Calc.parseClock(v); if (!c) return "--:--";
+    var d = new Date(2000, 0, 1, c.h, c.m); return fmtClock(d.getTime());
+  }
+
+  /* ---------- state ---------- */
+  function defaultMachine(i) {
+    return { id: uid("m"), slot: i + 1, name: "Machine " + (i + 1), needRate: DEFAULT_RATE, timerStartedAt: null, timerAccumMs: 0 };
+  }
+  function defaultState() {
+    var now = Date.now();
+    return {
+      schema: SCHEMA, setupDone: false,
+      shift: { id: uid("s"), date: todayStr(), operator: "", start: "", end: "", breakMode: "total",
+        breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now) },
+      machines: [defaultMachine(0)], coils: [], downtime: []
+    };
+  }
+
+  function sanitize(p) {
+    if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+    var base = defaultState(), sh = p.shift && typeof p.shift === "object" ? p.shift : {};
+    var s = base.shift;
+    if (typeof sh.id === "string" && sh.id) s.id = sh.id.slice(0, 64);
+    if (Calc.parseDate(sh.date)) s.date = sh.date;
+    s.operator = str(sh.operator, 60);
+    s.start = okClock(sh.start) ? sh.start : "";
+    s.end = okClock(sh.end) ? sh.end : "";
+    s.breakMode = sh.breakMode === "list" ? "list" : "total";
+    var bt = num(sh.breakTotalMin); s.breakTotalMin = bt >= 0 ? bt : 0;
+    s.breaks = Array.isArray(sh.breaks) ? sh.breaks.filter(function (b) {
+      return b && typeof b === "object" && okClock(b.start) && num(b.minutes) > 0;
+    }).slice(0, 12).map(function (b) { return { id: str(b.id, 64) || uid("b"), start: b.start, minutes: num(b.minutes) }; }) : [];
+    if (isIso(sh.createdAt)) s.createdAt = sh.createdAt;
+    if (isIso(sh.updatedAt)) s.updatedAt = sh.updatedAt;
+
+    var seen = {};
+    var ms = Array.isArray(p.machines) ? p.machines.filter(function (m) { return m && typeof m === "object"; }).slice(0, MAX_MACHINES) : [];
+    var machines = ms.map(function (m, i) {
+      var id = typeof m.id === "string" && m.id && !seen[m.id] ? m.id.slice(0, 64) : uid("m");
+      seen[id] = true;
+      var r = num(m.needRate);
+      var acc = num(m.timerAccumMs);
+      return { id: id, slot: i + 1, name: (str(m.name, 40).replace(/^\s+|\s+$/g, "")) || "Machine " + (i + 1),
+        needRate: r > 0 && r < 1e6 ? r : DEFAULT_RATE,
+        timerStartedAt: isIso(m.timerStartedAt) ? m.timerStartedAt : null,
+        timerAccumMs: acc >= 0 ? acc : 0 };
+    });
+    var setupDone = !!p.setupDone;
+    if (!machines.length) { machines = base.machines; setupDone = false; }
+    var coils = Array.isArray(p.coils) ? p.coils.filter(function (c) {
+      return c && typeof c === "object" && seen.hasOwnProperty(c.machineId) && num(c.weight) > 0 && isIso(c.loggedAt);
+    }).map(function (c) {
+      var dt = num(c.downtimeMin);
+      return { id: str(c.id, 64) || uid("c"), machineId: c.machineId, loggedAt: c.loggedAt, weight: num(c.weight),
+        coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500),
+        downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
+    }) : [];
+    var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
+      return d && typeof d === "object" && seen.hasOwnProperty(d.machineId) && num(d.minutes) > 0 && isIso(d.loggedAt);
+    }).map(function (d) {
+      return { id: str(d.id, 64) || uid("d"), machineId: d.machineId, loggedAt: d.loggedAt, minutes: num(d.minutes), reason: str(d.reason, 200) };
+    }) : [];
+    var st = { schema: SCHEMA, setupDone: setupDone, shift: s, machines: machines, coils: coils, downtime: downtime };
+    if (st.setupDone && !Calc.shiftWindow(s)) st.setupDone = false;
+    return st;
+  }
+
+  // One-time import from the v1-v3 tracker ("drawRateMulti"). The old key is left alone.
+  function migrateOld(text) {
+    var p = JSON.parse(text);
+    if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+    var st = defaultState(), now = Date.now();
+    if (okClock(p.punchIn)) st.shift.start = p.punchIn;
+    if (okClock(p.punchOut)) st.shift.end = p.punchOut;
+    var b = num(p.breakMin); st.shift.breakTotalMin = b >= 0 ? b : 0;
+    var old = Array.isArray(p.machines) ? p.machines.slice(0, 2) : [];
+    var machines = [], coils = [];
+    old.forEach(function (om, i) {
+      if (!om || typeof om !== "object") return;
+      var oc = Array.isArray(om.coils) ? om.coils : [];
+      var hasData = oc.length > 0 || !!om.running || isNum(om.startTime);
+      if (i > 0 && !hasData) return;               // only bring Machine 2 if it was used
+      var m = defaultMachine(machines.length);
+      if (typeof om.name === "string" && om.name.replace(/\s/g, "")) m.name = om.name.slice(0, 40);
+      if (isNum(om.rate) && om.rate > 0) m.needRate = om.rate;
+      machines.push(m);
+      oc.forEach(function (c) {
+        if (!c || typeof c !== "object" || !(num(c.weight) > 0)) return;
+        var t = isNum(c.loggedAt) ? c.loggedAt
+          : (isNum(om.startTime) && isNum(c.timestamp) && c.timestamp > 0 ? om.startTime + c.timestamp : now);
+        coils.push({ id: uid("c"), machineId: m.id, loggedAt: iso(t), weight: num(c.weight), coilNo: "", heatNo: "",
+          size: "", notes: "", downtimeMin: null, downtimeReason: "" });
+      });
+    });
+    if (machines.length) st.machines = machines;
+    st.coils = coils;
+    st.setupDone = false;                          // show the wizard pre-filled so it gets confirmed
+    return st;
+  }
+
+  function load() {
+    try {
+      var raw = window.localStorage.getItem(KEY);
+      if (raw) { var s = sanitize(JSON.parse(raw)); if (s) return s; }
+    } catch (e) { /* fall through */ }
+    try {
+      var old = window.localStorage.getItem(OLD_KEY);
+      if (old) { var m = migrateOld(old); if (m) { m.migrated = true; return m; } }
+    } catch (e2) { /* fall through */ }
+    return defaultState();
+  }
+  function save() {
+    try {
+      state.shift.updatedAt = iso(Date.now());
+      var out = { schema: SCHEMA, setupDone: state.setupDone, shift: state.shift, machines: state.machines, coils: state.coils, downtime: state.downtime };
+      window.localStorage.setItem(KEY, JSON.stringify(out));
+    } catch (e) { /* storage blocked or full: keep working in memory */ }
+  }
+
+  var state = load();
+  function machineById(id) { for (var i = 0; i < state.machines.length; i++) if (state.machines[i].id === id) return state.machines[i]; return null; }
+  function coilsOf(id) {
+    return state.coils.filter(function (c) { return c.machineId === id; })
+      .sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); });
+  }
+
+  /* =========================== WIZARD =========================== */
+  var STEPS = ["schedule", "breaks", "count", "machines", "operator", "review"];
+  var wz = null;   // { step, draft, editing }
+
+  function draftFromState() {
+    var s = state.shift;
+    return {
+      date: s.date || todayStr(), start: s.start, end: s.end, operator: s.operator,
+      breakMode: s.breakMode, breakTotalMin: s.breakTotalMin,
+      breaks: s.breaks.map(function (b) { return { id: b.id, start: b.start, minutes: b.minutes }; }),
+      machines: state.machines.map(function (m) { return { id: m.id, name: m.name, needRate: m.needRate }; })
+    };
+  }
+  function draftShift(d) {
+    return { date: d.date, start: d.start, end: d.end, breakMode: d.breakMode, breakTotalMin: d.breakTotalMin, breaks: d.breaks };
+  }
+  function draftNumbers(d) {
+    var sh = draftShift(d), win = Calc.shiftWindow(sh);
+    if (!win) return null;
+    var br = Calc.breakIntervals(sh, win);
+    var W = Calc.worked(win, br, win.start, win.end);
+    var rate = 0; d.machines.forEach(function (m) { rate += num(m.needRate) > 0 ? num(m.needRate) : 0; });
+    return { win: win, gross: win.end - win.start, worked: W, breakMs: win.end - win.start - W, target: W / Calc.HOUR * rate };
+  }
+
+  function openWizard(editing) {
+    wz = { step: 0, draft: draftFromState(), editing: editing };
+    $("dash").hidden = true; $("wizard").hidden = false;
+    renderWizard();
+  }
+  function closeWizard() { wz = null; $("wizard").hidden = true; $("dash").hidden = false; buildDashboard(); tick(); }
+
+  function field(labelText, input, extraCls) {
+    var f = el("div", "field" + (extraCls ? " " + extraCls : ""));
+    var l = el("label", "lbl", labelText);
+    if (input.id) l.setAttribute("for", input.id);
+    f.appendChild(l); f.appendChild(input);
+    return f;
+  }
+  function input(type, id, value, attrs) {
+    var i = el("input", "in");
+    i.type = type; if (id) i.id = id;
+    if (value != null) i.value = value;
+    if (attrs) for (var k in attrs) if (attrs.hasOwnProperty(k)) i.setAttribute(k, attrs[k]);
+    return i;
+  }
+
+  function renderWizard() {
+    var step = STEPS[wz.step], d = wz.draft, body = $("wz-body");
+    body.textContent = "";
+    setText($("wz-error"), "");
+    setText($("wz-step"), "STEP " + (wz.step + 1) + " OF " + STEPS.length);
+    $("wz-bar").style.width = Math.round((wz.step + 1) / STEPS.length * 100) + "%";
+    $("wz-back").disabled = wz.step === 0;
+    setText($("wz-next"), step === "review" ? (wz.editing ? "SAVE SETUP" : "SUBMIT") : "NEXT");
+    $("wz-cancel").hidden = !wz.editing;
+    var title = "", help = "";
+
+    if (step === "schedule") {
+      title = "What is your schedule?";
+      help = "Shift start and end. If the end is earlier than the start, it ends the next morning.";
+      if (state.migrated) help = "Brought over your punches, need rates and coils from the previous tracker. Check them and submit. " + help;
+      var row = el("div", "row2");
+      var si = input("time", "wz-start", d.start), ei = input("time", "wz-end", d.end);
+      row.appendChild(field("Shift start", si)); row.appendChild(field("Shift end", ei));
+      body.appendChild(row);
+      body.appendChild(field("Shift date", input("date", "wz-date", d.date)));
+      var note = el("p", "calc-note"); note.id = "wz-sched-note"; body.appendChild(note);
+      var upd = function () {
+        d.start = $("wz-start").value; d.end = $("wz-end").value; d.date = $("wz-date").value;
+        var w = Calc.shiftWindow(draftShift(d));
+        setText(note, w ? fmtDur(w.end - w.start) + " shift" + (w.overnight ? " · ends next morning" : "") : "");
+      };
+      ["wz-start", "wz-end", "wz-date"].forEach(function (id) { $(id).addEventListener("input", upd); $(id).addEventListener("change", upd); });
+      upd();
+    }
+
+    if (step === "breaks") {
+      title = "What are your breaks?";
+      help = "Breaks are not counted as run time, so the pace car pauses during them.";
+      var seg = el("div", "seg");
+      var bTot = el("button", "btn" + (d.breakMode !== "list" ? " on" : ""), "TOTAL MINUTES");
+      var bList = el("button", "btn" + (d.breakMode === "list" ? " on" : ""), "LIST OF BREAKS");
+      bTot.type = bList.type = "button"; bTot.id = "wz-mode-total"; bList.id = "wz-mode-list";
+      bTot.addEventListener("click", function () { d.breakMode = "total"; renderWizard(); });
+      bList.addEventListener("click", function () { d.breakMode = "list"; if (!d.breaks.length) d.breaks.push({ id: uid("b"), start: "", minutes: 30 }); renderWizard(); });
+      seg.appendChild(bTot); seg.appendChild(bList); body.appendChild(seg);
+      var bnote = el("p", "calc-note"); bnote.id = "wz-break-note";
+      var updB = function () {
+        var n = draftNumbers(d);
+        setText(bnote, n && n.worked > 0 ? fmtDur(n.worked) + " worked · " + fmtDur(n.breakMs) + " of breaks" : "");
+      };
+      if (d.breakMode !== "list") {
+        var ti = input("number", "wz-break-total", d.breakTotalMin, { inputmode: "numeric", min: "0", step: "5" });
+        ti.addEventListener("input", function () { d.breakTotalMin = num(ti.value); updB(); });
+        body.appendChild(field("Total break minutes", ti));
+        body.appendChild(el("p", "sub", "Counted as one break in the middle of the shift. Use a list for exact times."));
+      } else {
+        d.breaks.forEach(function (b, i) {
+          var r = el("div", "break-row");
+          var bs = input("time", "wz-bstart-" + i, b.start), bm = input("number", "wz-bmin-" + i, b.minutes, { inputmode: "numeric", min: "1", step: "5" });
+          bs.addEventListener("input", function () { b.start = bs.value; updB(); });
+          bs.addEventListener("change", function () { b.start = bs.value; updB(); });
+          bm.addEventListener("input", function () { b.minutes = num(bm.value); updB(); });
+          var x = el("button", "btn warn", "X"); x.type = "button"; x.setAttribute("aria-label", "Remove break " + (i + 1));
+          x.addEventListener("click", function () { d.breaks.splice(i, 1); renderWizard(); });
+          r.appendChild(field("Break " + (i + 1) + " start", bs, ""));
+          r.appendChild(field("Minutes", bm, ""));
+          r.appendChild(x);
+          body.appendChild(r);
+        });
+        var add = el("button", "btn small", "+ ADD BREAK"); add.type = "button"; add.id = "wz-add-break";
+        add.addEventListener("click", function () { d.breaks.push({ id: uid("b"), start: "", minutes: 15 }); renderWizard(); });
+        if (d.breaks.length < 12) body.appendChild(add);
+      }
+      body.appendChild(bnote); updB();
+    }
+
+    if (step === "count") {
+      title = "How many machines are you running?";
+      help = "Every machine you set up counts toward the day target.";
+      var g = el("div", "count-grid");
+      for (var n = 1; n <= MAX_MACHINES; n++) {
+        (function (n) {
+          var b = el("button", "btn" + (d.machines.length === n ? " on" : ""), String(n));
+          b.type = "button"; b.id = "wz-count-" + n;
+          b.addEventListener("click", function () { setCount(d, n); renderWizard(); });
+          g.appendChild(b);
+        })(n);
+      }
+      body.appendChild(g);
+    }
+
+    if (step === "machines") {
+      title = d.machines.length > 1 ? "Need rate at each machine" : "Need rate for your machine";
+      help = "Name each machine and enter the lb/hr you need from it.";
+      d.machines.forEach(function (m, i) {
+        var r = el("div", "mach-row");
+        var ni = input("text", "wz-mname-" + i, m.name, { autocomplete: "off", maxlength: "40" });
+        var ri = input("number", "wz-mrate-" + i, m.needRate, { inputmode: "decimal", min: "1", step: "10" });
+        ni.addEventListener("input", function () { m.name = ni.value; });
+        ri.addEventListener("input", function () { m.needRate = num(ri.value); });
+        var row = el("div", "row2");
+        row.appendChild(field("Machine " + (i + 1) + " name", ni));
+        row.appendChild(field("Need rate lb/hr", ri));
+        r.appendChild(row);
+        body.appendChild(r);
+      });
+    }
+
+    if (step === "operator") {
+      title = "Anything else? (optional)";
+      help = "Operator name or ID is saved with the shift for later records. Leave blank to skip.";
+      var oi = input("text", "wz-operator", d.operator, { autocomplete: "off", maxlength: "60", placeholder: "Name or ID" });
+      oi.addEventListener("input", function () { d.operator = oi.value; });
+      body.appendChild(field("Operator name / ID", oi));
+    }
+
+    if (step === "review") {
+      title = "Check and submit";
+      help = "This sets your day target. You can change it later with EDIT SETUP.";
+      var nums = draftNumbers(d);
+      var tbl = el("table", "review"), tb = el("tbody");
+      var add2 = function (k, v) { var tr = el("tr"); tr.appendChild(el("td", null, k)); tr.appendChild(el("td", null, v)); tb.appendChild(tr); };
+      add2("Date", d.date);
+      add2("Schedule", fmtHHMM(d.start) + " – " + fmtHHMM(d.end) + (nums && nums.win.overnight ? " (next day)" : ""));
+      add2("Breaks", d.breakMode === "list"
+        ? d.breaks.map(function (b) { return fmtHHMM(b.start) + " " + b.minutes + "m"; }).join(", ") || "none"
+        : (d.breakTotalMin || 0) + " min total");
+      add2("Worked time", nums ? fmtDur(nums.worked) : "—");
+      d.machines.forEach(function (m) { add2(m.name || "Machine", fmtInt(m.needRate) + " lb/hr"); });
+      if (d.operator) add2("Operator", d.operator);
+      add2("Day target", nums ? fmtInt(nums.target) + " lb" : "—");
+      tbl.appendChild(tb); body.appendChild(tbl);
+    }
+
+    setText($("wz-title"), title); setText($("wz-help"), help);
+    var first = body.querySelector("input");
+    if (first && !("ontouchstart" in window)) { try { first.focus(); } catch (e) {} }
+  }
+
+  function setCount(d, n) {
+    while (d.machines.length < n) d.machines.push({ id: null, name: "Machine " + (d.machines.length + 1), needRate: DEFAULT_RATE });
+    if (d.machines.length > n) d.machines.length = n;
+  }
+
+  function validateStep() {
+    var step = STEPS[wz.step], d = wz.draft;
+    if (step === "schedule") {
+      if (!Calc.parseDate(d.date)) return "Enter the shift date.";
+      if (!okClock(d.start)) return "Enter the shift start time.";
+      if (!okClock(d.end)) return "Enter the shift end time.";
+      if (d.start === d.end) return "Start and end can't be the same time.";
+    }
+    if (step === "breaks") {
+      var nums = draftNumbers(d);
+      if (d.breakMode === "list") {
+        for (var i = 0; i < d.breaks.length; i++) {
+          var b = d.breaks[i];
+          if (!okClock(b.start)) return "Enter a start time for break " + (i + 1) + ", or remove it.";
+          if (!(num(b.minutes) > 0)) return "Enter the minutes for break " + (i + 1) + ".";
+          var one = draftShift(d); one.breaks = [b];
+          var w = Calc.shiftWindow(one), iv = Calc.breakIntervals(one, w);
+          var inside = iv.length ? iv[0][1] - iv[0][0] : 0;
+          if (inside < b.minutes * 60000 - 1) return "Break " + (i + 1) + " (" + fmtHHMM(b.start) + ") falls outside the shift.";
+        }
+      } else if (!(num(d.breakTotalMin) >= 0)) return "Enter total break minutes (0 if none).";
+      if (!nums || nums.worked <= 0) return "Breaks take up the whole shift. Check the minutes.";
+    }
+    if (step === "machines") {
+      for (var j = 0; j < d.machines.length; j++) {
+        var m = d.machines[j];
+        if (!(num(m.needRate) > 0 && num(m.needRate) < 1e6)) return "Enter a need rate (lb/hr) for " + (m.name || "machine " + (j + 1)) + ".";
+      }
+    }
+    return "";
+  }
+
+  function wizardNext() {
+    var err = validateStep();
+    if (err) { setText($("wz-error"), err); return; }
+    if (wz.step < STEPS.length - 1) { wz.step++; renderWizard(); window.scrollTo(0, 0); return; }
+    submitWizard();
+  }
+
+  function submitWizard() {
+    var d = wz.draft;
+    // machines being removed that still have coils
+    var keepIds = {};
+    d.machines.forEach(function (m) { if (m.id) keepIds[m.id] = true; });
+    var dropped = state.machines.filter(function (m) { return !keepIds[m.id] && coilsOf(m.id).length; });
+    if (dropped.length && !window.confirm("Removing " + dropped.map(function (m) { return m.name; }).join(", ") +
+      " also deletes its logged coils. Continue?")) return;
+    var old = {};
+    state.machines.forEach(function (m) { old[m.id] = m; });
+    state.machines = d.machines.map(function (m, i) {
+      var prev = m.id && old[m.id];
+      var name = (m.name || "").replace(/^\s+|\s+$/g, "") || "Machine " + (i + 1);
+      return { id: prev ? prev.id : uid("m"), slot: i + 1, name: name.slice(0, 40), needRate: num(m.needRate),
+        timerStartedAt: prev ? prev.timerStartedAt : null, timerAccumMs: prev ? prev.timerAccumMs : 0 };
+    });
+    var ids = {}; state.machines.forEach(function (m) { ids[m.id] = true; });
+    state.coils = state.coils.filter(function (c) { return ids[c.machineId]; });
+    state.downtime = state.downtime.filter(function (x) { return ids[x.machineId]; });
+    var s = state.shift;
+    s.date = d.date; s.start = d.start; s.end = d.end; s.operator = str(d.operator, 60).replace(/^\s+|\s+$/g, "");
+    s.breakMode = d.breakMode === "list" ? "list" : "total";
+    s.breakTotalMin = num(d.breakTotalMin) >= 0 ? num(d.breakTotalMin) : 0;
+    s.breaks = s.breakMode === "list" ? d.breaks.map(function (b) { return { id: b.id || uid("b"), start: b.start, minutes: num(b.minutes) }; }) : [];
+    state.setupDone = true;
+    delete state.migrated;
+    save();
+    closeWizard();
+  }
+
+  $("wz-next").addEventListener("click", wizardNext);
+  $("wz-back").addEventListener("click", function () { if (wz && wz.step > 0) { wz.step--; renderWizard(); } });
+  $("wz-cancel").addEventListener("click", function () { closeWizard(); });
+  $("wz-body").addEventListener("input", function () { setText($("wz-error"), ""); });
+  $("wz-body").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target && e.target.tagName === "INPUT") { e.preventDefault(); wizardNext(); }
+  });
+
+  /* ========================= DASHBOARD ========================= */
+  var cards = {};      // machineId -> { name, rate, ran, pc, dl, input, last }
+  var advOpen = false, editingCoil = null, lastLogged = {};
+
+  function buildDashboard() {
+    var box = $("d-machines");
+    box.textContent = "";
+    cards = {};
+    state.machines.forEach(function (m, i) {
+      var c = el("div", "mc"); c.id = "mc-" + i;
+      var head = el("div", "mc-head");
+      var nm = el("span", "mc-name", m.name), rt = el("span", "mc-rate", "need " + fmtInt(m.needRate) + " lb/hr");
+      head.appendChild(nm); head.appendChild(rt); c.appendChild(head);
+      var stats = el("div", "mc-stats");
+      var mk = function (label) { var dv = el("div"); dv.appendChild(el("span", "lbl", label)); var b = el("b", null, "—"); dv.appendChild(b); stats.appendChild(dv); return b; };
+      var ran = mk("Ran"), pc = mk("Pace car"), dl = mk("+/-");
+      c.appendChild(stats);
+      var log = el("div", "mc-log");
+      var inp = input("number", "log-" + i, "", { inputmode: "decimal", min: "0", step: "0.1", placeholder: "Coil lb", "aria-label": "Coil weight for " + m.name });
+      var btn = el("button", "btn solid", "LOG COIL"); btn.type = "button"; btn.id = "logbtn-" + i;
+      var last = el("div", "mc-last sub");
+      btn.addEventListener("click", function () { logCoil(m.id, inp, last); });
+      inp.addEventListener("input", function () { if (last.className.indexOf("red") >= 0) { setCls(last, "mc-last sub"); lastLogged[m.id] = true; tick(); } });
+      inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); logCoil(m.id, inp, last); } });
+      log.appendChild(inp); log.appendChild(btn); c.appendChild(log); c.appendChild(last);
+      box.appendChild(c);
+      cards[m.id] = { ran: ran, pc: pc, dl: dl, last: last };
+    });
+    var s = state.shift;
+    setText($("d-shift"), s.date + " · " + fmtHHMM(s.start) + " – " + fmtHHMM(s.end) + (s.operator ? " · " + s.operator : ""));
+    if (advOpen) renderAdvanced();
+    buildDock();
+  }
+
+  function logCoil(machineId, inp, lastEl) {
+    var w = num(inp.value);
+    if (!(w > 0) || w >= 1e6) { setText(lastEl, "Enter a coil weight greater than 0."); setCls(lastEl, "mc-last red"); return; }
+    var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
+      size: "", notes: "", downtimeMin: null, downtimeReason: "" };
+    state.coils.push(c);
+    lastLogged[machineId] = c.id;
+    inp.value = "";
+    save();
+    tick();
+    if (advOpen) renderAdvanced();
+  }
+
+  function colorFor(pct) { return pct == null ? "white" : pct >= 0 ? "green" : pct > -5 ? "amber" : "red"; }
+
+  function tick() {
+    if (!state.setupDone || !$("wizard").hidden) return;
+    var now = Date.now(), r = Calc.compute(state, now);
+    setText($("d-clock"), fmtClock(now, true));
+    var ph = $("d-phase"), phase = "", phCls = "phase";
+    if (r.phase === "invalid") { phase = "SETUP INCOMPLETE · tap EDIT SETUP"; phCls = "phase amber"; }
+    else if (r.phase === "before") { phase = "SHIFT STARTS " + fmtClockDay(r.start, now) + " · in " + fmtDur(r.start - now); phCls = "phase amber"; }
+    else if (r.phase === "after") { phase = "SHIFT OVER · final numbers"; phCls = "phase amber"; }
+    else if (r.onBreakUntil) { phase = "ON BREAK until " + fmtClock(r.onBreakUntil) + " · pace car paused"; phCls = "phase amber"; }
+    else phase = "ON SHIFT · " + fmtDur(r.workedSoFarMs) + " worked · " + fmtDur(r.workedLeftMs) + " left";
+    setText(ph, phase); setCls(ph, phCls);
+
+    setText($("d-ran"), fmtInt(r.lbsRan));
+    setText($("d-pc"), r.paceCar == null ? "—" : fmtInt(r.paceCar));
+    var T = r.target;
+    $("d-fill").style.width = T ? Math.min(100, r.lbsRan / T * 100) + "%" : "0";
+    $("d-mark").style.left = T ? Math.min(100, r.paceCar / T * 100) + "%" : "0";
+    setText($("d-of-target"), T ? fmtW(r.lbsRan / T * 100) + "% of day target" : "");
+    setText($("d-target"), T ? "TARGET " + fmtInt(T) + " lb" : "");
+
+    // deficit / surplus
+    var col = colorFor(r.deltaPct);
+    if (r.paceCar == null || r.phase === "before" || r.paceCar <= 0) {
+      setText($("d-delta-lbl"), "Deficit / surplus");
+      setText($("d-delta-lb"), "—"); setText($("d-delta-pct"), "");
+      setCls($("d-delta"), "delta white");
+      setText($("d-delta-note"), r.phase === "before" ? "Starts when the shift starts." : "");
+    } else {
+      setText($("d-delta-lbl"), r.delta >= 0 ? "Surplus" : "Deficit");
+      setText($("d-delta-lb"), fmtSigned(r.delta) + " lb");
+      setText($("d-delta-pct"), fmtPct(r.deltaPct));
+      setCls($("d-delta"), "delta glow " + col);
+      setText($("d-delta-note"), (r.delta >= 0 ? "ahead of" : "behind") + " the pace car");
+    }
+
+    // projection
+    var note = "";
+    if (r.phase === "invalid") {
+      ["p-pace", "p-proj", "p-vs", "p-hit", "p-catch"].forEach(function (id) { setText($(id), "—"); });
+    } else {
+      var paceOk = r.pace != null && r.pace > 0;
+      setText($("p-pace"), paceOk ? fmtInt(r.pace) + " lb/hr" : "—");
+      setText($("p-proj"), paceOk || r.phase === "after" ? fmtInt(r.projected == null ? r.lbsRan : r.projected) + " lb" : "—");
+      var vsTxt = "—", vsCls = "";
+      if (paceOk || r.phase === "after") {
+        var pv = r.projected == null ? r.lbsRan : r.projected, pd = pv - T;
+        vsTxt = fmtSigned(pd) + " lb · " + fmtPct(pd / T * 100);
+        vsCls = colorFor(pd / T * 100);
+      }
+      setText($("p-vs"), vsTxt); setCls($("p-vs"), vsCls);
+      var hit = "—", hitCls = "";
+      if (r.targetHit) { hit = "TARGET HIT"; hitCls = "green"; }
+      else if (r.hitAt != null) {
+        var early = r.hitVsEndMs <= 0;
+        hit = fmtClockDay(r.hitAt, now) + " · " + fmtDur(Math.abs(r.hitVsEndMs)) + (early ? " early" : " late");
+        hitCls = early ? "green" : "red";
+      } else if (r.phase === "after") { hit = "Missed by " + fmtInt(T - r.lbsRan) + " lb"; hitCls = "red"; }
+      setText($("p-hit"), hit); setCls($("p-hit"), hitCls);
+      var cu = "—", cuCls = "";
+      if (r.targetHit) { cu = "0 · target hit"; cuCls = "green"; }
+      else if (r.catchUp != null && r.phase !== "after") { cu = fmtInt(r.catchUp) + " lb/hr"; cuCls = r.catchUp <= r.rateSum ? "" : "red"; }
+      setText($("p-catch"), cu); setCls($("p-catch"), cuCls);
+
+      if (r.phase === "before") note = "Projection starts once you have 10 minutes on the clock.";
+      else if (r.phase === "after") note = r.targetHit ? "Shift over. Target made." : "Shift over.";
+      else if (r.pace == null) note = "Projection starts after 10 minutes worked (" + fmtDur(r.paceWaitMs) + " to go).";
+      else if (r.pace === 0) note = "No lbs logged yet. Log a coil to see a projection.";
+      else if (r.onBreakUntil) note = "On break: the clock and pace car are paused.";
+    }
+    setText($("p-note"), note);
+
+    // machines
+    r.machines.forEach(function (mr) {
+      var c = cards[mr.id]; if (!c) return;
+      setText(c.ran, fmtInt(mr.lbs));
+      setText(c.pc, mr.paceCar == null ? "—" : fmtInt(mr.paceCar));
+      setText(c.dl, mr.deltaPct == null || r.phase === "before" ? "—" : fmtPct(mr.deltaPct));
+      setCls(c.dl, mr.deltaPct == null || r.phase === "before" ? "" : colorFor(mr.deltaPct));
+      var lc = null, list = coilsOf(mr.id);
+      if (list.length) lc = list[list.length - 1];
+      var t = lc ? "Last coil " + fmtW(lc.weight) + " lb at " + fmtClock(Date.parse(lc.loggedAt)) + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") : "No coils yet";
+      if (c.last.className.indexOf("red") < 0 || lastLogged[mr.id]) { setText(c.last, t); setCls(c.last, "mc-last sub"); }
+      lastLogged[mr.id] = null;
+    });
+
+    // advanced timers
+    state.machines.forEach(function (m, i) {
+      var te = $("timer-" + i);
+      if (te) setText(te, fmtTimer(m, now));
+    });
+  }
+
+  function fmtTimer(m, now) {
+    var ms = m.timerAccumMs + (m.timerStartedAt ? Math.max(0, now - Date.parse(m.timerStartedAt)) : 0);
+    var s = Math.floor(ms / 1000);
+    return Math.floor(s / 3600) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60);
+  }
+
+  /* ========================= ADVANCED ========================= */
+  function smallBtn(text, cls, fn) { var b = el("button", "btn small" + (cls ? " " + cls : ""), text); b.type = "button"; b.addEventListener("click", fn); return b; }
+
+  function renderAdvanced() {
+    var adv = $("adv");
+    adv.textContent = "";
+    state.machines.forEach(function (m, i) {
+      var sec = el("div", "adv-mach"); sec.id = "adv-" + i;
+      sec.appendChild(el("h3", null, m.name + " · " + fmtInt(m.needRate) + " lb/hr"));
+
+      // run timer (optional)
+      var tl = el("div", "adv-line");
+      tl.appendChild(el("span", "lbl", "Run timer"));
+      var tv = el("span", "white", fmtTimer(m, Date.now())); tv.id = "timer-" + i; tl.appendChild(tv);
+      tl.appendChild(smallBtn(m.timerStartedAt ? "STOP" : "START", "", function () {
+        if (m.timerStartedAt) { m.timerAccumMs += Math.max(0, Date.now() - Date.parse(m.timerStartedAt)); m.timerStartedAt = null; }
+        else m.timerStartedAt = iso(Date.now());
+        save(); renderAdvanced();
+      }));
+      tl.appendChild(smallBtn("RESET", "warn", function () { m.timerStartedAt = null; m.timerAccumMs = 0; save(); renderAdvanced(); }));
+      sec.appendChild(tl);
+
+      // coil log
+      var list = coilsOf(m.id), splits = {};
+      Calc.splitRates(state, m.id).forEach(function (s) { splits[s.id] = s.rate; });
+      var bar = el("div", "adv-line");
+      bar.appendChild(el("span", "lbl", "Coil log · " + list.length));
+      var undo = smallBtn("UNDO LAST", "", function () {
+        if (!list.length) return;
+        var lastC = list[list.length - 1];
+        state.coils = state.coils.filter(function (c) { return c.id !== lastC.id; });
+        save(); tick(); renderAdvanced();
+      });
+      undo.id = "undo-" + i; undo.disabled = !list.length; bar.appendChild(undo);
+      sec.appendChild(bar);
+      if (!list.length) sec.appendChild(el("p", "empty", "No coils logged."));
+      else {
+        var tbl = el("table", "coil-tbl"), th = el("thead"), hr = el("tr");
+        [["#", ""], ["Time", ""], ["Weight", "r"], ["Split", "r"], ["", "r"]].forEach(function (h) { hr.appendChild(el("th", h[1], h[0])); });
+        th.appendChild(hr); tbl.appendChild(th);
+        var tb = el("tbody");
+        for (var k = list.length - 1; k >= 0; k--) (function (c, n) {
+          var tr = el("tr");
+          tr.appendChild(el("td", null, String(n)));
+          var tdT = el("td", null, fmtClock(Date.parse(c.loggedAt)));
+          var meta = [c.coilNo && "coil " + c.coilNo, c.heatNo && "heat " + c.heatNo, c.size, c.downtimeMin ? c.downtimeMin + "m down" + (c.downtimeReason ? " (" + c.downtimeReason + ")" : "") : "", c.notes].filter(Boolean).join(" · ");
+          if (meta) { tdT.appendChild(el("div", "meta", meta)); }
+          tr.appendChild(tdT);
+          tr.appendChild(el("td", "r white", fmtW(c.weight)));
+          tr.appendChild(el("td", "r amber", splits[c.id] == null ? "—" : fmtInt(splits[c.id]) + "/hr"));
+          var act = el("td", "r");
+          act.appendChild(smallBtn(editingCoil === c.id ? "CLOSE" : "EDIT", "", function () { editingCoil = editingCoil === c.id ? null : c.id; renderAdvanced(); }));
+          tr.appendChild(act);
+          tb.appendChild(tr);
+          if (editingCoil === c.id) {
+            var er = el("tr"), ed = el("td"); ed.colSpan = 5;
+            ed.appendChild(coilEditor(c));
+            er.appendChild(ed); tb.appendChild(er);
+          }
+        })(list[k], k + 1);
+        tbl.appendChild(tb); sec.appendChild(tbl);
+      }
+
+      // downtime log
+      var dl = el("div", "adv-line"); dl.style.marginTop = "1rem";
+      dl.appendChild(el("span", "lbl", "Downtime"));
+      sec.appendChild(dl);
+      var form = el("div", "dt-form");
+      var dm = input("number", "dt-min-" + i, "", { inputmode: "numeric", min: "1", placeholder: "Min" });
+      var dr = input("text", "dt-reason-" + i, "", { placeholder: "Reason", maxlength: "200" });
+      var da = smallBtn("ADD", "", function () {
+        var mins = num(dm.value);
+        if (!(mins > 0)) { dm.focus(); return; }
+        state.downtime.push({ id: uid("d"), machineId: m.id, loggedAt: iso(Date.now()), minutes: mins, reason: str(dr.value, 200) });
+        save(); renderAdvanced();
+      });
+      da.id = "dt-add-" + i;
+      form.appendChild(dm); form.appendChild(dr); form.appendChild(da);
+      sec.appendChild(form);
+      var dts = state.downtime.filter(function (x) { return x.machineId === m.id; });
+      var tot = 0;
+      dts.forEach(function (x) {
+        tot += x.minutes;
+        var line = el("div", "adv-line");
+        line.appendChild(el("span", "white", fmtClock(Date.parse(x.loggedAt)) + " · " + x.minutes + " min" + (x.reason ? " · " + x.reason : "")));
+        line.appendChild(smallBtn("DELETE", "warn", function () {
+          if (!window.confirm("Delete this downtime entry?")) return;
+          state.downtime = state.downtime.filter(function (y) { return y.id !== x.id; }); save(); renderAdvanced();
+        }));
+        sec.appendChild(line);
+      });
+      if (dts.length) sec.appendChild(el("p", "sub", "Total downtime " + tot + " min (logged for records; it does not change the target)."));
+      adv.appendChild(sec);
+    });
+
+    // export
+    var ex = el("div", "adv-mach");
+    ex.appendChild(el("h3", null, "Export this shift"));
+    var g = el("div", "export");
+    var b1 = smallBtn("DOWNLOAD JSON", "", function () { download(fileBase() + ".json", exportJSON(), "application/json"); }); b1.id = "ex-json";
+    var b2 = smallBtn("DOWNLOAD CSV", "", function () { download(fileBase() + ".csv", exportCSV(), "text/csv"); }); b2.id = "ex-csv";
+    var b3 = smallBtn("COPY JSON", "", function () { copyText(exportJSON(), msg); }); b3.id = "ex-copy-json";
+    var b4 = smallBtn("COPY CSV", "", function () { copyText(exportCSV(), msg); }); b4.id = "ex-copy-csv";
+    g.appendChild(b1); g.appendChild(b2); g.appendChild(b3); g.appendChild(b4);
+    ex.appendChild(g);
+    var msg = el("p", "note"); msg.id = "ex-msg"; ex.appendChild(msg);
+    adv.appendChild(ex);
+  }
+
+  function coilEditor(c) {
+    var box = el("div", "edit-box"), g = el("div", "edit-grid");
+    var f = function (label, key, type, attrs, full) {
+      var i = input(type, "ce-" + key, c[key] == null ? "" : c[key], attrs);
+      var w = field(label, i, full ? "full" : ""); w.style.marginBottom = "0";
+      g.appendChild(w); return i;
+    };
+    var iw = f("Weight lb", "weight", "number", { inputmode: "decimal", min: "0", step: "0.1" });
+    var icn = f("Coil #", "coilNo", "text", { maxlength: "40" });
+    var ih = f("Heat #", "heatNo", "text", { maxlength: "40" });
+    var is = f("Size / gauge", "size", "text", { maxlength: "40" });
+    var idm = f("Downtime min", "downtimeMin", "number", { inputmode: "numeric", min: "0" });
+    var idr = f("Downtime reason", "downtimeReason", "text", { maxlength: "200" });
+    var ino = f("Notes", "notes", "text", { maxlength: "500" }, true);
+    box.appendChild(g);
+    var err = el("p", "err"); box.appendChild(err);
+    var line = el("div", "adv-line");
+    line.appendChild(smallBtn("SAVE", "", function () {
+      var w = num(iw.value);
+      if (!(w > 0)) { setText(err, "Weight must be greater than 0."); return; }
+      c.weight = w; c.coilNo = str(icn.value, 40); c.heatNo = str(ih.value, 40); c.size = str(is.value, 40);
+      var dm = num(idm.value); c.downtimeMin = dm >= 0 ? dm : null; c.downtimeReason = str(idr.value, 200); c.notes = str(ino.value, 500);
+      editingCoil = null; save(); tick(); renderAdvanced();
+    }));
+    line.appendChild(smallBtn("DELETE COIL", "warn", function () {
+      if (!window.confirm("Delete this " + fmtW(c.weight) + " lb coil?")) return;
+      state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
+      editingCoil = null; save(); tick(); renderAdvanced();
+    }));
+    box.appendChild(line);
+    return box;
+  }
+
+  /* ---------- export ---------- */
+  function fileBase() { return "draw-rate_" + state.shift.date + "_" + state.shift.id; }
+  function summary() {
+    var r = Calc.compute(state, Date.now());
+    return { computedAt: iso(Date.now()), phase: r.phase, workedHours: r.workedTotalMs != null ? r.workedTotalMs / 3600000 : null,
+      dayTargetLb: r.target != null ? r.target : null, lbsRan: r.lbsRan, paceCarLb: r.paceCar != null ? r.paceCar : null,
+      deltaLb: r.delta != null ? r.delta : null, deltaPct: r.deltaPct != null ? r.deltaPct : null,
+      currentPaceLbHr: r.pace != null ? r.pace : null, projectedLb: r.projected != null ? r.projected : null,
+      hitTargetAt: r.hitAt != null ? iso(r.hitAt) : null, catchUpLbHr: r.catchUp != null ? r.catchUp : null };
+  }
+  function exportJSON() {
+    return JSON.stringify({ schema: SCHEMA, exportedAt: iso(Date.now()), shift: state.shift, machines: state.machines,
+      coils: state.coils, downtime: state.downtime, summary: summary() }, null, 2);
+  }
+  function csvCell(v) {
+    if (v == null) return "";
+    var s = String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function exportCSV() {
+    var s = state.shift;
+    var breaks = s.breakMode === "list" ? s.breaks.map(function (b) { return b.start + "/" + b.minutes; }).join(" ") : s.breakTotalMin + " total";
+    var head = ["record_type", "shift_id", "shift_date", "operator", "shift_start", "shift_end", "breaks", "machine_id", "machine_slot",
+      "machine_name", "need_rate_lb_hr", "record_id", "logged_at", "weight_lb", "coil_no", "heat_no", "size", "notes", "downtime_min", "downtime_reason"];
+    var rows = [head];
+    var mrow = function (type, m, rec) {
+      return [type, s.id, s.date, s.operator, s.start, s.end, breaks, m.id, m.slot, m.name, m.needRate].concat(rec);
+    };
+    state.machines.forEach(function (m) {
+      rows.push(mrow("machine", m, ["", "", "", "", "", "", "", "", ""]));
+      coilsOf(m.id).forEach(function (c) {
+        rows.push(mrow("coil", m, [c.id, c.loggedAt, c.weight, c.coilNo, c.heatNo, c.size, c.notes, c.downtimeMin, c.downtimeReason]));
+      });
+      state.downtime.filter(function (d) { return d.machineId === m.id; }).forEach(function (d) {
+        rows.push(mrow("downtime", m, [d.id, d.loggedAt, "", "", "", "", "", d.minutes, d.reason]));
+      });
+    });
+    return rows.map(function (r) { return r.map(csvCell).join(","); }).join("\r\n") + "\r\n";
+  }
+  function download(name, text, type) {
+    try {
+      var blob = new Blob([text], { type: type + ";charset=utf-8" });
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) { window.navigator.msSaveOrOpenBlob(blob, name); return; }
+      var url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = name; a.style.display = "none";
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+      setText($("ex-msg"), "Saved " + name + " to Downloads.");
+    } catch (e) { setText($("ex-msg"), "Download blocked here. Use COPY instead."); }
+  }
+  function copyText(text, msgEl) {
+    var done = function () { setText(msgEl, "Copied to clipboard."); };
+    var fallback = function () {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.top = "-1000px";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      setText(msgEl, ok ? "Copied to clipboard." : "Copy blocked here. Use DOWNLOAD instead.");
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  /* ---------- top-level actions ---------- */
+  $("adv-toggle").addEventListener("click", function () {
+    advOpen = !advOpen;
+    $("adv").hidden = !advOpen;
+    setText($("adv-toggle"), (advOpen ? "- " : "+ ") + "ADVANCED");
+    $("adv-toggle").setAttribute("aria-expanded", advOpen ? "true" : "false");
+    if (advOpen) renderAdvanced();
+  });
+  $("btn-edit").addEventListener("click", function () { openWizard(true); });
+  $("btn-new").addEventListener("click", function () {
+    if (!window.confirm("Start a new shift? This clears today's coils and downtime. Your schedule and machines stay as defaults.")) return;
+    var now = Date.now();
+    state.coils = []; state.downtime = [];
+    state.shift.id = uid("s"); state.shift.date = todayStr(); state.shift.createdAt = iso(now);
+    state.machines.forEach(function (m) { m.timerStartedAt = null; m.timerAccumMs = 0; });
+    state.setupDone = false; editingCoil = null;
+    save();
+    openWizard(false);
+  });
+
+  /* ========================= PHONE DOCK ========================= */
+  var dockSel = null, dockUndoId = null, dockMsgTimer = null;
+  function buildDock() {
+    var box = $("dock-mach"); if (!box) return;
+    if (!machineById(dockSel)) dockSel = state.machines.length ? state.machines[0].id : null;
+    box.textContent = "";
+    box.hidden = state.machines.length < 2;
+    state.machines.forEach(function (m, i) {
+      var b = el("button", "btn chip", m.name);
+      b.type = "button"; b.id = "dock-m-" + i;
+      b.addEventListener("click", function () { selectDock(m.id); });
+      box.appendChild(b);
+      var card = $("mc-" + i);
+      if (card) card.addEventListener("click", function (e) {
+        var t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "BUTTON")) return;
+        selectDock(m.id);
+      });
+    });
+    markDock(); sizeDock();
+  }
+  function selectDock(id) { dockSel = id; markDock(); }
+  function markDock() {
+    state.machines.forEach(function (m, i) {
+      var on = m.id === dockSel, b = $("dock-m-" + i), c = $("mc-" + i);
+      if (b) { b.className = "btn chip" + (on ? " on" : ""); b.setAttribute("aria-pressed", on ? "true" : "false"); }
+      if (c) {
+        c.className = "mc" + (on && state.machines.length > 1 ? " sel" : "");
+        var tag = c.querySelector(".mc-sel-tag"), nm = c.querySelector(".mc-name");
+        if (on && state.machines.length > 1 && !tag && nm) nm.appendChild(el("span", "mc-sel-tag", "LOGGING"));
+        if (!(on && state.machines.length > 1) && tag) tag.parentNode.removeChild(tag);
+      }
+    });
+    var m = machineById(dockSel);
+    if (m) {
+      $("dock-in").setAttribute("aria-label", "Coil weight in lb for " + m.name);
+    }
+  }
+  function sizeDock() {
+    var d = $("dock"); if (!d) return;
+    $("dash").style.paddingBottom = (d.offsetHeight + 16) + "px";
+  }
+  function dockMsg(text, cls, undo) {
+    var box = $("dock-msg");
+    box.textContent = ""; box.className = "dock-msg" + (cls ? " " + cls : "");
+    if (dockMsgTimer) { clearTimeout(dockMsgTimer); dockMsgTimer = null; }
+    if (text) {
+      box.appendChild(el("span", null, text));
+      if (undo) {
+        var u = el("button", "link", "UNDO"); u.type = "button"; u.id = "dock-undo";
+        u.addEventListener("click", function () {
+          var id = dockUndoId; dockUndoId = null;
+          state.coils = state.coils.filter(function (c) { return c.id !== id; });
+          save(); tick(); if (advOpen) renderAdvanced();
+          dockMsg("Removed that coil.", "amber");
+        });
+        box.appendChild(u);
+      }
+      dockMsgTimer = setTimeout(function () { dockMsg(""); }, undo ? 12000 : 6000);
+    }
+    sizeDock();
+  }
+  function dockLog() {
+    var inp = $("dock-in"), m = machineById(dockSel) || state.machines[0];
+    if (!m) return;
+    var w = num(inp.value);
+    if (!(w > 0) || w >= 1e6) { dockMsg("Enter a coil weight greater than 0.", "red"); try { inp.focus(); } catch (e) {} return; }
+    var c = { id: uid("c"), machineId: m.id, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
+      size: "", notes: "", downtimeMin: null, downtimeReason: "" };
+    state.coils.push(c);
+    lastLogged[m.id] = c.id;
+    inp.value = "";
+    save(); tick(); if (advOpen) renderAdvanced();
+    dockUndoId = c.id;
+    dockMsg("Logged " + fmtW(w) + " lb · " + m.name + " · " + fmtClock(Date.now()), "", true);
+    try { inp.blur(); } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+  }
+  $("dock-log").addEventListener("click", dockLog);
+  $("dock-in").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); dockLog(); } });
+  $("dock-in").addEventListener("input", function () { if ($("dock-msg").className.indexOf("red") >= 0) dockMsg(""); });
+  window.addEventListener("resize", sizeDock);
+
+  /* ---------- start ---------- */
+  if (state.setupDone) { $("dash").hidden = false; buildDashboard(); tick(); }
+  else openWizard(false);
+  setInterval(tick, 1000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
+  window.__drawRate = { state: function () { return state; }, compute: function (now) { return Calc.compute(state, now || Date.now()); } };
+})();
+</script>
+<script>
+/* ---------- install prompt + offline cache (phone app only) ---------- */
+(function () {
+  "use strict";
+  var PWA = /*PWA_FLAG*/true;
+  function $(id) { return document.getElementById(id); }
+  var status = $("sw-status");
+  if (!PWA) { status.textContent = "Offline file · data saves in this browser"; return; }
+  var HKEY = "drawRateAppInstallHint";
+  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  function hidden() { try { return window.localStorage.getItem(HKEY) === "1"; } catch (e) { return false; } }
+  function dismiss() { try { window.localStorage.setItem(HKEY, "1"); } catch (e) {} $("install").hidden = true; }
+  var deferred = null, mode = "";
+  function show(m) {
+    if (standalone || hidden()) return;
+    mode = m;
+    if (m === "ios") {
+      $("install-text").textContent = "Put this on your home screen: tap the Share button (square with an up arrow), then \u201cAdd to Home Screen\u201d. It opens full screen and works with no signal.";
+      $("install-go").textContent = "GOT IT";
+    } else {
+      $("install-text").textContent = "Install Draw Rate on this phone. It opens like an app and works with no signal.";
+      $("install-go").textContent = "INSTALL";
+    }
+    $("install").hidden = false;
+  }
+  $("install-x").addEventListener("click", dismiss);
+  $("install-go").addEventListener("click", function () {
+    if (mode === "ios" || !deferred) { dismiss(); return; }
+    var p = deferred; deferred = null;
+    p.prompt();
+    if (p.userChoice) p.userChoice.then(function () { $("install").hidden = true; }, function () {});
+    else $("install").hidden = true;
+  });
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; show("android"); });
+  window.addEventListener("appinstalled", function () { $("install").hidden = true; deferred = null; });
+  var ua = navigator.userAgent || "";
+  var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (ios && !standalone) show("ios");
+
+  $("update-go").addEventListener("click", function () { window.location.reload(); });
+  $("update-x").addEventListener("click", function () { $("update").hidden = true; });
+  var secure = window.location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+  if ("serviceWorker" in navigator && secure) {
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (hadController) $("update").hidden = false;
+      hadController = true;
+    });
+    navigator.serviceWorker.register("sw.js", { scope: "./" }).then(function () {
+      return navigator.serviceWorker.ready;
+    }).then(function () {
+      status.textContent = "Offline ready · data saves on this device";
+      document.documentElement.setAttribute("data-sw", "ready");
+    }).catch(function () { status.textContent = "Offline cache unavailable · data still saves on this device"; });
+  } else {
+    status.textContent = "Data saves on this device";
+  }
+})();
+</script>
+</body>
+</html>
