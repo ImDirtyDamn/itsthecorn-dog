@@ -140,6 +140,7 @@ input.flash{outline:3px solid var(--amber)}
 .help{color:var(--fg-dim);margin:0 0 1.5rem}
 .calc-note{margin:.5rem 0 0;color:var(--amber);min-height:1.4em}
 </style>
+<script src="/data/config.js"></script><script src="/data/submit.js"></script>
 </head>
 <body>
 <header>
@@ -1280,7 +1281,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     else h += '<h3>List all problems and reasons for downtime</h3>';
     h += r.problems.length ? '<ul class="svlist">' + r.problems.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : '<p class="svp">(none entered)</p>';
     h += '<h3>Maintenance issues to follow up on</h3><p class="svp">' + esc(r.maintenance || "(none entered)") + '</p>';
-    $("sv-body").innerHTML = h; $("sheetview").hidden = false; document.body.classList.add("noscroll"); $("sv-close").focus();
+    $("sv-body").innerHTML = h; if (window.LogDB) LogDB.mount($("sv-body"), function () { return LogDB.fromTryout(S, calc()); }); $("sheetview").hidden = false; document.body.classList.add("noscroll"); $("sv-close").focus();
   }
   $("sv-close").onclick = function () { $("sheetview").hidden = true; document.body.classList.remove("noscroll"); };
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeDrill(); $("sv-close").onclick(); } });

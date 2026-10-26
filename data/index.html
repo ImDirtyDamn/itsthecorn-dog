@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#030a03">
+<title>Master Log</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23030a03'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%2339ff6a' font-family='monospace'%3E%23%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#030a03;--panel:#061206;--fg:#39ff6a;--fg-dim:#1f9a3e;--fg-faint:rgba(57,255,106,.16);--amber:#ffc23d;--red:#ff5f56;--white:#eaffea;--ph:#5f7a63;
+--font:"Courier New",Courier,"Noto Sans Mono","DejaVu Sans Mono","Droid Sans Mono",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;-webkit-text-size-adjust:100%}
+body{padding:0 12px calc(40px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto;overflow-x:hidden}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0 10px;border-bottom:1px solid var(--fg-faint)}
+h1{font-size:17px;margin:0;letter-spacing:.06em;color:var(--white);text-shadow:0 0 8px rgba(57,255,106,.4)}
+h1 small{display:block;font-size:12px;color:var(--fg-dim);letter-spacing:.04em;font-weight:normal}
+.hbtns{display:flex;gap:8px}
+a.back{color:var(--fg);text-decoration:none;border:1px solid var(--fg-dim);padding:0 12px;min-height:48px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap}
+button{font:inherit;font-size:16px;min-height:48px;min-width:48px;cursor:pointer;background:#000;color:var(--fg);border:1px solid var(--fg);padding:10px 12px;letter-spacing:.05em}
+button:active{background:var(--fg);color:#000}
+button:disabled{opacity:.5;cursor:default}
+button.big{width:100%;font-size:18px;font-weight:bold}
+button.solid{background:var(--fg);color:#000;font-weight:bold}
+button.warn{border-color:var(--red);color:var(--red)}
+button.ghost{border-color:var(--fg-dim);color:var(--fg-dim)}
+button.on{background:var(--fg);color:#000;font-weight:bold}
+.panel{background:var(--panel);border:1px solid var(--fg-faint);padding:12px;margin:10px 0}
+.lbl{display:block;color:var(--amber);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;margin:0 0 .4rem}
+input.in,select.in{width:100%;min-width:0;height:3.25rem;padding:0 .85rem;background:#000;color:var(--white);border:2px solid var(--fg-dim);border-radius:3px;
+font-family:var(--font);font-size:1.15rem;font-variant-numeric:tabular-nums;color-scheme:dark;-webkit-appearance:none;appearance:none}
+input.in:focus,select.in:focus{outline:none;border-color:var(--fg);box-shadow:0 0 10px rgba(57,255,106,.35)}
+input.in::placeholder{color:rgba(57,255,106,.35)}
+input.in[type=date]{font-size:1rem;padding:0 .4rem}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
+.field{margin-bottom:.9rem;min-width:0}
+.chips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.chips button{padding:4px 0;font-size:15px;letter-spacing:0}
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:.9rem}
+.quick button{padding:4px 0;font-size:14px;letter-spacing:0}
+details.filters>summary{list-style:none;cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;color:var(--white);letter-spacing:.08em;font-weight:bold}
+details.filters>summary::-webkit-details-marker{display:none}
+details.filters>summary span{color:var(--fg-dim);font-weight:normal;font-size:13px;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.stat{border:1px solid var(--fg-faint);background:var(--panel);padding:10px;min-width:0}
+.stat i{display:block;font-style:normal;color:var(--amber);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.stat b{display:block;color:var(--fg);font-size:24px;margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgba(57,255,106,.35);overflow-wrap:anywhere}
+.stat small{display:block;color:var(--fg-dim);font-size:12px;margin-top:2px}
+.stat.wide{grid-column:1/-1}
+.meter{height:10px;border:1px solid var(--fg-dim);margin-top:6px;background:#000}
+.meter span{display:block;height:100%;background:var(--fg)}
+.toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0}
+.logcard{display:block;width:100%;text-align:left;border:1px solid var(--fg-faint);background:var(--panel);padding:12px;margin:8px 0;color:var(--white);letter-spacing:0;min-height:72px}
+.logcard:active{background:#0c240c;color:var(--white)}
+.lc1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.lc1 b{font-size:18px;color:var(--white)}
+.lc1 span{color:var(--fg-dim);font-size:13px;white-space:nowrap}
+.lc2{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.tag{border:1px solid var(--fg-dim);color:var(--fg);font-size:13px;padding:2px 6px}
+.lc3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.lc3 div{min-width:0}
+.lc3 i{display:block;font-style:normal;color:var(--fg-dim);font-size:11px}
+.lc3 b{font-size:17px;color:var(--white);font-variant-numeric:tabular-nums}
+.badge{font-weight:bold;font-size:13px;padding:3px 7px;letter-spacing:.06em;white-space:nowrap}
+.badge.met{background:var(--fg);color:#000}
+.badge.notmet{background:var(--red);color:#000}
+.badge.inc{border:1px solid var(--amber);color:var(--amber)}
+.muted{color:var(--fg-dim)}
+.msg{padding:10px 12px;border:1px solid var(--amber);color:var(--amber);margin:10px 0}
+.msg.bad{border-color:var(--red);color:var(--red)}
+.lock{margin-top:40px}
+.lock p{color:var(--fg-dim);line-height:1.45}
+.overlay{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:20;padding:0 14px calc(30px + env(safe-area-inset-bottom))}
+.overlay[hidden]{display:none}
+.ovtop{position:sticky;top:0;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--fg-faint);z-index:1}
+.ovtop b{color:var(--white);font-size:16px}
+.svline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--fg-faint);flex-wrap:wrap}
+.svline span{color:var(--fg-dim);font-size:15px}
+.svline b{color:var(--white);font-size:20px;text-align:right;overflow-wrap:anywhere}
+.svline.big b{font-size:28px;color:var(--fg)}
+h3{color:var(--amber);font-size:13px;letter-spacing:.12em;margin:20px 0 6px;text-transform:uppercase}
+h3.bad{color:var(--red)}
+.svrow{border:1px solid var(--fg-faint);padding:8px;margin:8px 0}
+.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cells div{min-width:0;overflow-wrap:anywhere}
+.cells i{display:block;font-style:normal;color:var(--fg-dim);font-size:12px}
+.cells b{color:var(--white);font-size:17px}
+ul.list{padding-left:22px;color:var(--white);line-height:1.45;font-size:17px;margin:4px 0}
+.timeline{display:flex;height:34px;border:1px solid var(--fg-dim);margin:6px 0 2px}
+.timeline span{display:flex;align-items:center;justify-content:center;font-size:12px;color:#000;background:var(--fg);border-right:2px solid var(--bg);overflow:hidden;white-space:nowrap}
+.timeline span:nth-child(2n){background:var(--amber)}
+.timeline span:last-child{border-right:0}
+.confirm{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:flex-end;justify-content:center;z-index:40}
+.confirm[hidden]{display:none}
+.confirm .box{background:var(--bg);border:1px solid var(--red);border-bottom:0;width:100%;max-width:640px;padding:16px 14px calc(18px + env(safe-area-inset-bottom))}
+.confirm .box b{color:var(--red);font-size:18px;display:block;margin-bottom:8px}
+.confirm .box p{color:var(--white);line-height:1.45;margin:0 0 14px}
+.confirm .btns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw;z-index:50}
+body.noscroll{overflow:hidden}
+.more{margin:12px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>MASTER LOG<small>every submitted production log</small></h1>
+  <div class="hbtns"><button id="lockbtn" type="button" class="ghost" hidden>LOCK</button><a class="back" href="../">&larr; TRACKER</a></div>
+</header>
+<main id="app"></main>
+<div class="overlay" id="detail" hidden role="dialog" aria-label="Log detail"><div class="ovtop"><b id="dtitle">LOG</b><button id="dclose" type="button">CLOSE</button></div><div id="dbody"></div></div>
+<div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm delete"><div class="box"><b>DELETE THIS LOG?</b><p id="cmsg"></p>
+  <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+  var API = String(window.LOGDB_API_BASE || "").replace(/\/+$/, "");
+  var SKEY = "logdbAdminCode";          // sessionStorage only: gone when the tab closes
+  var PAGE = 100;
+  var F = { from: "", to: "", operator: "", draw: "" }, logs = [], summary = null, operators = [], hasMore = false, current = null;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function code() { try { return sessionStorage.getItem(SKEY) || ""; } catch (e) { return ""; } }
+  function setCode(v) { try { if (v) sessionStorage.setItem(SKEY, v); else sessionStorage.removeItem(SKEY); } catch (e) {} }
+  function toast(m) { var t = $("toast"); t.textContent = m; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 2200); }
+  function n0(v) { return v === null || v === undefined || v === "" ? "\u2013" : Math.round(v).toLocaleString("en-US"); }
+  function n1(v) { return v === null || v === undefined || v === "" ? "\u2013" : (Math.round(v * 10) / 10).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  function nh(v) { return v === null || v === undefined ? "\u2013" : String(Math.round(v * 100) / 100); }
+  var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function day(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); if (!m) return s || ""; var d = new Date(+m[1], +m[2] - 1, +m[3]); return DOW[d.getDay()] + " " + (+m[2]) + "/" + (+m[3]) + "/" + m[1].slice(2); }
+  function clock12(s) { var m = /^(\d{2}):(\d{2})$/.exec(s || ""); if (!m) return s || ""; var h = +m[1]; return ((h + 11) % 12 + 1) + ":" + m[2] + (h < 12 ? " AM" : " PM"); }
+  function ymd(d) { return d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" + (d.getDate() < 10 ? "0" : "") + d.getDate(); }
+  function draws(s) { return String(s || "").split(",").filter(Boolean); }
+  function badge(g) { return g === 1 ? '<span class="badge met">GOAL MET</span>' : g === 0 ? '<span class="badge notmet">NOT MET</span>' : '<span class="badge inc">NO GOAL</span>'; }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var h = { "X-Admin-Code": code() };
+    return fetch(API + path, { method: opts.method || "GET", headers: h, cache: "no-store", credentials: "omit" }).then(function (r) {
+      if (r.status === 401) { setCode(""); renderLock("Wrong passcode."); throw new Error("401"); }
+      if (opts.raw && r.ok) return r;
+      return r.json().catch(function () { return { ok: false, error: "Server said " + r.status }; }).then(function (j) {
+        if (!r.ok || !j.ok) throw new Error(j.error || ("Server said " + r.status));
+        return j;
+      });
+    });
+  }
+  function qs(extra) {
+    var p = []; Object.keys(F).forEach(function (k) { if (F[k]) p.push(k + "=" + encodeURIComponent(F[k])); });
+    Object.keys(extra || {}).forEach(function (k) { p.push(k + "=" + encodeURIComponent(extra[k])); });
+    return p.length ? "?" + p.join("&") : "";
+  }
+
+  /* ---------- lock screen ---------- */
+  function renderLock(err) {
+    $("lockbtn").hidden = true;
+    $("app").innerHTML = '<div class="lock"><form id="lockform" class="panel" autocomplete="off">' +
+      '<div class="field"><label class="lbl" for="pass">Passcode</label><input class="in" id="pass" type="password" placeholder="passcode" autocomplete="current-password" required></div>' +
+      (err ? '<div class="msg bad" role="alert">' + esc(err) + '</div>' : "") +
+      '<button class="big solid" type="submit">UNLOCK</button></form>' +
+      '<p>Only people with the passcode can see logs. It is kept for this tab only and forgotten when you close it.</p></div>';
+    $("lockform").onsubmit = function (e) {
+      e.preventDefault(); var v = $("pass").value.trim(); if (!v) return;
+      setCode(v); load(false);
+    };
+    setTimeout(function () { var p = $("pass"); if (p) p.focus(); }, 0);
+  }
+
+  /* ---------- list ---------- */
+  function load(append) {
+    if (!API || /REPLACE-ME/.test(API)) { $("app").innerHTML = '<div class="msg bad">The database address is not set yet (data/config.js).</div>'; return; }
+    if (!append) $("app").innerHTML = '<p class="muted" style="margin-top:24px">Loading\u2026</p>';
+    api("/logs" + qs({ limit: PAGE, offset: append ? logs.length : 0 })).then(function (j) {
+      logs = append ? logs.concat(j.logs) : j.logs; summary = j.summary; operators = j.operators || []; hasMore = j.logs.length === PAGE;
+      renderList();
+    }).catch(function (e) {
+      if (e.message === "401") return;
+      $("app").innerHTML = '<div class="msg bad" role="alert">Could not load logs: ' + esc(e.message === "Failed to fetch" ? "no connection to the database." : e.message) +
+        '</div><button class="big" id="retry" type="button">TRY AGAIN</button>';
+      $("retry").onclick = function () { load(false); };
+    });
+  }
+  function filterNote() {
+    var p = [];
+    if (F.from || F.to) p.push((F.from ? day(F.from) : "start") + " \u2192 " + (F.to ? day(F.to) : "today"));
+    if (F.operator) p.push(F.operator);
+    if (F.draw) p.push("Draw " + F.draw);
+    return p.length ? p.join(" \u00b7 ") : "all logs";
+  }
+  function renderList() {
+    $("lockbtn").hidden = false;
+    var s = summary || {}, rated = (s.met || 0) + (s.not_met || 0), pct = rated ? Math.round(s.met * 100 / rated) : 0;
+    var opOpts = '<option value="">Everyone</option>' + operators.map(function (o) { return '<option' + (o.toLowerCase() === F.operator.toLowerCase() ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("");
+    var h = '<details class="filters panel"' + (renderList.open ? " open" : "") + ' id="fbox"><summary>FILTERS <span>' + esc(filterNote()) + '</span></summary><div style="margin-top:10px">' +
+      '<div class="quick"><button type="button" data-q="7">7 DAYS</button><button type="button" data-q="30">30 DAYS</button><button type="button" data-q="month">MONTH</button><button type="button" data-q="all">ALL</button></div>' +
+      '<div class="row2"><div class="field"><label class="lbl" for="ffrom">From</label><input class="in" type="date" id="ffrom" value="' + esc(F.from) + '"></div>' +
+      '<div class="field"><label class="lbl" for="fto">To</label><input class="in" type="date" id="fto" value="' + esc(F.to) + '"></div></div>' +
+      '<div class="field"><label class="lbl" for="fop">Operator</label><select class="in" id="fop">' + opOpts + '</select></div>' +
+      '<div class="field"><span class="lbl">Draw</span><div class="chips" id="fdraw">' +
+      ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (F.draw === d ? "on" : "") + '">' + (d || "ALL") + '</button>'; }).join("") +
+      '</div></div></div></details>';
+    h += '<div class="stats">' +
+      '<div class="stat"><i>Logs</i><b>' + n0(s.count) + '</b><small>' + esc(n0(s.net_hours)) + ' run hrs</small></div>' +
+      '<div class="stat"><i>Total lbs</i><b>' + n0(s.total_lbs) + '</b><small>goal ' + n0(s.goal_lbs) + '</small></div>' +
+      '<div class="stat"><i>Avg lb/hr</i><b>' + n1(s.avg_lbhr) + '</b><small>all lbs \u00f7 all hrs</small></div>' +
+      '<div class="stat"><i>Downtime</i><b>' + n1((s.downtime_minutes || 0) / 60) + ' hr</b><small>' + n0(s.downtime_minutes) + ' min</small></div>' +
+      '<div class="stat wide"><i>Goal met</i><b>' + (rated ? s.met + " of " + rated + " (" + pct + "%)" : "\u2013") + '</b><div class="meter"><span style="width:' + pct + '%"></span></div>' +
+      (s.count > rated ? '<small>' + (s.count - rated) + ' without a goal</small>' : "") + '</div></div>';
+    h += '<div class="toolbar"><button type="button" id="csv">EXPORT CSV</button><button type="button" id="refresh" class="ghost">REFRESH</button></div>';
+    if (!logs.length) h += '<div class="msg">No logs match. Try ALL in the filters.</div>';
+    logs.forEach(function (l, i) {
+      h += '<button type="button" class="logcard" data-i="' + i + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(day(l.shift_date)) + (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div>' +
+        '<div class="lc2">' + badge(l.goal_met) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + '</div>' +
+        '<div class="lc3"><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
+    });
+    if (hasMore) h += '<button type="button" class="big more" id="more">SHOW MORE</button>';
+    $("app").innerHTML = h;
+    $("fbox").addEventListener("toggle", function () { renderList.open = $("fbox").open; });
+    var set = function () { F.from = $("ffrom").value; F.to = $("fto").value; F.operator = $("fop").value; load(false); };
+    $("ffrom").onchange = set; $("fto").onchange = set; $("fop").onchange = set;
+    Array.prototype.forEach.call(document.querySelectorAll("#fdraw button"), function (b) { b.onclick = function () { F.draw = b.dataset.d; load(false); }; });
+    Array.prototype.forEach.call(document.querySelectorAll(".quick button"), function (b) {
+      b.onclick = function () {
+        var q = b.dataset.q, d = new Date();
+        if (q === "all") { F.from = ""; F.to = ""; }
+        else if (q === "month") { F.from = ymd(new Date(d.getFullYear(), d.getMonth(), 1)); F.to = ""; }
+        else { F.from = ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() - (+q - 1))); F.to = ""; }
+        load(false);
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".logcard"), function (b) { b.onclick = function () { openDetail(logs[+b.dataset.i]); }; });
+    $("csv").onclick = exportCsv;
+    $("refresh").onclick = function () { load(false); };
+    if ($("more")) $("more").onclick = function () { load(true); };
+  }
+
+  function exportCsv() {
+    var b = $("csv"); b.disabled = true; b.textContent = "EXPORTING\u2026";
+    api("/export.csv" + qs(), { raw: true }).then(function (r) {
+      var name = (/filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "") || [])[1] || "production-logs.csv";
+      return r.blob().then(function (blob) {
+        var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        toast("CSV saved: " + name);
+      });
+    }).catch(function (e) { if (e.message !== "401") toast("Export failed: " + e.message); })
+      .then(function () { if ($("csv")) { $("csv").disabled = false; $("csv").textContent = "EXPORT CSV"; } });
+  }
+
+  /* ---------- detail ---------- */
+  function line(l, v, big) { return '<div class="svline' + (big ? " big" : "") + '"><span>' + esc(l) + '</span><b>' + esc(v) + '</b></div>'; }
+  function openDetail(l) {
+    current = l; $("toast").style.display = "none";
+    $("dtitle").textContent = (l.operator + " \u00b7 " + day(l.shift_date)).toUpperCase();
+    $("dbody").innerHTML = '<p class="muted">Loading\u2026</p>';
+    $("detail").hidden = false; document.body.classList.add("noscroll"); $("dclose").focus();
+    api("/logs/" + encodeURIComponent(l.id)).then(renderDetail).catch(function (e) {
+      if (e.message !== "401") $("dbody").innerHTML = '<div class="msg bad">Could not load this log: ' + esc(e.message) + '</div>';
+    });
+  }
+  function closeDetail() { $("detail").hidden = true; document.body.classList.remove("noscroll"); }
+  function renderDetail(j) {
+    var L = j.log, h = '<div style="margin:12px 0">' + badge(L.goal_met) + '</div>';
+    h += line("Shift", (L.shift_label ? L.shift_label + " \u00b7 " : "") + (L.shift_start ? clock12(L.shift_start) + " \u2013 " + clock12(L.shift_end) : "\u2013"));
+    h += line("Total Weight Produced", n0(L.total_lbs), true) + line("Hours per shift", nh(L.net_hours), true) +
+      line("Goal: Lbs/Hour", n1(L.goal_lbhr), true) + line("Average Lbs/per Hour", n1(L.avg_lbhr), true) + line("Shift goal (lb)", n0(L.goal_lbs));
+    if (j.machines.length) {
+      h += '<h3>Machines</h3>';
+      [1, 2].forEach(function (slot) {
+        var segs = j.machines.filter(function (m) { return m.slot === slot; }); if (!segs.length) return;
+        var tot = segs.reduce(function (a, m) { return a + (m.run_hours || 0); }, 0);
+        h += '<div class="svrow"><div class="muted" style="font-size:13px">MACHINE ' + slot + (segs.length > 1 ? " \u00b7 MOVED" : "") + '</div>';
+        if (segs.length > 1 && tot > 0) h += '<div class="timeline">' + segs.map(function (m) { return '<span style="width:' + ((m.run_hours || 0) * 100 / tot) + '%">' + esc(m.machine) + '</span>'; }).join("") + '</div>';
+        segs.forEach(function (m) {
+          h += '<div class="cells" style="margin-top:6px"><div><i>Machine</i><b>' + esc(m.machine || "\u2013") + '</b></div><div><i>Time</i><b>' +
+            esc(m.from_time || m.to_time ? clock12(m.from_time) + "\u2013" + clock12(m.to_time) : "all shift") + '</b></div><div><i>Goal lb/hr</i><b>' + n0(m.goal_lbhr) + '</b></div>' +
+            '<div><i>Run hrs</i><b>' + nh(m.run_hours) + '</b></div><div><i>Goal lb</i><b>' + n0(m.goal_lbs) + '</b></div><div></div></div>';
+        });
+        h += '</div>';
+      });
+    }
+    h += '<h3>Coils (' + j.coils.length + ')</h3>';
+    j.coils.forEach(function (c) {
+      var cells = [["Card #", c.work_order], ["Tot Avg Wgt", n0(c.tot_avg_wgt)], ["WO coils", c.wo_coils],
+        ["Avg. Wgt.", n0(c.avg_wgt)], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
+        ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
+      if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
+      h += '<div class="svrow"><div class="cells">' + cells.map(function (x) { return '<div><i>' + esc(x[0]) + '</i><b>' + esc(x[1] === null || x[1] === undefined || x[1] === "" ? (x[0] ? "\u2013" : "") : x[1]) + '</b></div>'; }).join("") + '</div></div>';
+    });
+    h += '<h3>Breaks</h3>' + (j.breaks.length ? '<ul class="list">' + j.breaks.map(function (b) { return '<li>' + esc((b.start ? clock12(b.start) + " \u00b7 " : "") + n0(b.minutes) + " min") + '</li>'; }).join("") + '</ul>' : '<p class="muted">None</p>');
+    h += '<h3' + (L.goal_met === 0 ? ' class="bad"' : "") + '>Downtime and problems</h3>';
+    h += j.downtime.length ? '<ul class="list">' + j.downtime.map(function (d) {
+      return '<li>' + esc((d.machine || "All machines") + ": " + n0(d.minutes) + " min" + (d.start ? " (" + clock12(d.start) + "\u2013" + clock12(d.end) + ")" : "") + (d.reason ? " \u00b7 " + d.reason : "")) + '</li>';
+    }).join("") + '</ul>' : '<p class="muted">No downtime entered.</p>';
+    if (L.problems) h += '<div class="muted" style="font-size:13px;margin-top:8px">AS WRITTEN ON THE SHEET</div><ul class="list">' + L.problems.split("\n").map(function (p) { return '<li>' + esc(p) + '</li>'; }).join("") + '</ul>';
+    h += '<h3>Maintenance to follow up</h3><p style="color:var(--white);font-size:17px;margin:4px 0">' + esc(L.maintenance || "None") + '</p>';
+    h += '<h3>Record</h3>' + line("Sent", L.submitted_at ? new Date(L.submitted_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "\u2013") +
+      '<div class="svline"><span>Log id</span><b style="font-size:14px">' + esc(L.id) + '</b></div>';
+    h += '<p class="muted" style="margin-top:14px">Logs are locked once sent. If one is wrong, delete it and have the operator send it again.</p>' +
+      '<button type="button" class="big warn" id="del" style="margin-top:6px">DELETE THIS LOG</button>';
+    $("dbody").innerHTML = h;
+    $("del").onclick = function () { askDelete(L); };
+  }
+  function askDelete(L) {
+    $("cmsg").textContent = L.operator + " \u00b7 " + day(L.shift_date) + " \u00b7 " + n0(L.total_lbs) + " lb. This can't be undone.";
+    $("confirm").hidden = false; $("cno").focus();
+    $("cno").onclick = function () { $("confirm").hidden = true; };
+    $("cyes").onclick = function () {
+      $("cyes").disabled = true;
+      api("/logs/" + encodeURIComponent(L.id), { method: "DELETE" }).then(function () {
+        $("confirm").hidden = true; closeDetail(); toast("Log deleted"); load(false);
+      }).catch(function (e) { $("confirm").hidden = true; if (e.message !== "401") toast("Delete failed: " + e.message); })
+        .then(function () { $("cyes").disabled = false; });
+    };
+  }
+
+  $("dclose").onclick = closeDetail;
+  $("lockbtn").onclick = function () { setCode(""); closeDetail(); renderLock(""); };
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (!$("confirm").hidden) $("confirm").hidden = true; else closeDetail(); } });
+  if (code()) load(false); else renderLock("");
+})();
+</script>
+</body>
+</html>
