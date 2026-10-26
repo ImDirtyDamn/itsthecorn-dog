@@ -137,6 +137,8 @@ input.in::placeholder{color:rgba(57,255,106,.35);font-size:1.25rem}
 .break-row .btn{min-height:3.25rem;height:3.25rem;padding:0;border:2px solid var(--red);border-radius:3px;color:var(--red);font-weight:700;letter-spacing:.08em}
 .field .sub,p.sub{color:var(--fg-dim);font-size:.85rem;margin:.4rem 0 0}
 input.flash{outline:3px solid var(--amber)}
+.help{color:var(--fg-dim);margin:0 0 1.5rem}
+.calc-note{margin:.5rem 0 0;color:var(--amber);min-height:1.4em}
 </style>
 </head>
 <body>
@@ -725,13 +727,35 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function blankRow() { return { card: "", woCoils: "", woTotal: "", coilsDrawn: "", coilsOut: "", cut: 1, machine: "", finish: "", grade: "", compound: "", package: "" }; }
   function blankSlot() { return { mode: "all", minutes: "", segments: [{ machine: "", from: "", to: "" }] }; }
   function fresh() {
-    return { screen: "home", step: 0, name: "", date: "", shift: "", rows: [blankRow()], shiftHours: "", start: "", breaks: [], downtime: [],
+    return { screen: "home", step: 0, name: "", date: "", shift: "", rows: [blankRow()], shiftHours: "", start: "", end: "", breaks: [], downtime: [],
       slotCount: 0, slots: [blankSlot(), blankSlot()], goals: {}, maintenance: "", q: { tot: "", coils: "", ran: "" } };
   }
   var S;
   try { S = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { S = null; }
   if (!S || typeof S !== "object" || !Array.isArray(S.rows)) S = fresh();
   else { var F = fresh(); Object.keys(F).forEach(function (k) { if (S[k] === undefined) S[k] = F[k]; }); }
+  /* Shift length comes from SHIFT START and SHIFT END, like the tracker: end earlier than start = ends next morning;
+     same start and end = not set. */
+  function shiftSpan() {
+    var a = P.clock(S.start), b = P.clock(S.end);
+    if (a === null || b === null || a === b) return null;
+    return { min: b > a ? b - a : b + 1440 - a, overnight: b < a };
+  }
+  function deriveHours() { var w = shiftSpan(); S.shiftHours = w ? String(w.min / 60) : ""; }
+  function endFrom(start, hours) {
+    var a = P.clock(start), h = P.num(hours);
+    if (a === null || h === null || !(h > 0) || h >= 24) return "";
+    var e = ((a + Math.round(h * 60)) % 1440 + 1440) % 1440;
+    return (e < 600 ? "0" : "") + Math.floor(e / 60) + ":" + (e % 60 < 10 ? "0" : "") + (e % 60);
+  }
+  function spanNote() {
+    var w = shiftSpan(); if (!w) return "";
+    var h = Math.floor(w.min / 60), m = w.min % 60;
+    return (h ? h + "h " + (m < 10 ? "0" : "") + m + "m" : m + "m") + " shift" + (w.overnight ? " \u00b7 ends next morning" : "");
+  }
+  // saved shifts from before start/end: keep their length by filling in the end time
+  if (!S.end && S.start && S.shiftHours) S.end = endFrom(S.start, S.shiftHours);
+  deriveHours();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
   function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 1800); }
@@ -768,7 +792,12 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         return o;
       }) };
   }
-  function calc() { var sh = coreShift(); return { sh: sh, res: P.compute(sh) }; }
+  function calc() {
+    var sh = coreShift(), res = P.compute(sh);
+    res.warnings = res.warnings.map(function (w) { return w === "Enter the shift length (hours)." ? "Type the shift start and shift end." : w; });
+    if (res.headline === "Enter the shift length") res.headline = "Enter shift start and end";
+    return { sh: sh, res: res };
+  }
 
   /* ---------- drill-in: tap a number to see how we got it ---------- */
   function cat(s) {
@@ -979,8 +1008,11 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     S.rows = replace || !keep.length ? (rows.length ? rows : [blankRow()]) : keep.concat(rows);
     var dts = t.downtime.map(function (d) { return { minutes: String(d.minutes), reason: d.reason, machine: d.machine === "All machines" ? "" : normName(d.machine), start: d.start, end: d.end }; });
     S.downtime = replace ? dts : S.downtime.concat(dts);
-    if (replace || !S.shiftHours) { if (t.shiftHours !== null) S.shiftHours = P.fmtNum(t.shiftHours).replace(/,/g, ""); }
-    if (replace || !S.start) { if (t.start) S.start = t.start; }
+    if (replace || !shiftSpan()) {
+      if (t.start) S.start = t.start;
+      if (t.start && t.shiftHours !== null) S.end = endFrom(t.start, t.shiftHours);
+      deriveHours();
+    }
     if (replace || !S.breaks.length) S.breaks = t.breaks.map(function (b) { return { minutes: String(b.minutes), start: b.start }; });
     if (replace || !S.name) S.name = t.name || S.name;
     if (replace || !S.date) S.date = t.date || S.date;
@@ -998,9 +1030,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
 
   /* step 2: time */
   function stepTime() {
-    var html = '<h2>Your time</h2><div class="panel">' +
-      field("Shift length (hours)", "t-hours", S.shiftHours, "shift hours, like 10") +
-      tfield("Shift start", "t-start", S.start, "", "Only needed for clock times and moved machines.") + '</div>';
+    var html = '<h2>Your time</h2><div class="panel"><p class="help">Shift start and end. If the end is earlier than the start, it ends the next morning.</p>' +
+      '<div class="row2">' + tfield("Shift start", "t-start", S.start) + tfield("Shift end", "t-end", S.end) + '</div>' +
+      '<p class="calc-note" id="t-note">' + esc(spanNote()) + '</p></div>';
     html += '<h2>Breaks</h2>';
     S.breaks.forEach(function (b, i) {
       html += '<div class="break-row">' + tfield("Break " + (i + 1) + " start", "b" + i + "-start", b.start) +
@@ -1027,8 +1059,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     $("t-hours-out").textContent = r.hours !== null ? r.hoursText : "\u2013";
   }
   function bindTime() {
-    $("t-hours").addEventListener("input", function (e) { S.shiftHours = e.target.value; save(); timeLive(); });
-    ["input", "change"].forEach(function (ev) { $("t-start").addEventListener(ev, function (e) { S.start = e.target.value; save(); timeLive(); }); });
+    var upd = function () { S.start = $("t-start").value; S.end = $("t-end").value; deriveHours(); $("t-note").textContent = spanNote(); save(); timeLive(); };
+    ["t-start", "t-end"].forEach(function (id) { $(id).addEventListener("input", upd); $(id).addEventListener("change", upd); });
     S.breaks.forEach(function (b, i) {
       $("b" + i + "-min").addEventListener("input", function (e) { b.minutes = e.target.value; save(); timeLive(); });
       ["input", "change"].forEach(function (ev) { $("b" + i + "-start").addEventListener(ev, function (e) { b.start = e.target.value; save(); timeLive(); }); });
@@ -1141,7 +1173,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     });
     app.querySelectorAll("[data-mode]").forEach(function (b) { b.onclick = function () { S.slots[+b.dataset.mode].mode = b.dataset.m; render(); if (b.dataset.m === "custom") focusLast("s" + b.dataset.mode + "-min"); }; });
     slotsInUse().forEach(function (sl, si) { var el = $("s" + si + "-min"); if (el) el.addEventListener("input", function () { sl.minutes = el.value; save(); machLive(); }); });
-    app.querySelectorAll("[data-shiftstart]").forEach(function (el) { el.addEventListener("change", function () { S.start = el.value; render(); }); });
+    app.querySelectorAll("[data-shiftstart]").forEach(function (el) { el.addEventListener("change", function () { S.start = el.value; deriveHours(); save(); render(); }); });
     app.querySelectorAll("[data-switch]").forEach(function (el) {
       el.addEventListener("change", function () {
         var p = el.dataset.switch.split("-"), segs = S.slots[+p[0]].segments, j = +p[1];
