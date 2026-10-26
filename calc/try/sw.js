@@ -1,5 +1,5 @@
 // Offline cache for the Production Log tryout (scope: /calc/try/ only).
-var CACHE = "draw-calc-try-v3";
+var CACHE = "draw-calc-try-v4";
 var FILES = ["./", "./index.html"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));

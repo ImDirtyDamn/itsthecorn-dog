@@ -51,6 +51,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* PHONE FIT: if the phone browser is set to "Request Desktop Website" it lays the page out
+   about 980px wide and shrinks it to fit, so everything looks tiny. Spot that (small touch
+   screen, much wider layout) and zoom the page back up to real phone size. */
+(function () {
+  var d = document.documentElement, last = "";
+  function fit() {
+    var key = (window.innerWidth > window.innerHeight ? "L" : "P") + screen.width + "x" + screen.height;
+    if (key === last) return; last = key;
+    d.style.zoom = ""; d.classList.remove("fit");
+    var lw = d.clientWidth || window.innerWidth, lh = d.clientHeight || window.innerHeight;
+    var sw = screen.width, sh = screen.height, dw = lw > lh ? Math.max(sw, sh) : Math.min(sw, sh);
+    if (navigator.maxTouchPoints > 0 && dw > 0 && dw < 600 && lw > dw * 1.3) {
+      var z = lw / dw;
+      d.style.zoom = z.toFixed(4); d.classList.add("fit");
+      d.style.setProperty("--fvw", (lw / z / 100).toFixed(3) + "px");
+      d.style.setProperty("--fvh", (lh / z / 100).toFixed(3) + "px");
+    }
+  }
+  fit();
+  window.addEventListener("resize", fit);
+  window.addEventListener("orientationchange", function () { last = ""; setTimeout(fit, 250); });
+})();
+</script>
 <meta name="theme-color" content="#030a03">
 <title>Draw Rate Tracker</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23030a03'/%3E%3Cpath d='M5 23 L12 15 L17 19 L27 8' stroke='%2339ff6a' stroke-width='3' fill='none'/%3E%3C/svg%3E">
@@ -79,7 +103,7 @@
   .green { color: var(--fg); }
   .white { color: var(--white); }
   .dim { color: var(--fg-dim); }
-  .lbl { color: var(--amber); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  .lbl { color: var(--amber); font-size: 0.8125rem; letter-spacing: 0.12em; text-transform: uppercase; }
   .sub { color: var(--fg-dim); font-size: 0.85rem; }
   .err { color: var(--red); min-height: 1.3em; margin: 0.75rem 0 0; }
 
@@ -145,7 +169,7 @@
   .bar { position: relative; height: 10px; background: var(--fg-faint); margin: 1.25rem 0 0.4rem; }
   .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg); width: 0; }
   .bar .mark { position: absolute; top: -5px; bottom: -5px; width: 3px; background: var(--amber); left: 0; margin-left: -1px; }
-  .legend { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.8rem; color: var(--fg-dim); }
+  .legend { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.85rem; color: var(--fg-dim); }
   .block { margin-top: 2rem; }
   .block > .lbl { display: block; margin-bottom: 0.6rem; }
   .delta { font-size: 2.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -163,12 +187,12 @@
   .mc { background: var(--panel); padding: 1rem; border-left: 3px solid var(--fg-dim); }
   .mc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.75rem; }
   .mc-name { color: var(--white); font-weight: 700; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .mc-rate { color: var(--fg-dim); font-size: 0.8rem; white-space: nowrap; }
+  .mc-rate { color: var(--fg-dim); font-size: 0.85rem; white-space: nowrap; }
   .mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.9rem; }
   .mc-stats b { display: block; color: var(--white); font-size: 1.2rem; font-variant-numeric: tabular-nums; margin-top: 0.15rem; }
   .mc-log { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
   .mc-log .in::placeholder { font-size: 0.85em; }
-  .wt-lbl { display: block; font-size: 0.75rem; letter-spacing: 0.12em; color: var(--white); margin: 0.6rem 0 0.3rem; font-weight: 700; }
+  .wt-lbl { display: block; font-size: 0.8125rem; letter-spacing: 0.12em; color: var(--white); margin: 0.6rem 0 0.3rem; font-weight: 700; }
   .mc-log .btn { padding: 0.5rem 1.1rem; }
   .mc-last { margin-top: 0.5rem; min-height: 1.2em; }
   .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 2.5rem; }
@@ -179,10 +203,10 @@
   .adv-mach h3 { color: var(--white); font-size: 1rem; margin: 0 0 0.6rem; letter-spacing: 0.06em; }
   .adv-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
   .coil-tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
-  .coil-tbl th { color: var(--amber); font-weight: 400; font-size: 0.7rem; letter-spacing: 0.1em; text-align: left; padding: 0.3rem 0.25rem; border-bottom: 1px solid var(--fg-faint); }
+  .coil-tbl th { color: var(--amber); font-weight: 400; font-size: 0.75rem; letter-spacing: 0.1em; text-align: left; padding: 0.3rem 0.25rem; border-bottom: 1px solid var(--fg-faint); }
   .coil-tbl td { padding: 0.45rem 0.25rem; border-bottom: 1px solid var(--fg-faint); vertical-align: top; }
   .coil-tbl td.r, .coil-tbl th.r { text-align: right; }
-  .coil-tbl .meta { color: var(--fg-dim); font-size: 0.8rem; }
+  .coil-tbl .meta { color: var(--fg-dim); font-size: 0.85rem; }
   .edit-box { background: var(--panel); padding: 0.75rem; }
   .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
   .edit-grid .full { grid-column: 1 / -1; }
@@ -194,11 +218,11 @@
   .text-center { text-align: center; }
 
   @media (min-width: 640px) {
-    .wrap { padding: 1.75rem 1.75rem 3rem; }
-    .big { font-size: 3.6rem; }
-    .delta { font-size: 2.6rem; }
-    .machines { grid-template-columns: 1fr 1fr; }
-    .count-grid { grid-template-columns: repeat(6, 1fr); }
+    html:not(.fit) .wrap { padding: 1.75rem 1.75rem 3rem; }
+    html:not(.fit) .big { font-size: 3.6rem; }
+    html:not(.fit) .delta { font-size: 2.6rem; }
+    html:not(.fit) .machines { grid-template-columns: 1fr 1fr; }
+    html:not(.fit) .count-grid { grid-template-columns: repeat(6, 1fr); }
   }
   @media (max-width: 360px) {
     .big { font-size: 2.1rem; }
@@ -298,7 +322,7 @@
   .sheet { position: fixed; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.78); display: flex; align-items: flex-end; justify-content: center; }
   .sheet-box { width: 100%; max-width: 40rem; max-height: 88vh; max-height: 88svh; overflow-y: auto; background: var(--panel); border: 2px solid var(--fg-dim); border-bottom: 0;
                padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-  @media (min-width: 700px) { .sheet { align-items: center; } .sheet-box { border-bottom: 2px solid var(--fg-dim); } }
+  @media (min-width: 700px) { html:not(.fit) .sheet { align-items: center; } html:not(.fit) .sheet-box { border-bottom: 2px solid var(--fg-dim); } }
   .sheet-title { margin: 0 0 0.75rem; color: var(--amber); font-size: 1rem; letter-spacing: 0.14em; }
   .sheet-close { width: 100%; min-height: 3.5rem; font-size: 1.15rem; margin-top: 1rem; }
   .sh-big { font-size: 2.2rem; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums; line-height: 1.1; margin: 0.2rem 0 0.6rem; }
@@ -311,6 +335,12 @@
   .sh-sub { color: var(--fg-dim); font-size: 0.85rem; margin: 0.5rem 0 0; }
   .sh-btn { width: 100%; margin-top: 0.75rem; min-height: 3rem; }
   .sheet-body #dtp, .sheet-body #rcp { padding-bottom: 0; }
+
+  /* PHONE FIT (browser in desktop-website mode, see script in head): keep the phone layout */
+  html.fit .s-n b { font-size: clamp(2rem, calc(var(--fvw) * 9.5), 4.4rem); }
+  html.fit .s-status { font-size: clamp(1.45rem, calc(var(--fvw) * 7), 2.4rem); }
+  html.fit .rb-w { font-size: clamp(2.4rem, calc(var(--fvw) * 11), 3.4rem); }
+  html.fit .sheet-box { max-height: calc(var(--fvh) * 88); }
 </style>
 </head>
 <body>
