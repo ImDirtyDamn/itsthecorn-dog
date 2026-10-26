@@ -31,8 +31,6 @@ input,select,textarea{width:100%;min-height:48px;font:inherit;font-size:18px;bac
 textarea{font-size:16px;min-height:90px}
 input::placeholder,textarea::placeholder{color:var(--ph);opacity:1;font-size:16px}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--fg);border-color:var(--fg)}
-input[type=time]{font-size:18px}
-input.flash{outline:3px solid var(--amber)}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .f{min-width:0;margin-bottom:10px}
 button{font:inherit;font-size:16px;min-height:48px;min-width:48px;cursor:pointer;background:#000;color:var(--fg);border:1px solid var(--fg);padding:10px 12px;letter-spacing:.05em}
@@ -124,6 +122,21 @@ ol.math li.good{color:var(--fg);font-weight:bold}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw;z-index:40}
 body.noscroll{overflow:hidden}
 .trybadge{color:var(--amber);font-size:12px;letter-spacing:.08em}
+/* clock-time inputs: copied from the tracker's setup screen (.in, .lbl, .field, .row2, .break-row, .sub) */
+.field{margin-bottom:1.25rem;min-width:0}
+.field>label{display:block;margin-bottom:.4rem}
+label.lbl,.field .lbl{color:var(--amber);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase}
+input.in{width:100%;min-width:0;height:3.25rem;min-height:0;padding:0 .85rem;background:#000;color:var(--white);border:2px solid var(--fg-dim);border-radius:3px;
+font-family:var(--font);font-size:1.25rem;font-variant-numeric:tabular-nums;color-scheme:dark;-webkit-appearance:none;appearance:none}
+input.in:focus{outline:none;border-color:var(--fg);box-shadow:0 0 10px rgba(57,255,106,.35)}
+input.in::placeholder{color:rgba(57,255,106,.35);font-size:1.25rem}
+
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
+.break-row{display:grid;grid-template-columns:minmax(0,1fr) 6rem 3.25rem;gap:.5rem;margin-bottom:.6rem;align-items:end}
+.break-row .field{margin-bottom:0}
+.break-row .btn{min-height:3.25rem;height:3.25rem;padding:0;border:2px solid var(--red);border-radius:3px;color:var(--red);font-weight:700;letter-spacing:.08em}
+.field .sub,p.sub{color:var(--fg-dim);font-size:.85rem;margin:.4rem 0 0}
+input.flash{outline:3px solid var(--amber)}
 </style>
 </head>
 <body>
@@ -729,6 +742,14 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     return '<div class="f"><label for="' + id + '">' + label + '</label>' + inp(id, val, ph, attrs) + (hint ? '<span class="hint">' + hint + '</span>' : "") + '</div>';
   }
 
+  /* Clock-time inputs: same markup, format and look as the tracker's new-day setup
+     (native <input type="time" class="in">, amber uppercase .lbl label, value stored as 24h HH:MM,
+     shown in the phone's own 12/24h format). */
+  function tfield(label, id, val, attrs, sub) {
+    return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in" type="time" id="' + id + '" value="' + esc(val) + '"' + (attrs ? " " + attrs : "") + '>' +
+      (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
+  }
+
   /* ---------- shift object for the calc core ---------- */
   function slotsInUse() { return S.slots.slice(0, S.slotCount); }
   function usedNames() {
@@ -979,20 +1000,18 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function stepTime() {
     var html = '<h2>Your time</h2><div class="panel">' +
       field("Shift length (hours)", "t-hours", S.shiftHours, "shift hours, like 10") +
-      '<div class="f"><label for="t-start">Shift starts at</label><input id="t-start" type="time" value="' + esc(S.start) + '"><span class="hint">Only needed for clock times and moved machines</span></div></div>';
+      tfield("Shift start", "t-start", S.start, "", "Only needed for clock times and moved machines.") + '</div>';
     html += '<h2>Breaks</h2>';
     S.breaks.forEach(function (b, i) {
-      html += '<div class="drow"><div class="grid2">' + field("Minutes", "b" + i + "-min", b.minutes, "break minutes", 'inputmode="numeric"') +
-        '<div class="f"><label for="b' + i + '-start">Starts at</label><input id="b' + i + '-start" type="time" value="' + esc(b.start) + '"></div></div>' +
-        '<button type="button" class="warn" style="width:100%" data-delbrk="' + i + '">REMOVE BREAK</button></div>';
+      html += '<div class="break-row">' + tfield("Break " + (i + 1) + " start", "b" + i + "-start", b.start) +
+        '<div class="field"><label class="lbl" for="b' + i + '-min">Minutes</label><input class="in" type="number" id="b' + i + '-min" value="' + esc(b.minutes) + '" placeholder="min" inputmode="numeric" min="1" step="5"></div>' +
+        '<button type="button" class="btn warn" data-delbrk="' + i + '" aria-label="Remove break ' + (i + 1) + '">X</button></div>';
     });
     html += '<button class="big" id="add-brk" type="button">+ ADD BREAK</button>';
     html += '<h2>Downtime</h2><p class="muted">With clock times, downtime during a break or overlapping other downtime only counts once.</p>';
     S.downtime.forEach(function (d, i) {
       var timed = P.clock(d.start) !== null && P.clock(d.end) !== null;
-      html += '<div class="drow"><div class="grid2">' +
-        '<div class="f"><label for="d' + i + '-start">From</label><input id="d' + i + '-start" type="time" value="' + esc(d.start) + '"></div>' +
-        '<div class="f"><label for="d' + i + '-end">To</label><input id="d' + i + '-end" type="time" value="' + esc(d.end) + '"></div></div>' +
+      html += '<div class="drow"><div class="row2">' + tfield("Started at", "d" + i + "-start", d.start) + tfield("Ended at", "d" + i + "-end", d.end) + '</div>' +
         '<div class="grid2">' + field("Minutes down", "d" + i + "-min", d.minutes, "minutes down", 'inputmode="numeric"' + (timed ? " readonly" : "")) +
         '<div class="f"><label for="d' + i + '-mach">Machine</label><select id="d' + i + '-mach"><option value="">All machines</option>' +
         DRAWS.concat(extraNames()).map(function (n) { return '<option' + (d.machine === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select></div></div>' +
@@ -1009,10 +1028,10 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function bindTime() {
     $("t-hours").addEventListener("input", function (e) { S.shiftHours = e.target.value; save(); timeLive(); });
-    $("t-start").addEventListener("input", function (e) { S.start = e.target.value; save(); timeLive(); });
+    ["input", "change"].forEach(function (ev) { $("t-start").addEventListener(ev, function (e) { S.start = e.target.value; save(); timeLive(); }); });
     S.breaks.forEach(function (b, i) {
       $("b" + i + "-min").addEventListener("input", function (e) { b.minutes = e.target.value; save(); timeLive(); });
-      $("b" + i + "-start").addEventListener("input", function (e) { b.start = e.target.value; save(); timeLive(); });
+      ["input", "change"].forEach(function (ev) { $("b" + i + "-start").addEventListener(ev, function (e) { b.start = e.target.value; save(); timeLive(); }); });
     });
     S.downtime.forEach(function (d, i) {
       var sync = function () {
@@ -1020,8 +1039,10 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         if (a !== null && b !== null) { d.minutes = String(((b - a) % 1440 + 1440) % 1440); m.value = d.minutes; m.readOnly = true; } else m.readOnly = false;
         save(); timeLive();
       };
-      $("d" + i + "-start").addEventListener("input", function (e) { d.start = e.target.value; sync(); });
-      $("d" + i + "-end").addEventListener("input", function (e) { d.end = e.target.value; sync(); });
+      ["input", "change"].forEach(function (ev) {
+        $("d" + i + "-start").addEventListener(ev, function (e) { d.start = e.target.value; sync(); });
+        $("d" + i + "-end").addEventListener(ev, function (e) { d.end = e.target.value; sync(); });
+      });
       $("d" + i + "-min").addEventListener("input", function (e) { d.minutes = e.target.value; save(); timeLive(); });
       $("d" + i + "-mach").addEventListener("change", function (e) { d.machine = e.target.value; save(); timeLive(); });
       $("d" + i + "-reason").addEventListener("input", function (e) { d.reason = e.target.value; save(); });
@@ -1077,11 +1098,11 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       }
       if (moved) {
         html += timeline(sl, si);
-        if (P.clock(S.start) === null) html += '<div class="f"><label for="s' + si + '-start">Shift starts at</label><input id="s' + si + '-start" data-shiftstart="1" type="time" value="' + esc(S.start) + '"><span class="hint">Needed so switch times work</span></div>';
+        if (P.clock(S.start) === null) html += tfield("Shift start", "s" + si + "-start", S.start, 'data-shiftstart="1"', "Needed so switch times work.");
         segs.forEach(function (sg, j) {
           if (j === 0) return;
           html += '<div class="seg"><div class="cardhead"><b>MOVED TO ' + esc(sg.machine) + '</b><button class="xbtn" type="button" data-delseg="' + si + '-' + j + '" aria-label="Undo this move">&times;</button></div>' +
-            '<div class="f"><label for="sw' + si + '-' + j + '">Switch time</label><input id="sw' + si + '-' + j + '" type="time" value="' + esc(sg.from) + '" data-switch="' + si + '-' + j + '"></div>' +
+            tfield("Switch time", "sw" + si + "-" + j, sg.from, 'data-switch="' + si + '-' + j + '"') +
             (P.clock(sg.from) === null ? '<span class="hint" style="margin:-6px 0 8px">Type the switch time</span>' : "") +
             goalInput("g" + si + "-" + j, sg.machine) + '</div>';
         });
@@ -1089,7 +1110,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       if (first.machine) {
         if (moveOpen[si]) {
           html += '<div class="movebox"><b style="color:var(--amber)">MOVED TO WHICH DRAW?</b>' + chips("move" + si, moveOpen[si].machine || "") +
-            '<div class="f"><label for="mv' + si + '-time">Switch time</label><input id="mv' + si + '-time" type="time" value="' + esc(moveOpen[si].time || "") + '"></div>' +
+            tfield("Switch time", "mv" + si + "-time", moveOpen[si].time || "") +
             '<div class="grid2"><button type="button" class="solid" id="mv' + si + '-ok">ADD MOVE</button><button type="button" class="warn" id="mv' + si + '-x">CANCEL</button></div></div>';
         } else html += '<button type="button" class="big amber" data-move="' + si + '" style="margin-top:6px">MOVED MACHINES</button>';
       }
@@ -1145,7 +1166,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     app.querySelectorAll("[data-move]").forEach(function (b) { b.onclick = function () { moveOpen[+b.dataset.move] = { machine: "", time: "" }; render(); focusLast("mv" + b.dataset.move + "-time"); }; });
     slotsInUse().forEach(function (sl, si) {
       if (!moveOpen[si]) return;
-      $("mv" + si + "-time").addEventListener("input", function (e) { moveOpen[si].time = e.target.value; });
+      ["input", "change"].forEach(function (ev) { $("mv" + si + "-time").addEventListener(ev, function (e) { moveOpen[si].time = e.target.value; }); });
       $("mv" + si + "-x").onclick = function () { delete moveOpen[si]; render(); };
       $("mv" + si + "-ok").onclick = function () {
         var mo = moveOpen[si];
