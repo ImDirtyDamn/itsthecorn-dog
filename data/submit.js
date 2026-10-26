@@ -8,7 +8,11 @@
 
    Remembered on this device (localStorage): operator name, crew code, the outbox of logs not sent yet,
    and the last 30 sent logs (so a second tap does not send the same shift twice).
-   Every log gets an id made on the phone; the server stores each id once, so retries are safe. */
+   Every log gets an id made on the phone; the server stores each id once, so retries are safe.
+   If the server says a log looks like one already in the master log (409: same operator, date, Draw and
+   overlapping hours), the log is held on the phone and a "Looks like this was already submitted" box asks:
+   SEND ANYWAY (resend with force: true) or DON'T SEND (keep it on the phone, nothing sent). Held logs are
+   never sent by the background retry; the box comes back the next time the sheet view is opened. */
 (function () {
   "use strict";
   var K = { op: "logdbOperator", code: "logdbCrewCode", queue: "logdbQueueV1", sent: "logdbSentV1" };
@@ -107,15 +111,16 @@
   function flush(force) {
     if (busy) return Promise.resolve();
     var q = queue(), now = Date.now();
-    var due = q.filter(function (it) { return force || !it.nextAt || it.nextAt <= now; });
+    var due = q.filter(function (it) { return !it.held && (force || !it.nextAt || it.nextAt <= now); });
     if (!due.length) { schedule(); return Promise.resolve(); }
     var code = get(K.code, "");
     if (!code) { status("bad", "Type the crew code, then tap SUBMIT."); return Promise.resolve(); }
     if (!api() || /REPLACE-ME/.test(api())) { status("bad", "Master log address not set up yet."); return Promise.resolve(); }
     busy = true; paint();
     var it = due[0];
+    var body = it.force ? Object.assign({}, it.payload, { force: true }) : it.payload;
     return fetch(api() + "/submit", { method: "POST", headers: { "Content-Type": "application/json", "X-Crew-Code": code },
-      body: JSON.stringify(it.payload), credentials: "omit", cache: "no-store" })
+      body: JSON.stringify(body), credentials: "omit", cache: "no-store" })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { r: r, j: j }; }); })
       .then(function (x) {
         var r = x.r, j = x.j, rest = queue();
@@ -123,6 +128,11 @@
           put(K.queue, rest.filter(function (o) { return o.id !== it.id; }));
           markSent(it, j.submitted_at || new Date().toISOString());
           status("ok", (j.duplicate ? "Already in the master log" : "Sent to the master log") + " \u2713 " + hhmm(new Date()) + ". It's locked now.");
+          return "next";
+        }
+        if (r.status === 409 && j.possible_duplicate) {
+          put(K.queue, rest.map(function (o) { if (o.id === it.id) o.held = { match: j.match || {}, at: Date.now(), kept: false }; return o; }));
+          status("warn", "Not sent yet: looks like this was already submitted. Choose below.");
           return "next";
         }
         if (r.status === 401) { status("bad", "Crew code is wrong. Fix it and tap SUBMIT again. (Your log is saved on this phone.)"); return "stop"; }
@@ -140,14 +150,29 @@
         status("warn", "No signal. Saved on this phone \u2713 It will send by itself when you're back online.");
         return "stop";
       })
-      .then(function (next) { busy = false; paint(); if (next === "next" && queue().length) return flush(force); schedule(); });
+      .then(function (next) { busy = false; paint(); if (next === "next" && sendable().length) return flush(force); schedule(); });
   }
   function backoff(it) { return Math.min(30000 * Math.pow(2, it.tries || 0), 15 * 60000); }
   function bump(it, wait, err) {
     put(K.queue, queue().map(function (o) { if (o.id === it.id) { o.tries = (o.tries || 0) + 1; o.nextAt = Date.now() + wait; o.error = err; } return o; }));
   }
+  function sendable() { return queue().filter(function (o) { return !o.held; }); }
+  function held() { return queue().filter(function (o) { return o.held; }); }
+  /* SEND ANYWAY: stored as a new log even though it looks like one already there. */
+  function sendAnyway(id) {
+    var hit = false;
+    put(K.queue, queue().map(function (o) { if (o.id === id) { hit = true; o.held = null; o.force = true; o.nextAt = 0; } return o; }));
+    if (!hit) return Promise.resolve("gone");
+    status("warn", "Sending\u2026");
+    return flush(true).then(function () { return lastStatus && lastStatus.kind; });
+  }
+  /* DON'T SEND: stays on this phone, never sent by itself. Tapping SUBMIT again on that shift asks the server again. */
+  function keep(id) {
+    put(K.queue, queue().map(function (o) { if (o.id === id && o.held) o.held.kept = true; return o; }));
+    status("warn", "Not sent. Kept on this phone only.");
+  }
   function schedule() {
-    clearTimeout(timer); var q = queue(); if (!q.length) return;
+    clearTimeout(timer); var q = sendable(); if (!q.length) return;
     var next = Math.min.apply(null, q.map(function (o) { return o.nextAt || 0; }));
     timer = setTimeout(function () { flush(false); }, Math.max(5000, Math.min(next - Date.now(), 15 * 60000)));
   }
@@ -169,6 +194,7 @@
     var waiting = q.filter(function (o) { return o.key === key; })[0];
     if (waiting) {          // not sent yet: keep its id, send the newest version
       waiting.payload = Object.assign({}, p, { id: waiting.id, created_at: new Date().toISOString() }); waiting.hash = h; waiting.nextAt = 0;
+      waiting.held = null; waiting.force = false;
       put(K.queue, q);
     } else {
       var id = newId();
@@ -189,16 +215,45 @@
     ".ldb button{min-height:48px}.ldb .go{width:100%;min-height:60px;font-size:19px;font-weight:bold;background:var(--fg,#39ff6a);color:#000;border:0;letter-spacing:.06em}" +
     ".ldb .go:disabled{opacity:.6}.ldb .st{margin-top:10px;padding:10px;font-size:16px;line-height:1.4;border:1px solid;display:none}" +
     ".ldb .st.ok{display:block;color:var(--fg,#39ff6a);border-color:var(--fg,#39ff6a)}.ldb .st.warn{display:block;color:var(--amber,#ffc23d);border-color:var(--amber,#ffc23d)}" +
-    ".ldb .st.bad{display:block;color:var(--red,#ff5f56);border-color:var(--red,#ff5f56)}.ldb .q{color:var(--amber,#ffc23d);font-size:14px;margin-top:8px}";
+    ".ldb .st.bad{display:block;color:var(--red,#ff5f56);border-color:var(--red,#ff5f56)}.ldb .q{color:var(--amber,#ffc23d);font-size:14px;margin-top:8px}" +
+    ".ldb .dup{margin-top:12px;padding:12px;border:2px solid var(--amber,#ffc23d);background:#140f00;color:var(--white,#eaffea)}" +
+    ".ldb .dup b.t{display:block;color:var(--amber,#ffc23d);font-size:17px;letter-spacing:.04em;margin-bottom:8px}" +
+    ".ldb .dup p{margin:0 0 8px;font-size:15px;line-height:1.45}.ldb .dup dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 12px;font-size:15px}" +
+    ".ldb .dup dt{color:var(--amber,#ffc23d)}.ldb .dup dd{margin:0;color:var(--white,#eaffea)}" +
+    ".ldb .dup .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ldb .dup button{min-height:56px;font-size:16px;font-weight:bold;letter-spacing:.04em}" +
+    ".ldb .dup .any{background:var(--amber,#ffc23d);color:#000;border:0}.ldb .dup .no{background:#000;color:var(--fg,#39ff6a);border:2px solid var(--fg,#39ff6a)}";
   function focus(id) { var e = document.getElementById(id); if (e) e.focus(); }
   function paint() {
     if (!mounted || !document.body.contains(mounted.el)) return;
     var b = mounted.el.querySelector(".go"), st = mounted.el.querySelector(".st"), qn = mounted.el.querySelector(".q");
     b.disabled = busy; b.textContent = busy ? "SENDING\u2026" : "SUBMIT TO MASTER LOG";
     st.className = "st" + (lastStatus ? " " + lastStatus.kind : ""); st.textContent = lastStatus ? lastStatus.msg : "";
-    var n = queue().length;
-    qn.textContent = n ? n + (n === 1 ? " log" : " logs") + " waiting on this phone to send" : "";
+    var n = sendable().length, kept = held().filter(function (o) { return o.held.kept; }).length;
+    qn.textContent = (n ? n + (n === 1 ? " log" : " logs") + " waiting on this phone to send. " : "") +
+      (kept ? kept + (kept === 1 ? " log" : " logs") + " kept on this phone, not sent." : "");
+    var box = mounted.el.querySelector(".dup"), it = held().filter(function (o) { return !o.held.kept; })[0];
+    if (!it || busy) { if (box) box.remove(); return; }
+    if (box && box.dataset.id === it.id) return;
+    if (box) box.remove();
+    box = document.createElement("div"); box.className = "dup"; box.dataset.id = it.id; box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-label", "Looks like this was already submitted");
+    var m = it.held.match || {}, mine = it.payload && it.payload.shift || {};
+    box.innerHTML = '<b class="t">LOOKS LIKE THIS WAS ALREADY SUBMITTED</b>' +
+      '<p>The master log already has a log like this one' + (mine.operator ? " (" + esc(mine.operator) + ", " + esc(day(mine.date)) + ")" : "") + ':</p><dl>' +
+      '<dt>Name</dt><dd>' + esc(m.operator || "\u2013") + '</dd>' +
+      '<dt>Date</dt><dd>' + esc(day(m.shift_date)) + '</dd>' +
+      '<dt>Shift</dt><dd>' + esc(m.shift_start && m.shift_end ? clock12(m.shift_start) + " \u2013 " + clock12(m.shift_end) : "\u2013") + '</dd>' +
+      '<dt>Draws</dt><dd>' + esc((m.draws || []).map(function (d) { return "Draw " + d; }).join(", ") || "\u2013") + '</dd>' +
+      (m.total_lbs !== null && m.total_lbs !== undefined ? '<dt>Weight</dt><dd>' + esc(Number(m.total_lbs).toLocaleString()) + ' lb</dd>' : "") +
+      '<dt>Sent</dt><dd>' + esc(m.submitted_at ? new Date(m.submitted_at).toLocaleString([], { month: "numeric", day: "numeric", year: "2-digit", hour: "numeric", minute: "2-digit" }) : "\u2013") + '</dd></dl>' +
+      '<p>If this is a different log, send it anyway. If it\'s the same one, don\'t send it again.</p>' +
+      '<div class="btns"><button type="button" class="any">SEND ANYWAY</button><button type="button" class="no">DON\'T SEND</button></div>';
+    mounted.el.appendChild(box);
+    box.querySelector(".any").onclick = function () { sendAnyway(it.id); };
+    box.querySelector(".no").onclick = function () { keep(it.id); };
   }
+  function day(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); return m ? +m[2] + "/" + +m[3] + "/" + m[1].slice(2) : (iso || "\u2013"); }
+  function clock12(v) { var m = /^(\d{2}):(\d{2})$/.exec(v || ""); if (!m) return v || ""; var h = +m[1]; return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " AM" : " PM"); }
   function mount(container, getPayload) {
     if (!document.getElementById("ldb-css")) { var s = document.createElement("style"); s.id = "ldb-css"; s.textContent = CSS; document.head.appendChild(s); }
     var p = null; try { p = getPayload(); } catch (e) {}
@@ -221,7 +276,9 @@
       var key = shiftKey(Object.assign({}, p, { shift: Object.assign({}, p.shift, { operator: get(K.op, "") || p.shift.operator }) }));
       var s = get(K.sent, []).filter(function (x) { return x.key === key; })[0];
       var w = queue().filter(function (x) { return x.key === key; })[0];
-      if (w) lastStatus = { kind: "warn", msg: "Saved on this phone \u2713 It will send by itself when there's signal." + (w.error ? " (Last try: " + w.error + ")" : "") };
+      if (w && w.held && w.held.kept) lastStatus = { kind: "warn", msg: "Not sent. Kept on this phone only (looked like it was already submitted). Tap SUBMIT to check again." };
+      else if (w && w.held) lastStatus = { kind: "warn", msg: "Not sent yet: looks like this was already submitted. Choose below." };
+      else if (w) lastStatus = { kind: "warn", msg: "Saved on this phone \u2713 It will send by itself when there's signal." + (w.error ? " (Last try: " + w.error + ")" : "") };
       else if (s) lastStatus = { kind: "ok", msg: "Already sent \u2713 " + new Date(s.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) + ". This log is locked." };
     }
     paint();
@@ -230,7 +287,8 @@
 
   window.addEventListener("online", function () { flush(true); });
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") flush(false); });
-  if (queue().length) setTimeout(function () { flush(true); }, 1500);
+  if (sendable().length) setTimeout(function () { flush(true); }, 1500);
 
-  window.LogDB = { mount: mount, submit: submit, flush: flush, queue: queue, fromTryout: fromTryout, normDate: normDate, keys: K };
+  window.LogDB = { mount: mount, submit: submit, flush: flush, queue: queue, held: held, sendAnyway: sendAnyway, keep: keep,
+    fromTryout: fromTryout, normDate: normDate, keys: K };
 })();
