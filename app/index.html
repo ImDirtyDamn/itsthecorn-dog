@@ -313,6 +313,11 @@
   .s-status { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.8rem 0; margin-top: 0.6rem; min-height: 3rem; cursor: pointer;
               font-size: clamp(1.45rem, 7vw, 2.4rem); font-weight: 700; line-height: 1.15; color: var(--white); font-variant-numeric: tabular-nums; }
   .s-status.green { color: var(--fg); text-shadow: 0 0 8px rgba(57, 255, 106, 0.45); } .s-status.red { color: var(--red); }
+  /* lbs ran total + ahead/behind line: green at/ahead of pace car, amber when a little behind, red when far behind */
+  .s-status.amber { color: var(--amber); }
+  .big.pace-green, .s-n b.pace-green { color: var(--fg); }
+  .big.pace-amber, .s-n b.pace-amber { color: var(--amber); text-shadow: none; }
+  .big.pace-red, .s-n b.pace-red { color: var(--red); text-shadow: none; }
   .s-proj { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--fg-faint); padding: 0.7rem 0; min-height: 3rem; cursor: pointer; font-size: 0.95rem; color: var(--fg-dim); }
   .s-proj b { color: var(--white); font-weight: 700; }
   .s-down { display: block; width: 100%; text-align: left; background: rgba(255, 95, 86, 0.12); border: 1px solid var(--red); color: var(--red); font-weight: 700; padding: 0.5rem 0.75rem; min-height: 3rem; margin-top: 0.75rem; cursor: pointer; font-size: 0.95rem; letter-spacing: 0.04em; }
@@ -1464,6 +1469,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return c;
   }
 
+  // How far behind the pace car (lb) still counts as "a little behind" (yellow). More than this is red. About one coil.
+  var BEHIND_YELLOW_LB = 4500;
+  function paceColor(delta) { return delta == null ? "white" : delta >= 0 ? "green" : -delta <= BEHIND_YELLOW_LB ? "amber" : "red"; }
   function colorFor(pct) { return pct == null ? "white" : pct >= 0 ? "green" : pct > -5 ? "amber" : "red"; }
 
   function tick() {
@@ -1479,6 +1487,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     setText(ph, phase); setCls(ph, phCls);
 
     setText($("d-ran"), fmtInt(r.lbsRan));
+    var ranReady = !(r.paceCar == null || r.phase === "before" || r.phase === "invalid" || r.paceCar <= 0);
+    var ranCls = ranReady ? " pace-" + paceColor(r.delta) : "";
+    setCls($("d-ran"), "big glow" + ranCls);
     setText($("d-pc"), r.paceCar == null ? "—" : fmtInt(r.paceCar));
     var T = r.target;
     $("d-fill").style.width = T ? Math.min(100, r.lbsRan / T * 100) + "%" : "0";
@@ -1487,7 +1498,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     setText($("d-target"), T ? "TARGET " + fmtInt(T) + " lb" : "");
 
     // deficit / surplus
-    var col = colorFor(r.deltaPct);
+    var col = paceColor(r.delta);
     if (r.paceCar == null || r.phase === "before" || r.paceCar <= 0) {
       setText($("d-delta-lbl"), "Deficit / surplus");
       setText($("d-delta-lb"), "—"); setText($("d-delta-pct"), "");
@@ -2093,12 +2104,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
   function updateSimple(r, now) {
     setText($("s-ran"), $("d-ran").textContent);
+    setCls($("s-ran"), "glow" + (raceReady(r) ? " pace-" + paceColor(r.delta) : ""));
     setText($("s-pc"), $("d-pc").textContent);
     var T = r.target;
     $("s-fill").style.width = $("d-fill").style.width;
     $("s-mark").style.left = $("d-mark").style.left;
     setText($("s-target"), T ? "TARGET " + fmtInt(T) + " lb" : "");
     var st = raceReady(r) ? statusText(r.delta, r.deltaPct) : null;
+    if (st) st.cls = paceColor(r.delta);
     setText($("s-status"), st ? st.t : (r.phase === "before" ? "Starts when the shift starts" : r.phase === "invalid" ? "Setup incomplete · tap FULL, then EDIT SETUP" : "—"));
     setCls($("s-status"), "s-status" + (st ? " " + st.cls : ""));
     var pj = $("s-proj"); pj.textContent = "";
@@ -2273,7 +2286,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     } else if (sheetKind === "delta") {
       title = "AHEAD / BEHIND · THE MATH";
       var st = ready ? statusText(r.delta, r.deltaPct) : null;
-      var b2 = el("div", "sh-big " + (st ? st.cls : ""), st ? st.t : "—"); b2.id = "sh-delta-big"; if (st) b2.style.color = st.cls === "green" ? "var(--fg)" : "var(--red)"; body.appendChild(b2);
+      if (st) st.cls = paceColor(r.delta);
+      var b2 = el("div", "sh-big " + (st ? st.cls : ""), st ? st.t : "—"); b2.id = "sh-delta-big"; if (st) b2.style.color = st.cls === "green" ? "var(--fg)" : st.cls === "amber" ? "var(--amber)" : "var(--red)"; body.appendChild(b2);
       var dl2 = el("dl", "sh-rows");
       sRow(dl2, "Lbs ran", fmtInt(r.lbsRan) + " lb");
       sRow(dl2, "Pace car", r.paceCar == null ? "—" : fmtInt(r.paceCar) + " lb");
