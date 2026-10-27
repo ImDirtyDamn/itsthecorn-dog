@@ -284,6 +284,8 @@
   .tools { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.4rem; }
   #dash .tools .btn { min-height: 3rem; padding: 0.2rem 0.3rem; font-size: 0.78rem; letter-spacing: 0.04em; line-height: 1.15; white-space: normal; }
   #dash .top-r a.btn.calc-link { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; min-height: 3rem; padding: 0.2rem 0.8rem; text-decoration: none; font-size: 0.78rem; letter-spacing: 0.06em; white-space: nowrap; }
+  #dash .top-r a.btn.scan-link { border-color: var(--amber, #ffc23d); color: var(--amber, #ffc23d); }
+  #dash .top-r a.btn.scan-link .try { font-size: 0.62rem; letter-spacing: 0.08em; opacity: 0.85; }
   .vseg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; margin: 0; min-width: 0; }
   .tools .btn { min-width: 0; width: 100%; }
   #dash .vseg .btn { border-radius: 0; letter-spacing: 0; padding-left: 0.1rem; padding-right: 0.1rem; }
@@ -377,6 +379,7 @@
       <div class="top-r">
         <div class="clock" id="d-clock"></div>
         <a class="btn small calc-link" id="calc-link" href="calc/" aria-label="Open the production report calculator">&#9638; CALCULATOR</a>
+        <a class="btn small calc-link scan-link" id="scan-link" href="app/scan/" aria-label="Tryout: scan your paper production sheet into the tracker">SCAN SHEET <span class="try">TRY</span></a>
       </div>
       <div class="tools">
         <div class="vseg" role="group" aria-label="View">

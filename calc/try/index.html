@@ -4,6 +4,7 @@
   A one-thing-per-screen redesign of /calc/. Self-contained, no outside files.
   Saves the shift in progress to localStorage key "drawCalcTryV1" (nothing is remembered once you start a new shift).
   Reads the tracker (drawRateV5) only when you tap FILL FROM TODAY'S TRACKER, and never changes it.
+  SCAN MY SHEET (tryout): photo of the paper sheet -> /data/scan.js reads it -> review -> REPLACE or ADD (applyScan below).
   The math lives in the "calc-core" script below: a line-for-line port of production_calc.py (parity tested).
 -->
 <html lang="en">
@@ -165,7 +166,7 @@ input.flash{outline:3px solid var(--amber)}
 .calc-note{margin:.5rem 0 0;color:var(--amber);min-height:1.4em}
 html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 </style>
-<script src="/data/config.js"></script><script src="/data/submit.js"></script>
+<script src="/data/config.js"></script><script src="/data/submit.js"></script><script src="/data/scan.js"></script>
 </head>
 <body>
 <header>
@@ -859,16 +860,18 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function go(screen) { S.screen = screen; render(); }
 
   function hasProgress() {
-    return S.rows.some(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card; }) || S.shiftHours || S.slotCount || S.downtime.length;
+    return S.rows.some(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card || r.avgWgt; }) || S.shiftHours || S.slotCount || S.downtime.length;
   }
   function renderHome() {
     app.innerHTML = '<div class="home">' +
       '<button id="go-quick" type="button">AVERAGE COIL WEIGHT<small>Quick database math: Tot Avg Wgt &divide; work order coils, then &times; coils you ran</small></button>' +
       '<button id="go-log" type="button" class="solid">FILL OUT MY PRODUCTION LOG<small style="color:#000">' +
-      (hasProgress() ? "Picks up where you left off" : "One question per screen, then copy it onto the sheet") + '</small></button></div>' +
+      (hasProgress() ? "Picks up where you left off" : "One question per screen, then copy it onto the sheet") + '</small></button>' +
+      (window.SheetScan ? '<button id="go-scan" type="button" class="amber">SCAN MY SHEET<small>Take a picture of your filled-in sheet (all of it, or the shift so far) and check what it read</small></button>' : "") + '</div>' +
       '<p class="muted" style="margin-top:22px">Tryout version. The current calculator is still here:</p><a class="back" href="../" style="width:100%;justify-content:center">OPEN THE CURRENT CALCULATOR</a>';
     $("go-quick").onclick = function () { go("quick"); };
     $("go-log").onclick = function () { go("log"); };
+    if ($("go-scan")) $("go-scan").onclick = function () { S.step = 0; go("log"); openScan(); };
   }
 
   /* ---------- quick average coil weight ---------- */
@@ -937,12 +940,14 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function trackerState() { try { return JSON.parse(localStorage.getItem(TRACKER_KEY) || "null"); } catch (e) { return null; } }
   function stepCoils() {
     var t = trackerState(), html = '<h2>Your coils</h2><p class="muted">One box per work order card. Weight counts the coils you ran in.</p>';
-    if (t && t.schema === "draw-rate/v5") html += '<button class="big amber" id="fill" type="button">FILL FROM TODAY\'S TRACKER</button><div id="fill-preview"></div>';
+    if (window.SheetScan) html += '<button class="big amber" id="scan" type="button">SCAN MY SHEET (CAMERA)</button><div id="scan-host"></div>';
+    if (t && t.schema === "draw-rate/v5") html += '<button class="big amber" id="fill" type="button"' + (window.SheetScan ? ' style="margin-top:10px"' : "") + '>FILL FROM TODAY\'S TRACKER</button><div id="fill-preview"></div>';
     S.rows.forEach(function (r, i) {
       var rr = P.computeRow(r, i);
       html += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + (S.rows.length > 1 ? '<button class="xbtn" type="button" data-delrow="' + i + '" aria-label="Remove card ' + (i + 1) + '">&times;</button>' : "") + '</div>' +
         field("Card #", "r" + i + "-card", r.card, "card number", 'inputmode="numeric"') +
-        (r.actualWeights && r.actualWeights.length ? '<p class="muted">From the tracker: ' + r.actualWeights.length + ' weighed ' + (r.actualWeights.length === 1 ? "coil" : "coils") + '. ' + esc(r.note || "") + '</p>' :
+        (r.actualWeights && r.actualWeights.length ? '<p class="muted">' + (r.fromScan ? "From the sheet: " : "From the tracker: ") + r.actualWeights.length + ' weighed ' + (r.actualWeights.length === 1 ? "coil" : "coils") + '. ' + esc(r.note || "") + '</p>' :
+        r.avgWgt !== undefined && r.avgWgt !== "" ? field("Avg. Wgt. (lb, from the sheet)", "r" + i + "-avgWgt", r.avgWgt, "avg weight", 'inputmode="numeric"') :
         field("Work order Tot Avg Wgt (lb)", "r" + i + "-woTotal", r.woTotal, "Tot Avg Wgt", 'inputmode="numeric"') +
         field("Coils on the work order", "r" + i + "-woCoils", r.woCoils, "work order coils", 'inputmode="numeric"')) +
         '<div class="grid2">' + field("Coils IN", "r" + i + "-coilsDrawn", r.coilsDrawn, "coils in") +
@@ -972,7 +977,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function bindCoils() {
     S.rows.forEach(function (r, i) {
-      ["card", "woTotal", "woCoils", "coilsDrawn", "coilsOut", "finish", "grade", "compound", "package"].forEach(function (k) {
+      ["card", "avgWgt", "woTotal", "woCoils", "coilsDrawn", "coilsOut", "finish", "grade", "compound", "package"].forEach(function (k) {
         var el = $("r" + i + "-" + k); if (!el) return;
         el.addEventListener("input", function () {
           r[k] = el.value;
@@ -997,6 +1002,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     $("add-row").onclick = function () { S.rows.push(blankRow()); render(); setTimeout(function () { var el = $("r" + (S.rows.length - 1) + "-card"); el.scrollIntoView({ block: "center" }); }, 30); };
     [["h-name", "name"], ["h-date", "date"], ["h-shift", "shift"]].forEach(function (p) { $(p[0]).addEventListener("input", function (e) { S[p[1]] = e.target.value; save(); }); });
     if ($("fill")) $("fill").onclick = showFill;
+    if ($("scan")) $("scan").onclick = openScan;
+    S.rows.forEach(function (r, i) { var el = $("r" + i + "-avgWgt"); if (el) el.addEventListener("change", function () { if (!el.value.trim()) { delete r.avgWgt; render(); } }); });
   }
   function bindChips(fn) {
     app.querySelectorAll("[data-chip]").forEach(function (b) {
@@ -1030,7 +1037,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function applyFill(replace) {
     var t = fillData, before = localStorage.getItem(TRACKER_KEY);
     var rows = t.rows.map(function (x) { var r = blankRow(); r.machine = normName(x.machine); r.coilsDrawn = String(x.coilsDrawn); r.actualWeights = x.actualWeights; r.finish = x.finish || ""; r.note = x.note || ""; return r; });
-    var keep = S.rows.filter(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card || (r.actualWeights && r.actualWeights.length); });
+    var keep = keepRows();
     S.rows = replace || !keep.length ? (rows.length ? rows : [blankRow()]) : keep.concat(rows);
     var dts = t.downtime.map(function (d) { return { minutes: String(d.minutes), reason: d.reason, machine: d.machine === "All machines" ? "" : normName(d.machine), start: d.start, end: d.end }; });
     S.downtime = replace ? dts : S.downtime.concat(dts);
@@ -1052,6 +1059,61 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     }
     if (localStorage.getItem(TRACKER_KEY) !== before) console.error("tracker changed");
     render(); toast(replace ? "Filled from the tracker" : "Added from the tracker");
+  }
+
+  function keepRows() { return S.rows.filter(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card || r.avgWgt || (r.actualWeights && r.actualWeights.length); }); }
+
+  /* scan the paper sheet (tryout). Same REPLACE / ADD idea as the tracker fill:
+     REPLACE = the sheet's cards, downtime, breaks and machines take the place of what's here;
+     ADD = the sheet's cards and downtime go after what's here. Either way, boxes that are blank on the sheet don't wipe what you typed. */
+  function openScan() {
+    var host = $("scan-host"); if (!host || !window.SheetScan) return;
+    SheetScan.start(host, { onApply: applyScan,
+      actionNote: "REPLACE: the sheet takes the place of the cards, downtime and breaks here. ADD: puts the sheet\u2019s cards and downtime after what\u2019s already here." });
+  }
+  function applyScan(sc, replace) {
+    var N = SheetScan.num, str = function (x) { return x === null || x === undefined ? "" : String(x); };
+    var rows = sc.coils.map(function (c) {
+      var r = blankRow(), cin = N(c.coils_in), cout = N(c.coils_out), avg = N(c.avg_wgt), w = N(c.weight);
+      r.card = str(c.card); r.machine = SheetScan.drawName(c.machine); r.finish = str(c.finish); r.grade = str(c.grade); r.compound = str(c.compound); r.package = str(c.package);
+      if (cin !== null && cin > 0) {
+        r.coilsDrawn = str(cin);
+        if (cout !== null && cout !== cin) { r.coilsOut = str(cout); r.cut = cout === cin * 2 ? 2 : cout === cin * 3 ? 3 : 0; }
+        if (avg !== null && avg > 0) r.avgWgt = str(avg);
+        else if (w !== null && w > 0) r.avgWgt = str(Math.round(w / cin));
+      } else if (w !== null && w > 0) { r.actualWeights = [str(w)]; r.fromScan = true; r.note = "Coils drawn was blank on the sheet."; }
+      else if (avg !== null && avg > 0) r.avgWgt = str(avg);
+      return r;
+    });
+    var keep = keepRows();
+    S.rows = replace || !keep.length ? (rows.length ? rows : (replace ? [blankRow()] : S.rows)) : keep.concat(rows);
+    var dts = sc.downtime.map(function (d) { return { minutes: str(d.minutes), reason: str(d.reason), machine: SheetScan.drawName(d.machine), start: str(d.start), end: str(d.end) }; });
+    S.downtime = replace ? dts : S.downtime.concat(dts);
+    var brk = sc.breaks.map(function (b) { return { minutes: str(b.minutes), start: str(b.start) }; });
+    if (replace) S.breaks = brk; else S.breaks = S.breaks.concat(brk);
+    var set = function (k, v) { if (v && (replace || !S[k])) S[k] = v; };
+    set("name", sc.name); set("date", sc.date); set("shift", sc.shift);
+    if (sc.shift_start && (replace || !S.start)) S.start = sc.shift_start;
+    if (sc.shift_end && (replace || !S.end)) S.end = sc.shift_end;
+    deriveHours();
+    if (sc.maintenance) S.maintenance = replace || !S.maintenance ? sc.maintenance : S.maintenance + "; " + sc.maintenance;
+    var slots = sc.machines.map(function (m) {
+      var segs = m.segments.filter(function (g) { return g.machine; }).map(function (g) { return { machine: SheetScan.drawName(g.machine), from: str(g.from), to: "" }; });
+      segs.forEach(function (g, j) { if (j) { g.from = g.from || ""; segs[j - 1].to = g.from; } else g.from = ""; });
+      m.segments.forEach(function (g) { var n = SheetScan.drawName(g.machine), v = N(g.goal); if (n && v !== null && (replace || S.goals[n] === undefined || S.goals[n] === "")) S.goals[n] = str(v); });
+      return { mode: "all", minutes: "", segments: segs };
+    }).filter(function (sl) { return sl.segments.length; });
+    if (!slots.length) {
+      var ms = []; rows.forEach(function (r) { if (r.machine && ms.indexOf(r.machine) < 0) ms.push(r.machine); });
+      slots = ms.map(function (n) { var sl = blankSlot(); sl.segments[0].machine = n; return sl; });
+    }
+    if (slots.length && (replace || !S.slotCount)) {
+      S.slotCount = Math.min(2, slots.length);
+      S.slots = slots.slice(0, 2); while (S.slots.length < 2) S.slots.push(blankSlot());
+    }
+    moveOpen = {}; S.step = 0; render();
+    toast((replace ? "Filled from the sheet" : "Added from the sheet") + (slots.length > 2 ? " (only 2 machines fit here)" : ""));
+    return true;
   }
 
   /* step 2: time */

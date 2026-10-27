@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<!--
+  SCAN MY SHEET INTO THE TRACKER (tryout). Photo of the hand-filled P-310 -> /data/scan.js reads it (POST /scan)
+  -> review screen -> REPLACE or ADD writes the tracker's saved shift ("drawRateV5"). UNDO puts the old one back.
+  Looks and fits like the calculator tryout (/calc/try/): same CSS and PHONE FIT script.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* PHONE FIT: if the phone browser is set to "Request Desktop Website" it lays the page out
+   about 980px wide and shrinks it to fit, so everything looks tiny. Spot that (small touch
+   screen, much wider layout) and zoom the page back up to real phone size. */
+(function () {
+  var d = document.documentElement, last = "";
+  function fit() {
+    var key = (window.innerWidth > window.innerHeight ? "L" : "P") + screen.width + "x" + screen.height;
+    if (key === last) return; last = key;
+    d.style.zoom = ""; d.classList.remove("fit");
+    var lw = d.clientWidth || window.innerWidth, lh = d.clientHeight || window.innerHeight;
+    var sw = screen.width, sh = screen.height, dw = lw > lh ? Math.max(sw, sh) : Math.min(sw, sh);
+    if (navigator.maxTouchPoints > 0 && dw > 0 && dw < 600 && lw > dw * 1.3) {
+      var z = lw / dw;
+      d.style.zoom = z.toFixed(4); d.classList.add("fit");
+      d.style.setProperty("--fvw", (lw / z / 100).toFixed(3) + "px");
+      d.style.setProperty("--fvh", (lh / z / 100).toFixed(3) + "px");
+    }
+  }
+  fit();
+  window.addEventListener("resize", fit);
+  window.addEventListener("orientationchange", function () { last = ""; setTimeout(fit, 250); });
+})();
+</script>
+<meta name="theme-color" content="#030a03">
+<meta name="robots" content="noindex">
+<title>Scan sheet into the tracker (tryout)</title>
+<link rel="icon" href="../icons/icon-192.png">
+<style>
+:root{--bg:#030a03;--panel:#061206;--fg:#39ff6a;--fg-dim:#1f9a3e;--fg-faint:rgba(57,255,106,.16);--amber:#ffc23d;--red:#ff5f56;--white:#eaffea;--ph:#5f7a63;
+--font:"Courier New",Courier,"Noto Sans Mono","DejaVu Sans Mono","Droid Sans Mono",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;-webkit-text-size-adjust:100%}
+body{padding:0 12px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;overflow-x:hidden}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0 10px;border-bottom:1px solid var(--fg-faint)}
+h1{font-size:17px;margin:0;letter-spacing:.06em;color:var(--white);text-shadow:0 0 8px rgba(57,255,106,.4)}
+h1 small{display:block;font-size:12px;color:var(--fg-dim);letter-spacing:.04em;font-weight:normal}
+a.back{color:var(--fg);text-decoration:none;border:1px solid var(--fg-dim);padding:0 12px;min-height:48px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap}
+h2{font-size:15px;letter-spacing:.1em;color:var(--white);margin:18px 0 6px;text-transform:uppercase}
+.panel{background:var(--panel);border:1px solid var(--fg-faint);padding:12px;margin:10px 0}
+label,.lbl{display:block;font-size:13px;color:var(--fg-dim);margin:0 0 4px;letter-spacing:.04em}
+input,select,textarea{width:100%;min-height:48px;font:inherit;font-size:18px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px 10px;border-radius:0}
+textarea{font-size:16px;min-height:90px}
+input::placeholder,textarea::placeholder{color:var(--ph);opacity:1;font-size:16px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--fg);border-color:var(--fg)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.f{min-width:0;margin-bottom:10px}
+button{font:inherit;font-size:16px;min-height:48px;min-width:48px;cursor:pointer;background:#000;color:var(--fg);border:1px solid var(--fg);padding:10px 12px;letter-spacing:.05em}
+button:active{background:var(--fg);color:#000}
+button.big{width:100%;font-size:18px;font-weight:bold}
+button.solid{background:var(--fg);color:#000;font-weight:bold}
+button.warn{border-color:var(--red);color:var(--red)}
+button.amber{border-color:var(--amber);color:var(--amber)}
+button.ghost{border-color:var(--fg-dim);color:var(--fg-dim)}
+button.on{background:var(--fg);color:#000;font-weight:bold}
+.home{display:grid;gap:16px;margin-top:22px}
+.home button{min-height:120px;font-size:22px;font-weight:bold;text-align:left;padding:16px;line-height:1.25}
+.home button small{display:block;font-size:14px;font-weight:normal;margin-top:6px;color:var(--fg-dim);letter-spacing:.02em}
+.home button:active small{color:#000}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:12px 0 4px}
+.steps button{padding:4px 2px;font-size:13px;letter-spacing:0;border-color:var(--fg-faint);color:var(--fg-dim);line-height:1.15}
+.steps button.cur{border-color:var(--fg);color:var(--white);font-weight:bold;box-shadow:inset 0 -4px 0 var(--fg)}
+.steps button.done{color:var(--fg)}
+.navbar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--fg-faint);padding:10px 12px calc(10px + env(safe-area-inset-bottom));z-index:10}
+.navbar .in{max-width:616px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px}
+.navbar button{min-height:56px;font-size:18px;font-weight:bold}
+.card{border:1px solid var(--fg-faint);background:var(--panel);padding:12px;margin:10px 0}
+.cardhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.cardhead b{color:var(--white);letter-spacing:.06em}
+.xbtn{border-color:var(--red);color:var(--red);padding:0;width:48px;font-size:20px}
+.cuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.cuts button{padding:6px 2px;font-size:15px;letter-spacing:0}
+.chips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.chips button{padding:0;font-size:18px;letter-spacing:0}
+.chips button.wide{grid-column:span 5;font-size:16px}
+.live{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-top:1px dashed var(--fg-faint);padding:8px 0 0;flex-wrap:wrap}
+.live span{color:var(--fg-dim);font-size:13px}
+.live b{color:var(--white);font-size:20px}
+.muted{color:var(--fg-dim);font-size:14px;line-height:1.4}
+.hint{display:block;font-size:12px;color:var(--amber);margin-top:3px}
+details>summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:var(--fg-dim);letter-spacing:.05em}
+.num{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--fg-faint);background:var(--panel);padding:12px;margin:8px 0;min-height:72px;letter-spacing:0}
+.num span{color:var(--fg-dim);font-size:14px;line-height:1.3}
+.num span i{display:block;font-style:normal;font-size:12px;color:var(--ph)}
+.num b{color:var(--white);font-size:28px;white-space:nowrap}
+.num.key b{font-size:34px;color:var(--fg);text-shadow:0 0 10px rgba(57,255,106,.5)}
+.num:active{background:var(--fg-faint);color:var(--fg)}
+.banner{display:block;width:100%;text-align:left;margin:12px 0;padding:14px 12px;border:2px solid var(--fg);font-weight:bold;font-size:20px;color:var(--fg);background:#000;letter-spacing:.03em}
+.banner small{display:block;font-weight:normal;font-size:14px;margin-top:4px;color:var(--white)}
+.banner.notmet{border-color:var(--red);color:var(--red)}
+.banner.incomplete{border-color:var(--amber);color:var(--amber)}
+.warnbox{color:var(--amber);font-size:15px;line-height:1.4;padding-left:20px;margin:6px 0}
+.slot{border:1px solid var(--fg-dim);padding:12px;margin:12px 0;background:var(--panel)}
+.slot>b{display:block;color:var(--white);letter-spacing:.06em;margin-bottom:8px}
+.seg{border-top:1px dashed var(--fg-faint);padding-top:10px;margin-top:10px}
+.runchoice{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.runchoice button{padding:4px 2px;font-size:15px;letter-spacing:0}
+.tl{display:flex;min-height:52px;border:1px solid var(--fg-dim);margin:6px 0 2px;background:#000}
+.tl button{min-width:0;flex:1 1 0;white-space:normal;line-height:1.1;border:0;border-right:2px solid var(--bg);padding:0 4px;font-size:14px;letter-spacing:0;overflow:hidden;background:var(--fg-faint);color:var(--white)}
+.tl button.alt{background:rgba(255,194,61,.22)}
+.tl button.gap{background:transparent;color:var(--ph)}
+.tlx{display:flex;justify-content:space-between;color:var(--fg-dim);font-size:12px;margin-bottom:8px}
+.movebox{border:1px dashed var(--amber);padding:10px;margin:10px 0}
+.count{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.count button{min-height:72px;font-size:22px;font-weight:bold}
+.drow{border:1px dashed var(--fg-faint);padding:10px;margin:0 0 10px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.overlay[hidden]{display:none}
+.sheet{background:var(--bg);border:1px solid var(--fg);border-bottom:0;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;padding:14px 14px calc(18px + env(safe-area-inset-bottom))}
+.sheet .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.sheet .top b{color:var(--white);font-size:17px}
+.sheet .big{font-size:34px;color:var(--fg);margin:4px 0 8px;text-shadow:0 0 10px rgba(57,255,106,.5)}
+ol.math{padding-left:26px;margin:8px 0}
+ol.math li{margin:0 0 12px;line-height:1.4;color:var(--white);font-size:17px;overflow-wrap:anywhere}
+ol.math li.bad{color:var(--red);font-weight:bold}
+ol.math li.good{color:var(--fg);font-weight:bold}
+.sheetview{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:20;padding:0 14px calc(30px + env(safe-area-inset-bottom))}
+.sheetview[hidden]{display:none}
+.svtop{position:sticky;top:0;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--fg-faint)}
+.svtop b{color:var(--white);font-size:16px}
+.svline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--fg-faint);flex-wrap:wrap}
+.svline span{color:var(--fg-dim);font-size:16px}
+.svline b{color:var(--white);font-size:24px;text-align:right;overflow-wrap:anywhere}
+.svline.big b{font-size:32px;color:var(--fg)}
+.sheetview h3{color:var(--fg-dim);font-size:14px;letter-spacing:.1em;margin:18px 0 4px}
+.sheetview h3.bad{color:var(--red)}
+.svrow{border:1px solid var(--fg-faint);padding:8px;margin:8px 0}
+.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cells div{min-width:0;overflow-wrap:anywhere}
+.cells i{display:block;font-style:normal;color:var(--fg-dim);font-size:12px}
+.cells b{color:var(--white);font-size:18px}
+.svlist{font-size:20px;color:var(--white);padding-left:24px;line-height:1.45}
+.svp{font-size:20px;color:var(--white)}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw;z-index:40}
+body.noscroll{overflow:hidden}
+.trybadge{color:var(--amber);font-size:12px;letter-spacing:.08em}
+/* clock-time inputs: copied from the tracker's setup screen (.in, .lbl, .field, .row2, .break-row, .sub) */
+.field{margin-bottom:1.25rem;min-width:0}
+.field>label{display:block;margin-bottom:.4rem}
+label.lbl,.field .lbl{color:var(--amber);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase}
+input.in{width:100%;min-width:0;height:3.25rem;min-height:0;padding:0 .85rem;background:#000;color:var(--white);border:2px solid var(--fg-dim);border-radius:3px;
+font-family:var(--font);font-size:1.25rem;font-variant-numeric:tabular-nums;color-scheme:dark;-webkit-appearance:none;appearance:none}
+input.in:focus{outline:none;border-color:var(--fg);box-shadow:0 0 10px rgba(57,255,106,.35)}
+input.in::placeholder{color:rgba(57,255,106,.35);font-size:1.25rem}
+
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
+.break-row{display:grid;grid-template-columns:minmax(0,1fr) 6rem 3.25rem;gap:.5rem;margin-bottom:.6rem;align-items:end}
+.break-row .field{margin-bottom:0}
+.break-row .btn{min-height:3.25rem;height:3.25rem;padding:0;border:2px solid var(--red);border-radius:3px;color:var(--red);font-weight:700;letter-spacing:.08em}
+.field .sub,p.sub{color:var(--fg-dim);font-size:.85rem;margin:.4rem 0 0}
+input.flash{outline:3px solid var(--amber)}
+.help{color:var(--fg-dim);margin:0 0 1.5rem}
+.calc-note{margin:.5rem 0 0;color:var(--amber);min-height:1.4em}
+html.fit .sheet{max-height:calc(var(--fvh) * 85)}
+</style>
+<script src="/data/config.js"></script><script src="/data/scan.js"></script>
+</head>
+<body>
+<header>
+  <h1>SCAN MY SHEET<small>into the tracker <span class="trybadge">TRYOUT</span></small></h1>
+  <a class="back" href="../">&larr; TRACKER</a>
+</header>
+<main id="app"></main>
+<div class="toast" id="toast"></div>
+<script>
+/* Tryout: photo of the hand-filled P-310 -> review -> writes the tracker's saved shift (localStorage "drawRateV5").
+   Only writes after REPLACE or ADD. The tracker as it was is kept in "drawRateV5_beforeScan" so UNDO can put it back.
+   The tracker page itself is not changed; it just loads the new data next time it opens.
+   Each card becomes "coils drawn" coils at the sheet's Avg. Wgt. (or the card weight split evenly), logged at the time
+   you tap REPLACE/ADD (or the shift end, if the shift is already over), because the paper has no time per coil. */
+(function () {
+  "use strict";
+  var KEY = "drawRateV5", BACKUP = "drawRateV5_beforeScan", SCHEMA = "draw-rate/v5", MAX_MACHINES = 6, DEFAULT_RATE = 2800;
+  var $ = function (id) { return document.getElementById(id); }, app = $("app");
+  function esc(s) { return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 2200); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function todayStr() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function uid(p) { return p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function iso(ms) { return new Date(ms).toISOString(); }
+  function load() { try { var t = JSON.parse(localStorage.getItem(KEY) || "null"); return t && t.schema === SCHEMA && t.shift && Array.isArray(t.machines) ? t : null; } catch (e) { return null; } }
+  function clockMin(c) { return SheetScan.isClock(c) ? +c.slice(0, 2) * 60 + +c.slice(3) : null; }
+  function fmt12(c) { var m = clockMin(c); if (m === null) return ""; var h = Math.floor(m / 60), mm = m % 60; return (h % 12 || 12) + ":" + pad(mm) + (h < 12 ? "a" : "p"); }
+  function fmtLb(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  /* clock on the shift: times earlier than the start are the next morning */
+  function at(date, start, clock) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date), c = clockMin(clock), s = clockMin(start);
+    if (!m || c === null) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3], Math.floor(c / 60), c % 60, 0, 0);
+    if (s !== null && c < s) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  }
+  function sameMachine(a, b) { return SheetScan.drawName(a).toLowerCase() === SheetScan.drawName(b).toLowerCase(); }
+
+  function home(done) {
+    var t = load(), h = "";
+    if (done) h += '<div class="panel" style="border-color:var(--fg)"><b style="color:var(--fg);font-size:18px">' + esc(done) + '</b>' +
+      '<p class="muted">Open the tracker to see it. Changed your mind? UNDO puts the tracker back how it was.</p>' +
+      '<a class="back" href="../" style="width:100%;justify-content:center;background:var(--fg);color:#000;font-weight:bold">OPEN THE TRACKER</a>' +
+      '<button id="undo" type="button" class="warn big" style="margin-top:10px">UNDO</button></div>';
+    h += '<p class="muted" style="margin-top:16px">Take a picture of your filled-in production sheet: the whole shift, or the shift so far. You check everything it read before anything goes into the tracker.</p>';
+    if (t) {
+      var n = t.coils.length, lb = t.coils.reduce(function (a, c) { return a + (+c.weight || 0); }, 0);
+      h += '<div class="panel"><b style="color:var(--white)">In the tracker now:</b><ul class="muted" style="padding-left:20px;margin:6px 0 0">' +
+        '<li>' + esc(t.shift.date || "") + (t.shift.start ? ", " + fmt12(t.shift.start) + (t.shift.end ? " to " + fmt12(t.shift.end) : "") : "") + (t.shift.operator ? ", " + esc(t.shift.operator) : "") + '</li>' +
+        '<li>' + t.machines.map(function (m) { return esc(m.name) + " @ " + fmtLb(m.needRate) + " lb/hr"; }).join(", ") + '</li>' +
+        '<li>' + n + (n === 1 ? " coil, " : " coils, ") + fmtLb(lb) + ' lb' + (t.downtime.length ? ", " + t.downtime.length + " downtime" : "") + '</li></ul></div>';
+    } else h += '<p class="muted">The tracker is empty on this phone, so the sheet will start a new shift.</p>';
+    h += '<button id="scan" type="button" class="big amber" style="margin-top:6px">SCAN MY SHEET (CAMERA)</button><div id="scan-host"></div>';
+    if (!done && localStorage.getItem(BACKUP) !== null) h += '<button id="undo" type="button" class="warn big" style="margin-top:22px">UNDO THE LAST SCAN</button>';
+    app.innerHTML = h;
+    $("scan").onclick = function () {
+      var cur = load();
+      SheetScan.start($("scan-host"), { onApply: apply,
+        endNote: cur && cur.shift.end ? "Shift end blank = keep the tracker\u2019s " + fmt12(cur.shift.end) + "." : "The tracker needs a shift end. Type it if the sheet doesn\u2019t have it yet.",
+        actionNote: "REPLACE: start the tracker over from this sheet. ADD: add the sheet\u2019s cards and downtime to the tracker\u2019s shift." +
+          " Coils go in at the time you tap, since the sheet has no time per coil." });
+    };
+    if ($("undo")) $("undo").onclick = undo;
+  }
+  function undo() {
+    var b = localStorage.getItem(BACKUP);
+    if (b === null) { toast("Nothing to undo"); return; }
+    if (b === "") localStorage.removeItem(KEY); else localStorage.setItem(KEY, b);
+    localStorage.removeItem(BACKUP); home(); toast("Tracker put back");
+  }
+
+  function apply(sc, replace) {
+    var cur = load(), now = Date.now(), N = SheetScan.num;
+    if (!replace && !cur) replace = true;
+    var base = replace ? null : cur;
+    var sh = base ? JSON.parse(JSON.stringify(base.shift)) : { id: uid("s"), date: "", operator: "", start: "", end: "", breakMode: "total", breakTotalMin: 0, breaks: [], createdAt: iso(now) };
+    var fill = function (k, v) { if (v && (replace || !sh[k])) sh[k] = v; };
+    fill("date", sc.date); fill("operator", sc.name); fill("start", sc.shift_start); fill("end", sc.shift_end);
+    if (!sh.date) sh.date = cur && cur.shift.date ? cur.shift.date : todayStr();
+    if (!sh.start && cur) sh.start = cur.shift.start;
+    if (!sh.end && cur && cur.shift.end && (!sc.shift_start || sc.shift_start === cur.shift.start)) sh.end = cur.shift.end;
+    if (!SheetScan.isClock(sh.start)) { toast("Type the shift start"); focus("sc-shift_start"); return false; }
+    if (!SheetScan.isClock(sh.end) || sh.end === sh.start) { toast("Type the shift end. The tracker needs it."); focus("sc-shift_end"); return false; }
+    // breaks
+    var brk = sc.breaks.filter(function (b) { return N(b.minutes) > 0; });
+    if (brk.length) {
+      var timed = brk.every(function (b) { return SheetScan.isClock(b.start); });
+      if (timed) {
+        var list = brk.map(function (b) { return { id: uid("b"), start: b.start, minutes: N(b.minutes) }; });
+        if (!replace && sh.breakMode === "list") sh.breaks = sh.breaks.concat(list); else { sh.breakMode = "list"; sh.breaks = list; }
+      } else { sh.breakMode = "total"; sh.breakTotalMin = (replace || sh.breakMode !== "total" ? 0 : +sh.breakTotalMin || 0) + brk.reduce(function (a, b) { return a + N(b.minutes); }, 0); sh.breaks = []; }
+    } else if (replace) { sh.breakMode = "total"; sh.breakTotalMin = 0; sh.breaks = []; }
+    sh.updatedAt = iso(now);
+
+    // machines: the sheet's machine line first, then any machine named on a card or downtime
+    var machines = base ? JSON.parse(JSON.stringify(base.machines)) : [];
+    var goals = {}, order = [];
+    var want = function (n, g) { if (!n) return; var k = SheetScan.drawName(n); if (order.indexOf(k) < 0) order.push(k); if (N(g) > 0) goals[k] = N(g); };
+    sc.machines.forEach(function (m) { m.segments.forEach(function (g) { want(g.machine, g.goal); }); });
+    sc.coils.forEach(function (c) { want(c.machine); }); sc.downtime.forEach(function (d) { want(d.machine); });
+    var skipped = [];
+    var find = function (n) { for (var i = 0; i < machines.length; i++) if (sameMachine(machines[i].name, n)) return machines[i]; return null; };
+    order.forEach(function (n) {
+      var m = find(n), isNew = !m;
+      if (!m && replace && cur) { var old = null; cur.machines.forEach(function (x) { if (sameMachine(x.name, n)) old = x; }); if (old) { m = { id: old.id, slot: 0, name: old.name, needRate: old.needRate, timerStartedAt: null, timerAccumMs: 0 }; machines.push(m); } }
+      if (!m) { if (machines.length >= MAX_MACHINES) { skipped.push(n); return; } m = { id: uid("m"), slot: 0, name: n, needRate: DEFAULT_RATE, timerStartedAt: null, timerAccumMs: 0 }; machines.push(m); }
+      if (goals[n] && (replace || isNew)) m.needRate = goals[n];   // ADD keeps the tracker's need rates for machines it already has
+    });
+    if (!machines.length) machines.push(cur && cur.machines[0] ? { id: cur.machines[0].id, slot: 1, name: cur.machines[0].name, needRate: cur.machines[0].needRate, timerStartedAt: null, timerAccumMs: 0 } : { id: uid("m"), slot: 1, name: "Machine 1", needRate: DEFAULT_RATE, timerStartedAt: null, timerAccumMs: 0 });
+    machines.forEach(function (m, i) { m.slot = i + 1; });
+    var defaultMachine = order.length ? find(order[0]) || machines[0] : machines[0];
+
+    // when the coils were made: now, but inside the shift
+    var s0 = at(sh.date, sh.start, sh.start), s1 = at(sh.date, sh.start, sh.end);
+    if (s1 !== null && s0 !== null && s1 <= s0) s1 += 86400000;
+    var when = Math.max(s0 || now, Math.min(now, s1 || now));
+    var coils = base ? base.coils.slice() : [], lbs = 0, count = 0, noWeight = [];
+    sc.coils.forEach(function (c, i) {
+      var m = (c.machine && find(c.machine)) || defaultMachine, cin = N(c.coils_in), avg = N(c.avg_wgt), w = N(c.weight);
+      var n = cin !== null && cin >= 1 ? Math.round(cin) : 1;
+      var each = avg !== null && avg > 0 ? avg : (w !== null && w > 0 ? w / n : null);
+      if (each === null) { noWeight.push(i + 1); return; }
+      var note = ["From the scanned sheet", c.grade ? "grade " + c.grade : "", c.compound ? "compound " + c.compound : "", c.package ? "package " + c.package : "", c.coils_text && c.coils_text !== String(n) ? "coils " + c.coils_text : ""].filter(Boolean).join(", ");
+      for (var k = 0; k < n; k++) {
+        coils.push({ id: uid("c"), machineId: m.id, loggedAt: iso(when + count), weight: Math.round(each * 10) / 10, coilNo: String(c.card || "").slice(0, 40), heatNo: "", size: String(c.finish || "").slice(0, 40), notes: note, downtimeMin: null, downtimeReason: "" });
+        count++; lbs += each;
+      }
+    });
+    var downtime = base ? base.downtime.slice() : [];
+    sc.downtime.forEach(function (d) {
+      var m = d.machine ? find(d.machine) : null, a = at(sh.date, sh.start, d.start), b = at(sh.date, sh.start, d.end), mins = N(d.minutes);
+      if (a !== null && b !== null && b <= a) b += 86400000;
+      if (a === null || b === null) { if (!(mins > 0)) return; b = b !== null ? b : (a !== null ? a + mins * 60000 : when); a = b - mins * 60000; }
+      downtime.push({ id: uid("d"), machineId: m ? m.id : "all", loggedAt: iso(b), startAt: iso(a), endAt: iso(b), minutes: (b - a) / 60000, reason: String(d.reason || "").slice(0, 200) });
+    });
+    var st = { schema: SCHEMA, setupDone: true, shift: sh, machines: machines, coils: coils, downtime: downtime, settings: cur && cur.settings ? cur.settings : undefined };
+    var before = localStorage.getItem(KEY);
+    try { localStorage.setItem(BACKUP, before === null ? "" : before); localStorage.setItem(KEY, JSON.stringify(st)); }
+    catch (e) { toast("Couldn't save on this phone"); return false; }
+    var msg = (replace ? "Tracker started from the sheet: " : "Added to the tracker: ") + count + (count === 1 ? " coil, " : " coils, ") + fmtLb(lbs) + " lb";
+    if (noWeight.length) msg += ". Card " + noWeight.join(", ") + " had no weight, so it was skipped";
+    if (skipped.length) msg += ". No room for " + skipped.join(", ") + " (6 machines max)";
+    home(msg + ".");
+    return true;
+  }
+  function focus(id) { var el = $(id); if (el) { el.scrollIntoView({ block: "center" }); el.classList.add("scan-unclear"); el.focus(); } }
+
+  home();
+})();
+</script>
+</body>
+</html>
