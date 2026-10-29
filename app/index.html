@@ -448,6 +448,21 @@
   html.fit .delta { font-size: clamp(1.7rem, calc(var(--fvw) * 8), 2.6rem); }
   html.fit .dock .rb-w { font-size: clamp(2.2rem, calc(var(--fvw) * 11), 3rem); }
   html.fit #wizard { min-height: calc(var(--fvh) * 100 - 2.25rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  /* master log */
+  .ml-bar { display: flex; align-items: center; gap: 0.6rem; margin: 0 0 0.9rem; padding: 0.45rem 0.6rem 0.45rem 0.75rem; border: 1px solid var(--fg-dim); font-size: 0.9rem; line-height: 1.35; }
+  .ml-bar[hidden] { display: none; }
+  .ml-bar .ml-msg { flex: 1; min-width: 0; }
+  .ml-bar .btn { flex: none; min-height: 2.5rem; padding: 0.3rem 0.7rem; font-size: 0.85rem; }
+  .ml-bar.ok { color: var(--fg); border-color: var(--fg); }
+  .ml-bar.warn { color: var(--amber); border-color: var(--amber); }
+  .ml-bar.warn .btn { border-color: var(--amber); color: var(--amber); }
+  .ml-bar.bad { color: var(--red); border-color: var(--red); }
+  .ml-bar.bad .btn { border-color: var(--red); color: var(--red); }
+  .actions .ml-send { grid-column: 1 / -1; }
+  .ml-line { margin: 0 0 0.35rem; color: var(--white); font-size: 0.95rem; }
+  #ml { z-index: 46; }
+  #ml .ldb .ldb-show { background: transparent; color: var(--fg); border: 2px solid var(--fg); border-radius: 3px; font-family: inherit; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
+  #ml .ldb .ldb-show:active { background: var(--fg); color: #000; }
 </style>
 </head>
 <body>
@@ -473,6 +488,7 @@
       <span class="wz-step" id="wz-step"></span>
     </div>
     <div class="wz-progress"><div id="wz-bar"></div></div>
+    <div class="ml-bar" id="ml-bar-w" hidden role="status" aria-live="polite"><span class="ml-msg"></span><button type="button" class="btn small">OPEN</button></div>
     <h2 id="wz-title"></h2>
     <p id="wz-help" class="help"></p>
     <div id="wz-body"></div>
@@ -504,6 +520,7 @@
         <button type="button" class="btn small" id="dt-open">DOWNTIME</button>
       </div>
     </header>
+    <div class="ml-bar" id="ml-bar-d" hidden role="status" aria-live="polite"><span class="ml-msg"></span><button type="button" class="btn small">OPEN</button></div>
 
     <section id="simple" class="simple" aria-label="Simple view">
       <button type="button" class="s-down" id="s-down" hidden></button>
@@ -576,6 +593,7 @@
     </section>
 
     <div class="actions">
+      <button type="button" class="btn ml-send" id="btn-ml">SEND TO MASTER LOG</button>
       <button type="button" class="btn" id="btn-edit">EDIT SETUP</button>
       <button type="button" class="btn warn" id="btn-new">NEW SHIFT</button>
     </div>
@@ -600,6 +618,13 @@
   <div class="rb-w" id="rb-w"></div>
   <div class="rb-act"><button type="button" class="btn solid" id="rb-undo">UNDO</button><button type="button" class="btn" id="rb-fix">FIX / RECENT</button><button type="button" class="btn" id="rb-x" aria-label="Hide">OK</button></div>
 </div>
+<div class="sheet" id="ml" hidden role="dialog" aria-modal="true" aria-labelledby="ml-title">
+  <div class="sheet-box" id="ml-box">
+    <h2 class="sheet-title" id="ml-title">MASTER LOG</h2>
+    <div class="sheet-body" id="ml-body"></div>
+    <button type="button" class="btn solid sheet-close" id="ml-close">CLOSE</button>
+  </div>
+</div>
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-title">
   <div class="sheet-box" id="sheet-box">
     <h2 class="sheet-title" id="sheet-title"></h2>
@@ -613,6 +638,8 @@
     <div class="ask-btns"><button type="button" class="btn solid" id="ask-yes">Yes, log it</button><button type="button" class="btn warn" id="ask-no">Fix it</button></div>
   </div>
 </div>
+<script src="/data/config.js"></script>
+<script src="/data/submit.js"></script>
 <script>
 /* =====================================================================
    CALC MODULE - every number on the dashboard comes from Calc.compute().
@@ -1801,7 +1828,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   });
   $("btn-edit").addEventListener("click", function () { openWizard(true); });
   $("btn-new").addEventListener("click", function () {
-    if (!window.confirm("Start a new shift? This clears today's coils and downtime. Your schedule and machines stay as defaults.")) return;
+    var has = mlHasData();
+    if (!window.confirm("Start a new shift? This clears today's coils and downtime. Your schedule and machines stay as defaults." +
+      (has ? "\n\nThis shift is sent to the master log first. With no signal it stays saved on this phone and sends later." : ""))) return;
+    var ask = false, sentKey = null;
+    if (has) { try { ask = !mlCredsReady(); sentKey = mlBase(); mlSend(false); } catch (e) {} }   // queued before anything is cleared
     var now = Date.now();
     state.coils = []; state.downtime = [];
     state.shift.id = uid("s"); state.shift.date = todayStr(); state.shift.createdAt = iso(now);
@@ -1809,6 +1840,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     state.setupDone = false; editingCoil = null;
     save();
     openWizard(false);
+    if (ask) mlOpen("first", sentKey);
   });
 
   /* ========================= DOWNTIME (by weight) ========================= */
@@ -2417,13 +2449,215 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   $("dock-in").addEventListener("input", function () { if ($("dock-msg").className.indexOf("red") >= 0) dockMsg(""); });
   window.addEventListener("resize", sizeDock);
 
+  /* ========================= MASTER LOG (send the shift to the log database) =========================
+     NEW SHIFT packages the finished shift in the master-log format and hands it to LogDB (/data/submit.js),
+     which keeps it in this phone's outbox until the server has it. One stable id per shift ("T" + shift id,
+     versioned -v1, -v2 ...): sending a changed shift again replaces the earlier version instead of adding one. */
+  var ML_DT_MAX = 40, ML_COIL_MAX = 150;
+  function mlBase(st) { return ("T" + String((st || state).shift.id || "")).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 58); }
+  function mlHasData(st) { st = st || state; return st.coils.length > 0 || st.downtime.length > 0; }
+  function mlClock(ms) { var d = new Date(ms); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function mlR(n, d) { if (n == null || !isFinite(n)) return null; var f = Math.pow(10, d || 0); return Math.round(n * f) / f; }
+  function mlDraw(name) {
+    var s = String(name || ""), m = /\bdraw\s*#?\s*([1-9])\b/i.exec(s) || /^\s*(?:dr?|#)\s*([1-9])\s*$/i.exec(s) || /^\s*([1-9])\s*$/.exec(s);
+    return m ? Number(m[1]) : null;
+  }
+  function mlName(m) { return String(m && m.name || "").slice(0, 30); }
+  function masterLogPayload(st, now) {
+    var s = st.shift, r = Calc.compute(st, now), done = r.phase === "after", H = 3600000;
+    var byId = {}; st.machines.forEach(function (m, i) { byId[m.id] = { m: m, i: i, r: r.machines[i] || {} }; });
+    var clockOf = function (v) { var c = Calc.parseClock(v); return c ? pad(c.h) + ":" + pad(c.m) : ""; };
+    var W = r.workedTotalMs || 0, w = r.workedSoFarMs || 0, span = done ? W : w;
+    var breaks = s.breakMode === "list"
+      ? s.breaks.slice(0, 12).map(function (b) { return { start: clockOf(b.start), minutes: isNum(b.minutes) ? b.minutes : null }; })
+      : (s.breakTotalMin > 0 ? [{ start: "", minutes: s.breakTotalMin }] : []);
+    var slots = [];
+    st.machines.forEach(function (m, i) {
+      var mr = r.machines[i] || {}, downMs = done ? (mr.downMs || 0) : (m.needRate > 0 ? (mr.downSoFarLb || 0) / m.needRate * H : 0);
+      var seg = { machine: mlName(m), draw: mlDraw(m.name), from: clockOf(s.start), to: clockOf(s.end), goal: isNum(m.needRate) ? m.needRate : null,
+        run_hours: r.workedTotalMs != null ? mlR(Math.min(24, Math.max(0, (span - downMs) / H)), 2) : null,
+        goal_lbs: mr.target != null ? mlR(Math.max(0, done ? mr.target : mr.paceCar), 0) : null };
+      var si = Math.min(i, 1);                       // the master log has 2 machine slots; machines 3+ ride along in slot 2
+      if (!slots[si]) slots[si] = { segments: [] };
+      if (slots[si].segments.length < 6) slots[si].segments.push(seg);
+    });
+    var coils = st.coils.slice().sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }).slice(0, ML_COIL_MAX).map(function (c) {
+      var m = (byId[c.machineId] || {}).m;
+      return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? mlDraw(m.name) : null };
+    });
+    var downtime = [], problems = [];
+    st.downtime.slice().sort(function (a, b) { return Date.parse(a.startAt) - Date.parse(b.startAt); }).forEach(function (d) {
+      var m = d.machineId === "all" ? null : (byId[d.machineId] || {}).m, a = Date.parse(d.startAt), b = d.endAt ? Date.parse(d.endAt) : now;
+      var mins = d.minutes != null && isNum(d.minutes) ? d.minutes : Math.max(0, (b - a) / 60000);
+      var name = d.machineId === "all" ? "All machines" : mlName(m);
+      downtime.push({ machine: name, draw: m ? mlDraw(m.name) : null, start: isFinite(a) ? mlClock(a) : "", end: isFinite(b) ? mlClock(b) : "",
+        minutes: mlR(Math.min(1440, mins), 1), reason: str(d.reason || "", 300) });
+      problems.push(name + ": " + mlR(mins, 0) + " min down" + (d.reason ? ", " + d.reason : "") + (isFinite(a) ? " (" + mlClock(a) + " to " + (d.endAt ? mlClock(b) : "still down at " + mlClock(b)) + ")" : ""));
+    });
+    st.coils.forEach(function (c) {                  // downtime typed on a coil (older entries)
+      if (!(c.downtimeMin > 0)) return;
+      var m = (byId[c.machineId] || {}).m, name = mlName(m);
+      downtime.push({ machine: name, draw: m ? mlDraw(m.name) : null, start: "", end: "", minutes: mlR(Math.min(1440, c.downtimeMin), 1), reason: str(c.downtimeReason || "", 300) });
+      problems.push(name + ": " + mlR(c.downtimeMin, 0) + " min down" + (c.downtimeReason ? ", " + c.downtimeReason : ""));
+    });
+    if (st.machines.length > 2) problems.push("Ran " + st.machines.length + " machines; machines 3 to " + st.machines.length + " are listed under machine slot 2.");
+    if (!done) problems.push("Sent before the shift ended (" + fmtClock(now) + "); goals are as of then.");
+    var minDown = Infinity; r.machines.forEach(function (mr, i) {
+      var m = st.machines[i]; var dm = done ? (mr.downMs || 0) : (m.needRate > 0 ? (mr.downSoFarLb || 0) / m.needRate * H : 0); minDown = Math.min(minDown, dm);
+    });
+    if (!isFinite(minDown)) minDown = 0;
+    var net = r.workedTotalMs != null ? Math.max(0, (span - minDown) / H) : null;
+    var goalLbs = r.target != null ? (done ? r.target : r.paceCar) : null;
+    return {
+      v: 1,
+      shift: { date: s.date, operator: str(s.operator || "", 60), shift: "", start: clockOf(s.start), end: clockOf(s.end) },
+      breaks: breaks, machines: slots, coils: coils, downtime: downtime.slice(0, ML_DT_MAX),
+      totals: { total_lbs: mlR(r.lbsRan, 1), net_hours: net != null ? mlR(Math.min(24, net), 2) : null, goal_lbs: goalLbs != null ? mlR(Math.max(0, goalLbs), 0) : null,
+        goal_lbhr: r.rateSum != null ? mlR(r.rateSum, 2) : null, avg_lbhr: net > 0 ? mlR(r.lbsRan / net, 1) : null,
+        goal_met: done && r.target != null ? r.lbsRan >= r.target : null },
+      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "",
+      raw: { source: "tracker", page: location.pathname, complete: done, phase: r.phase, sent_at: iso(now),
+        state: { shift: st.shift, machines: st.machines, coils: st.coils, downtime: st.downtime, settings: st.settings } }
+    };
+  }
+
+  // fallback when /data/submit.js didn't load (first open with no signal): park the log in the same outbox it uses
+  function mlNextId(id) { var m = /^(.*)-v(\d+)$/.exec(id); return m ? m[1] + "-v" + (+m[2] + 1) : id + "-v2"; }
+  function mlFallback(p, base, okMsg) {
+    try {
+      var q = JSON.parse(localStorage.getItem("logdbQueueV1") || "[]"), sent = JSON.parse(localStorage.getItem("logdbSentV1") || "[]");
+      if (!p.shift.operator) p.shift.operator = JSON.parse(localStorage.getItem("logdbOperator") || '""') || "";
+      var w = q.filter(function (o) { return o.key === base; })[0], last = sent.filter(function (o) { return o.key === base; })[0];
+      if (w) { p.id = w.id; if (w.replaces) p.replaces = w.replaces; p.created_at = iso(Date.now()); w.payload = p; w.hash = ""; w.nextAt = 0; w.rejected = null; }
+      else {
+        var id = last ? mlNextId(last.id) : base + "-v1"; p.id = id; p.created_at = iso(Date.now()); if (last) p.replaces = last.id;
+        var it = { id: id, key: base, hash: "", queuedAt: Date.now(), tries: 0, nextAt: 0, keep: true, okMsg: okMsg, payload: p };
+        if (last) it.replaces = last.id;
+        q.push(it);
+      }
+      localStorage.setItem("logdbQueueV1", JSON.stringify(q));
+      mlLocal = { kind: "warn", at: Date.now(), msg: "Saved on this phone \u2713 It sends the next time this opens with signal." };
+    } catch (e) { mlLocal = { kind: "bad", at: Date.now(), msg: "Couldn't save the log on this phone (storage full or blocked)." }; }
+    mlPaint();
+  }
+  var mlLocal = null;
+  function mlSend(manual) {
+    if (!mlHasData()) { if (mlMode) mlSum(); return Promise.resolve("empty"); }
+    var p; try { p = masterLogPayload(state, Date.now()); } catch (e) { mlLocal = { kind: "bad", at: Date.now(), msg: "Couldn't package this shift: " + e.message }; mlPaint(); return Promise.resolve("error"); }
+    var okMsg = !manual ? "Last shift sent to the master log" : (p.raw.complete ? "Shift sent to the master log" : "Shift so far sent to the master log");
+    mlLocal = null;
+    if (window.LogDB && LogDB.enqueue) return LogDB.enqueue(p, { base: mlBase(), manual: !!manual, okMsg: okMsg });
+    mlFallback(p, mlBase(), okMsg + " \u2713"); return Promise.resolve("queued");
+  }
+  function mlCredsReady() {
+    if (!window.LogDB) return true;                  // can't ask without the send code; the outbox waits
+    var x = LogDB.stats(); return x.hasCode && !x.badCode && !!(str(state.shift.operator || "", 60).trim() || x.operator);
+  }
+
+  /* status line (wizard + dashboard) */
+  var mlLast = { st: null, x: null };
+  function mlCounts() {
+    if (window.LogDB) return LogDB.stats();
+    var q = []; try { q = JSON.parse(localStorage.getItem("logdbQueueV1") || "[]"); } catch (e) {}
+    return { pending: q.length, held: 0, kept: 0, rejected: 0, total: q.length, lastSent: null, badCode: false };
+  }
+  function mlPaint() {
+    var st = window.LogDB ? mlLast.st : null, x = mlCounts(), now = Date.now();
+    if (mlLocal && !window.LogDB) st = mlLocal;
+    if (mlLocal && window.LogDB) { st = mlLocal; }
+    var fresh = st && (st.at == null || now - st.at < 15 * 60000), kind = "", msg = "", btn = "OPEN", n = x.pending;
+    var waiting = n ? " " + n + (n === 1 ? " log" : " logs") + " waiting to send." : "";
+    if (x.held) { kind = "warn"; msg = "Not sent: looks like this was already submitted."; btn = "CHOOSE"; }
+    else if (x.badCode && x.total) { kind = "bad"; msg = "Crew code is wrong. Your log is saved on this phone." + waiting; btn = "FIX"; }
+    else if (st && st.kind === "bad" && fresh && (x.total || mlLocal)) { kind = "bad"; msg = st.msg; btn = x.total ? "FIX" : "OPEN"; }
+    else if (n) { kind = "warn"; msg = (st && st.kind === "warn" && fresh ? st.msg : "Saved, will send when online.") + waiting; btn = "VIEW"; }
+    else if (x.rejected) { kind = "bad"; msg = x.rejected + (x.rejected === 1 ? " log" : " logs") + " the master log turned down, kept on this phone."; btn = "VIEW"; }
+    else if (x.kept) { kind = "warn"; msg = x.kept + (x.kept === 1 ? " log" : " logs") + " kept on this phone, not sent."; btn = "VIEW"; }
+    else if (st && st.kind === "ok" && fresh) { kind = "ok"; msg = st.msg; }
+    else if (x.lastSent && /^T/.test(x.lastSent.key || "") && now - Date.parse(x.lastSent.at) < 18 * 3600000) {
+      kind = "ok"; msg = "Last shift sent to the master log \u2713 " + fmtClockDay(Date.parse(x.lastSent.at), now);
+    }
+    ["ml-bar-w", "ml-bar-d"].forEach(function (id) {
+      var b = $(id); if (!b) return;
+      b.hidden = !kind; setCls(b, "ml-bar " + kind);
+      setText(b.querySelector(".ml-msg"), msg); setText(b.querySelector(".btn"), btn);
+    });
+    var sb = $("btn-ml"); if (sb) sb.disabled = false;
+  }
+  if (window.LogDB) {
+    LogDB.setLabels({ go: "SEND TO MASTER LOG", word: "SEND" });
+    LogDB.onChange(function (st, x) { if (st && st !== mlLast.st && st.at == null) st.at = Date.now(); mlLast = { st: st, x: x }; if (st) mlLocal = null; mlPaint(); if (mlMode) mlSum(); });
+  }
+  setInterval(mlPaint, 30000);
+
+  /* the master-log panel */
+  var mlMode = null, mlKey = null;
+  function mlQueued(key) { return window.LogDB ? LogDB.queue().filter(function (o) { return o.key === key; })[0] : null; }
+  function mlSum() {
+    var box = $("ml-sum"); if (!box) return;
+    box.textContent = "";
+    if (mlMode === "send") {
+      var c = state.coils.length, lb = 0; state.coils.forEach(function (x) { lb += x.weight; });
+      var r = Calc.compute(state, Date.now());
+      box.appendChild(el("p", "ml-line", "THIS SHIFT: " + (function (d) { var p = Calc.parseDate(d); return p ? p.mo + "/" + p.d : d; })(state.shift.date) + " · " + fmtHHMM(state.shift.start) + " – " + fmtHHMM(state.shift.end) +
+        " · " + c + (c === 1 ? " coil" : " coils") + " · " + fmtLb(lb) + " lb" + (state.downtime.length ? " · " + state.downtime.length + " downtime" : "")));
+      box.appendChild(el("p", "sh-sub", !mlHasData() ? "Nothing to send yet: log a coil or downtime first."
+        : r.phase === "after" ? "The shift is over, so this sends the whole shift. NEW SHIFT also sends it by itself."
+        : "The shift isn't over, so this sends what you have so far. NEW SHIFT sends the finished shift and replaces this one."));
+    } else if (mlMode === "first") {
+      box.appendChild(el("p", "ml-line", "The shift you just finished is saved on this phone."));
+      box.appendChild(el("p", "sh-sub", "Type your name and the crew code once. This phone remembers them, and from now on NEW SHIFT sends the finished shift by itself."));
+    } else {
+      var q = window.LogDB ? LogDB.queue() : [];
+      if (!q.length) box.appendChild(el("p", "sh-sub", "Nothing waiting on this phone."));
+      q.forEach(function (o) {
+        var p = o.payload || {}, sh = p.shift || {}, t = p.totals || {};
+        var why = o.held ? (o.held.kept ? "kept, not sent" : "looks already submitted") : o.rejected ? "turned down: " + o.rejected.error : o.error ? "waiting (" + o.error + ")" : "waiting";
+        box.appendChild(el("p", "ml-line", (sh.date || "?") + " · " + (sh.operator || "no name yet") + (t.total_lbs != null ? " · " + fmtLb(t.total_lbs) + " lb" : "") + " · " + why));
+      });
+    }
+  }
+  function mlOpen(mode, key) {
+    mlMode = mode; mlKey = key || mlBase();
+    if (mode === "queue" && window.LogDB) { var first = LogDB.queue()[0]; if (first) mlKey = first.key; }
+    setText($("ml-title"), mode === "first" ? "SEND THE SHIFT YOU JUST FINISHED" : "MASTER LOG");
+    var body = $("ml-body"); body.textContent = "";
+    var sum = el("div", "ml-sum"); sum.id = "ml-sum"; body.appendChild(sum);
+    mlSum();
+    if (!window.LogDB) {
+      body.appendChild(el("p", "note", "The sending part didn't load (no signal?). Logs stay saved on this phone and send the next time this opens with signal."));
+    } else {
+      var k = mlKey;
+      LogDB.mount(body, mode === "send" ? function () { return mlHasData() ? masterLogPayload(state, Date.now()) : null; }
+        : function () { var it = mlQueued(k); return it ? it.payload : null; }, {
+        title: mode === "first" ? "YOUR NAME AND CREW CODE" : "SEND TO MASTER LOG", go: mode === "first" ? "SEND IT" : "SEND TO MASTER LOG", key: k,
+        send: function () { if (mode === "send") mlSend(true); else LogDB.flush("manual"); }
+      });
+    }
+    $("ml").hidden = false;
+    try { $("ml-box").scrollTop = 0; } catch (e) {}
+    if (mode === "first") { var op = body.querySelector("#ldb-op"), cd = body.querySelector("#ldb-code"); var f = op && !op.value ? op : cd; if (f) try { f.focus({ preventScroll: true }); } catch (e) {} }
+  }
+  function mlClose() { $("ml").hidden = true; mlMode = null; $("ml-body").textContent = ""; mlPaint(); }
+  $("ml-close").addEventListener("click", mlClose);
+  $("ml").addEventListener("click", function (e) { if (e.target === $("ml")) mlClose(); });
+  document.addEventListener("keydown", function (e) { if (mlMode && e.key === "Escape") mlClose(); });
+  ["ml-bar-w", "ml-bar-d"].forEach(function (id) { var b = $(id); if (b) b.querySelector(".btn").addEventListener("click", function () { mlOpen(mlCounts().total ? "queue" : "send"); }); });
+  $("btn-ml").addEventListener("click", function () {
+    var ready = window.LogDB && mlHasData() && mlCredsReady();
+    mlOpen("send");
+    if (ready) mlSend(true);
+  });
+  mlPaint();
+
   /* ---------- start ---------- */
   applyView();
   if (state.setupDone) { $("dash").hidden = false; buildDashboard(); tick(); }
   else openWizard(false);
   setInterval(tick, 1000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
-  window.__drawRate = { state: function () { return state; }, compute: function (now) { return Calc.compute(state, now || Date.now()); } };
+  window.__drawRate = { state: function () { return state; }, compute: function (now) { return Calc.compute(state, now || Date.now()); },
+    masterLog: function (now) { return masterLogPayload(state, now || Date.now()); }, masterLogBase: function () { return mlBase(); } };
 })();
 </script>
 <script>

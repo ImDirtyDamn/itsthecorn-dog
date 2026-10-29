@@ -12,11 +12,18 @@
    If the server says a log looks like one already in the master log (409: same operator, date, Draw and
    overlapping hours), the log is held on the phone and a "Looks like this was already submitted" box asks:
    SEND ANYWAY (resend with force: true) or DON'T SEND (keep it on the phone, nothing sent). Held logs are
-   never sent by the background retry; the box comes back the next time the sheet view is opened. */
+   never sent by the background retry; the box comes back the next time the sheet view is opened.
+
+   The Draw Rate tracker uses LogDB.enqueue(payload, { base: "T<shift id>" }) instead of submit(): no questions asked,
+   the log id is "<base>-v1" (stable for that shift, so retries and double taps are stored once). If the shift is
+   changed after it was sent, the next send is "<base>-v2" with replaces: "<base>-v1" and the server swaps the old
+   one out (see /submit in the Worker). Tracker logs the server turns down (400) stay on the phone, marked rejected.
+   A wrong crew code (401) is remembered so the background retry stops until the code is changed. */
 (function () {
   "use strict";
-  var K = { op: "logdbOperator", code: "logdbCrewCode", queue: "logdbQueueV1", sent: "logdbSentV1" };
-  var busy = false, timer = null, mounted = null, lastStatus = null;
+  var K = { op: "logdbOperator", code: "logdbCrewCode", queue: "logdbQueueV1", sent: "logdbSentV1", badCode: "logdbBadCodeV1" };
+  var busy = false, timer = null, mounted = null, lastStatus = null, listeners = [];
+  var labels = { go: "SUBMIT TO MASTER LOG", word: "SUBMIT" };
 
   function api() { return String(window.LOGDB_API_BASE || "").replace(/\/+$/, ""); }
   function get(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
@@ -101,23 +108,49 @@
   /* ---------- outbox ---------- */
   function queue() { return get(K.queue, []); }
   function shiftKey(p) { return [p.shift.date, (p.shift.operator || "").toLowerCase(), p.shift.shift, p.shift.start].join("|"); }
-  function contentHash(p) { var c = {}; Object.keys(p).forEach(function (k) { if (k !== "id" && k !== "created_at") c[k] = p[k]; }); return hash(JSON.stringify(c)); }
-  function markSent(item, at) {
-    var sent = get(K.sent, []).filter(function (s) { return s.id !== item.id; });
-    sent.unshift({ id: item.id, key: item.key, hash: item.hash, at: at }); put(K.sent, sent.slice(0, 30));
+  /* What counts as "the same log": everything but the ids and times. A tracker log's raw copy of the phone's
+     state changes on every save, so it is left out too (the rest of the log already holds what it says). */
+  function contentHash(p) {
+    var tracker = p.raw && p.raw.source === "tracker", c = {};
+    Object.keys(p).forEach(function (k) { if (k !== "id" && k !== "created_at" && k !== "replaces" && k !== "force" && !(tracker && k === "raw")) c[k] = p[k]; });
+    return hash(JSON.stringify(c));
   }
-  function status(kind, msg) { lastStatus = { kind: kind, msg: msg }; paint(); }
+  function nextId(id) { var m = /^(.*)-v(\d+)$/.exec(id); return m ? m[1] + "-v" + (+m[2] + 1) : id + "-v2"; }
+  function markSent(item, at, h) {
+    var sent = get(K.sent, []).filter(function (s) { return s.id !== item.id; });
+    sent.unshift({ id: item.id, key: item.key, hash: h || item.hash, at: at }); put(K.sent, sent.slice(0, 30));
+  }
+  function status(kind, msg) { lastStatus = { kind: kind, msg: msg, at: Date.now() }; paint(); }
+  function canSend(o) { return !o.held && !o.rejected; }
+  function stats() {
+    var q = queue(), sent = get(K.sent, []);
+    return { pending: q.filter(canSend).length, held: q.filter(function (o) { return o.held && !o.held.kept; }).length,
+      kept: q.filter(function (o) { return o.held && o.held.kept; }).length, rejected: q.filter(function (o) { return o.rejected && !o.held; }).length,
+      total: q.length, busy: busy, lastSent: sent[0] || null, hasCode: !!get(K.code, ""), operator: get(K.op, ""),
+      badCode: !!get(K.code, "") && get(K.badCode, "") === hash(get(K.code, "")) };
+  }
+  function notify() { var st = stats(); listeners.forEach(function (fn) { try { fn(lastStatus, st); } catch (e) {} }); }
 
+  /* force: true = also items still waiting out a retry delay; "manual" = a person tapped a button (also tries a
+     crew code that failed before). */
   function flush(force) {
     if (busy) return Promise.resolve();
     var q = queue(), now = Date.now();
-    var due = q.filter(function (it) { return !it.held && (force || !it.nextAt || it.nextAt <= now); });
-    if (!due.length) { schedule(); return Promise.resolve(); }
+    var due = q.filter(function (it) { return canSend(it) && (force || !it.nextAt || it.nextAt <= now); });
+    if (!due.length) { schedule(); notify(); return Promise.resolve(); }
     var code = get(K.code, "");
-    if (!code) { status("bad", "Type the crew code, then tap SUBMIT."); return Promise.resolve(); }
+    if (!code) { status("bad", "Type the crew code, then tap " + labels.word + ". (Your log is saved on this phone.)"); return Promise.resolve(); }
+    if (force !== "manual" && get(K.badCode, "") === hash(code)) { status("bad", "Crew code is wrong. Fix it and tap " + labels.word + " again. (Your log is saved on this phone.)"); return Promise.resolve(); }
     if (!api() || /REPLACE-ME/.test(api())) { status("bad", "Master log address not set up yet."); return Promise.resolve(); }
-    busy = true; paint();
     var it = due[0];
+    if (!txt(it.payload.shift && it.payload.shift.operator, 60)) {      // queued before a name was typed
+      var who = txt(get(K.op, ""), 60);
+      if (!who) { status("bad", "Type your name, then tap " + labels.word + ". (Your log is saved on this phone.)"); return Promise.resolve(); }
+      it.payload.shift.operator = who; it.hash = contentHash(it.payload);
+      put(K.queue, q.map(function (o) { return o.id === it.id ? it : o; }));
+    }
+    busy = true; paint();
+    var sentHash = it.hash;
     var body = it.force ? Object.assign({}, it.payload, { force: true }) : it.payload;
     return fetch(api() + "/submit", { method: "POST", headers: { "Content-Type": "application/json", "X-Crew-Code": code },
       body: JSON.stringify(body), credentials: "omit", cache: "no-store" })
@@ -125,9 +158,20 @@
       .then(function (x) {
         var r = x.r, j = x.j, rest = queue();
         if (r.ok && j.ok) {
-          put(K.queue, rest.filter(function (o) { return o.id !== it.id; }));
-          markSent(it, j.submitted_at || new Date().toISOString());
-          status("ok", (j.duplicate ? "Already in the master log" : "Sent to the master log") + " \u2713 " + hhmm(new Date()) + ". It's locked now.");
+          put(K.badCode, "");
+          markSent(it, j.submitted_at || new Date().toISOString(), sentHash);
+          var cur = rest.filter(function (o) { return o.id === it.id; })[0];
+          if (cur && cur.hash !== sentHash && cur.key) {
+            // changed while it was on its way: send the newer version as an update of the one just stored
+            var nid = nextId(it.id);
+            cur.payload = Object.assign({}, cur.payload, { id: nid, replaces: it.id }); cur.id = nid; cur.replaces = it.id;
+            cur.tries = 0; cur.nextAt = 0; cur.force = false;
+            put(K.queue, rest);
+          } else put(K.queue, rest.filter(function (o) { return o.id !== it.id; }));
+          var when = " \u2713 " + hhmm(new Date());
+          status("ok", j.duplicate ? "Already in the master log" + when + (it.okMsg ? "" : ". It's locked now.")
+            : it.replaces ? (j.replaced === false ? (it.okMsg || "Sent to the master log") : "Update sent to the master log") + when
+            : it.okMsg ? it.okMsg + when : "Sent to the master log" + when + ". It's locked now.");
           return "next";
         }
         if (r.status === 409 && j.possible_duplicate) {
@@ -135,10 +179,18 @@
           status("warn", "Not sent yet: looks like this was already submitted. Choose below.");
           return "next";
         }
-        if (r.status === 401) { status("bad", "Crew code is wrong. Fix it and tap SUBMIT again. (Your log is saved on this phone.)"); return "stop"; }
+        if (r.status === 401) {
+          put(K.badCode, hash(code));
+          status("bad", "Crew code is wrong. Fix it and tap " + labels.word + " again. (Your log is saved on this phone.)"); return "stop";
+        }
         if (r.status === 400 || r.status === 413) {
-          put(K.queue, rest.filter(function (o) { return o.id !== it.id; }));
-          status("bad", "Not sent: " + (j.error || "the log has a problem") + " Fix it and tap SUBMIT again.");
+          if (it.keep) {     // tracker log: the phone has nothing else, so never throw it away
+            put(K.queue, rest.map(function (o) { if (o.id === it.id) o.rejected = { error: j.error || ("server said " + r.status), at: Date.now() }; return o; }));
+            status("bad", "The master log turned this log down: " + (j.error || "it has a problem.") + " It's kept on this phone.");
+          } else {
+            put(K.queue, rest.filter(function (o) { return o.id !== it.id; }));
+            status("bad", "Not sent: " + (j.error || "the log has a problem") + " Fix it and tap " + labels.word + " again.");
+          }
           return "stop";
         }
         var wait = r.status === 429 ? (Number(r.headers.get("Retry-After")) || 900) * 1000 : backoff(it);
@@ -156,7 +208,7 @@
   function bump(it, wait, err) {
     put(K.queue, queue().map(function (o) { if (o.id === it.id) { o.tries = (o.tries || 0) + 1; o.nextAt = Date.now() + wait; o.error = err; } return o; }));
   }
-  function sendable() { return queue().filter(function (o) { return !o.held; }); }
+  function sendable() { return queue().filter(canSend); }
   function held() { return queue().filter(function (o) { return o.held; }); }
   /* SEND ANYWAY: stored as a new log even though it looks like one already there. */
   function sendAnyway(id) {
@@ -164,7 +216,7 @@
     put(K.queue, queue().map(function (o) { if (o.id === id) { hit = true; o.held = null; o.force = true; o.nextAt = 0; } return o; }));
     if (!hit) return Promise.resolve("gone");
     status("warn", "Sending\u2026");
-    return flush(true).then(function () { return lastStatus && lastStatus.kind; });
+    return flush("manual").then(function () { return lastStatus && lastStatus.kind; });
   }
   /* DON'T SEND: stays on this phone, never sent by itself. Tapping SUBMIT again on that shift asks the server again. */
   function keep(id) {
@@ -202,7 +254,44 @@
       put(K.queue, q);
     }
     status("warn", "Sending\u2026");
-    return flush(true).then(function () { return lastStatus && lastStatus.kind; });
+    return flush("manual").then(function () { return lastStatus && lastStatus.kind; });
+  }
+
+  /* For the Draw Rate tracker: queue (or update) this shift's log under a stable id and start sending.
+     Never asks anything and never drops the log. opts: base (required, one per shift), manual (a person tapped
+     SEND: also re-asks a held "looks already submitted" log and retries a turned-down one), okMsg. */
+  function enqueue(p, opts) {
+    opts = opts || {};
+    var base = String(opts.base || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 58);
+    if (base.length < 6) return Promise.resolve("error");
+    if (!txt(p.shift.operator, 60)) p.shift.operator = txt(get(K.op, ""), 60);
+    var h = contentHash(p), q = queue(), now = new Date().toISOString();
+    var waiting = q.filter(function (o) { return o.key === base; })[0];
+    var last = get(K.sent, []).filter(function (s) { return s.key === base; })[0];
+    if (waiting) {
+      var changed = waiting.hash !== h;
+      waiting.payload = Object.assign({}, p, { id: waiting.id, created_at: now }, waiting.replaces ? { replaces: waiting.replaces } : {});
+      waiting.hash = h; waiting.nextAt = 0; waiting.keep = true; if (opts.okMsg) waiting.okMsg = opts.okMsg;
+      if (opts.manual) { if (waiting.held) { waiting.held = null; waiting.force = false; } waiting.rejected = null; }
+      else if (changed) waiting.rejected = null;
+    } else if (last && last.hash === h) {
+      status("ok", "Already in the master log \u2713 (sent " + hhmm(new Date(last.at)) + ")");
+      return Promise.resolve("already");
+    } else {
+      var id = last ? nextId(last.id) : base + "-v1";
+      var item = { id: id, key: base, hash: h, queuedAt: Date.now(), tries: 0, nextAt: 0, keep: true, okMsg: opts.okMsg || "",
+        payload: Object.assign({}, p, { id: id, created_at: now }) };
+      if (last) { item.replaces = last.id; item.payload.replaces = last.id; }
+      q.push(item);
+    }
+    put(K.queue, q);
+    status("warn", "Saved on this phone \u2713 Sending\u2026");
+    return flush(opts.manual ? "manual" : true).then(function () { return lastStatus && lastStatus.kind; });
+  }
+  function saveCreds(op, code) {
+    if (op !== undefined && op !== null) put(K.op, txt(op, 60));
+    if (code !== undefined && code !== null) put(K.code, String(code).trim());
+    notify();
   }
 
   /* ---------- UI ---------- */
@@ -224,13 +313,15 @@
     ".ldb .dup .any{background:var(--amber,#ffc23d);color:#000;border:0}.ldb .dup .no{background:#000;color:var(--fg,#39ff6a);border:2px solid var(--fg,#39ff6a)}";
   function focus(id) { var e = document.getElementById(id); if (e) e.focus(); }
   function paint() {
+    notify();
     if (!mounted || !document.body.contains(mounted.el)) return;
     var b = mounted.el.querySelector(".go"), st = mounted.el.querySelector(".st"), qn = mounted.el.querySelector(".q");
-    b.disabled = busy; b.textContent = busy ? "SENDING\u2026" : "SUBMIT TO MASTER LOG";
+    b.disabled = busy; b.textContent = busy ? "SENDING\u2026" : (mounted.go || labels.go);
     st.className = "st" + (lastStatus ? " " + lastStatus.kind : ""); st.textContent = lastStatus ? lastStatus.msg : "";
-    var n = sendable().length, kept = held().filter(function (o) { return o.held.kept; }).length;
+    var x = stats(), n = x.pending, kept = x.kept, rej = x.rejected;
     qn.textContent = (n ? n + (n === 1 ? " log" : " logs") + " waiting on this phone to send. " : "") +
-      (kept ? kept + (kept === 1 ? " log" : " logs") + " kept on this phone, not sent." : "");
+      (kept ? kept + (kept === 1 ? " log" : " logs") + " kept on this phone, not sent. " : "") +
+      (rej ? rej + (rej === 1 ? " log" : " logs") + " the master log turned down, kept on this phone." : "");
     var box = mounted.el.querySelector(".dup"), it = held().filter(function (o) { return !o.held.kept; })[0];
     if (!it || busy) { if (box) box.remove(); return; }
     if (box && box.dataset.id === it.id) return;
@@ -254,41 +345,53 @@
   }
   function day(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); return m ? +m[2] + "/" + +m[3] + "/" + m[1].slice(2) : (iso || "\u2013"); }
   function clock12(v) { var m = /^(\d{2}):(\d{2})$/.exec(v || ""); if (!m) return v || ""; var h = +m[1]; return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " AM" : " PM"); }
-  function mount(container, getPayload) {
+  /* opts (all optional): go = button text, send = what the button does instead of submit(getPayload),
+     key = the outbox key of this log (tracker), title. */
+  function mount(container, getPayload, opts) {
+    opts = opts || {};
     if (!document.getElementById("ldb-css")) { var s = document.createElement("style"); s.id = "ldb-css"; s.textContent = CSS; document.head.appendChild(s); }
     var p = null; try { p = getPayload(); } catch (e) {}
     var el = document.createElement("div"); el.className = "ldb";
-    el.innerHTML = '<h4>SEND TO MASTER LOG</h4>' +
+    el.innerHTML = '<h4>' + esc(opts.title || "SEND TO MASTER LOG") + '</h4>' +
       '<div class="f"><label for="ldb-op">Your name</label><input id="ldb-op" autocomplete="name" placeholder="your name" maxlength="60" value="' + esc(get(K.op, "") || (p && p.shift.operator) || "") + '"></div>' +
       '<div class="f"><label for="ldb-code">Crew code</label><div class="row"><input id="ldb-code" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="crew code" value="' + esc(get(K.code, "")) + '">' +
       '<button type="button" class="ldb-show">SHOW</button></div></div>' +
-      '<button type="button" class="go">SUBMIT TO MASTER LOG</button><div class="st" role="status" aria-live="polite"></div><div class="q"></div>';
+      '<button type="button" class="go">' + esc(opts.go || labels.go) + '</button><div class="st" role="status" aria-live="polite"></div><div class="q"></div>';
     container.appendChild(el);
-    mounted = { el: el };
+    mounted = { el: el, go: opts.go || "" };
     var op = el.querySelector("#ldb-op"), cd = el.querySelector("#ldb-code");
     op.addEventListener("input", function () { put(K.op, op.value.trim()); });
     cd.addEventListener("input", function () { put(K.code, cd.value.trim()); });
     el.querySelector(".ldb-show").onclick = function () { var t = cd.type === "password"; cd.type = t ? "text" : "password"; this.textContent = t ? "HIDE" : "SHOW"; };
-    el.querySelector(".go").onclick = function () { put(K.op, op.value.trim()); put(K.code, cd.value.trim()); submit(getPayload); };
+    el.querySelector(".go").onclick = function () {
+      put(K.op, op.value.trim()); put(K.code, cd.value.trim());
+      if (opts.send) opts.send(); else submit(getPayload);
+    };
     // show where this shift stands right now
     if (!busy) lastStatus = null;
     if (p && !busy) {
-      var key = shiftKey(Object.assign({}, p, { shift: Object.assign({}, p.shift, { operator: get(K.op, "") || p.shift.operator }) }));
+      var key = opts.key || shiftKey(Object.assign({}, p, { shift: Object.assign({}, p.shift, { operator: get(K.op, "") || p.shift.operator }) }));
       var s = get(K.sent, []).filter(function (x) { return x.key === key; })[0];
       var w = queue().filter(function (x) { return x.key === key; })[0];
-      if (w && w.held && w.held.kept) lastStatus = { kind: "warn", msg: "Not sent. Kept on this phone only (looked like it was already submitted). Tap SUBMIT to check again." };
+      if (w && w.held && w.held.kept) lastStatus = { kind: "warn", msg: "Not sent. Kept on this phone only (looked like it was already submitted). Tap " + labels.word + " to check again." };
       else if (w && w.held) lastStatus = { kind: "warn", msg: "Not sent yet: looks like this was already submitted. Choose below." };
+      else if (w && w.rejected) lastStatus = { kind: "bad", msg: "The master log turned this log down: " + w.rejected.error + " It's kept on this phone. Tap " + labels.word + " to try again." };
       else if (w) lastStatus = { kind: "warn", msg: "Saved on this phone \u2713 It will send by itself when there's signal." + (w.error ? " (Last try: " + w.error + ")" : "") };
-      else if (s) lastStatus = { kind: "ok", msg: "Already sent \u2713 " + new Date(s.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) + ". This log is locked." };
+      else if (s) lastStatus = { kind: "ok", msg: "Already sent \u2713 " + new Date(s.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) +
+        (opts.key ? ". Log more and it sends the update." : ". This log is locked.") };
     }
     paint();
     return el;
   }
+
+  function onChange(fn) { listeners.push(fn); try { fn(lastStatus, stats()); } catch (e) {} }
+  function setLabels(l) { Object.keys(l || {}).forEach(function (k) { labels[k] = l[k]; }); }
 
   window.addEventListener("online", function () { flush(true); });
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") flush(false); });
   if (sendable().length) setTimeout(function () { flush(true); }, 1500);
 
   window.LogDB = { mount: mount, submit: submit, flush: flush, queue: queue, held: held, sendAnyway: sendAnyway, keep: keep,
-    fromTryout: fromTryout, normDate: normDate, keys: K };
+    enqueue: enqueue, saveCreds: saveCreds, stats: stats, onChange: onChange, setLabels: setLabels, nextId: nextId,
+    status: function () { return lastStatus; }, fromTryout: fromTryout, normDate: normDate, keys: K };
 })();
