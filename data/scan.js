@@ -3,7 +3,7 @@
    The photo is shrunk on the phone (about 1600 px, JPEG), sent once to POST /scan, and never saved anywhere.
    Nothing is filled in until the operator taps REPLACE or ADD on the review screen.
 
-   SheetScan.start(hostEl, { onApply: function (scan, replace) {}, intro: "html above the review" })
+   SheetScan.start(hostEl, { onApply: function (scan, replace) {}, intro: "html above the review", applyLabel: "one button instead of REPLACE / ADD" })
      opens the camera, then shows progress, errors and the review inside hostEl.
    SheetScan.input()  -> markup for the hidden camera input (put it once in the page; start() makes one if missing).
    scan shape (all strings or numbers, blank = not on the sheet):
@@ -188,20 +188,21 @@
 
   function review(c) {
     var d = c.data, s = d.scan, o = c.opts, h = '<div class="scan-review" id="scan-review">';
-    h += '<h2 style="margin-top:6px">Check what was read</h2><p class="muted" style="margin-top:0">Fix anything that\u2019s wrong. Nothing is filled in until you tap REPLACE or ADD. Blank = not on the sheet yet.</p>';
+    h += '<h2 style="margin-top:6px">Check what was read</h2><p class="muted" style="margin-top:0">Fix anything that\u2019s wrong. Nothing is filled in until you tap ' + esc(o.applyLabel || "REPLACE or ADD") + '. Blank = not on the sheet yet.</p>';
     var nf = Object.keys(d.flags || {}).length;
     if (nf) h += '<div class="scan-legend"><span><i></i>hard to read</span><span><i class="c"></i>math doesn\u2019t add up</span></div>';
     if (d.checks && d.checks.length) h += '<ul class="warnbox">' + d.checks.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ul>';
     if (o.intro) h += o.intro;
 
-    h += '<h3>Top of the sheet</h3><div class="panel">' + tbox("name", "Name", s.name, "your name") +
+    var full = !o.coilsOnly;   // coilsOnly: just the cards (the average coil weight tool)
+    if (full) h += '<h3>Top of the sheet</h3><div class="panel">' + tbox("name", "Name", s.name, "your name") +
       '<div class="grid2">' + tbox("date", "Date", s.date, "date") + tbox("shift", "Shift", s.shift, "shift, like 1st") + '</div>' +
       '<div class="row2">' + clockbox("shift_start", "Shift start", s.shift_start) + clockbox("shift_end", "Shift end", s.shift_end) + '</div>' +
       (o.endNote ? '<p class="sub" style="margin-top:-8px">' + o.endNote + '</p>' : "") + '</div>';
 
-    h += '<h3>Machines and need rates</h3>';
-    if (!s.machines.length) h += '<p class="muted">None on the sheet.</p>';
-    s.machines.forEach(function (sl, si) {
+    if (full) h += '<h3>Machines and need rates</h3>';
+    if (full && !s.machines.length) h += '<p class="muted">None on the sheet.</p>';
+    if (full) s.machines.forEach(function (sl, si) {
       h += '<div class="card"><div class="cardhead"><b>MACHINE ' + (si + 1) + '</b>' + xbtn("m", si, "machine " + (si + 1)) + '</div>';
       sl.segments.forEach(function (sg, j) {
         var p = "machines." + si + ".segments." + j;
@@ -224,9 +225,9 @@
         '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound") + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
     });
 
-    h += '<h3>Downtime</h3>';
-    if (!s.downtime.length) h += '<p class="muted">None on the sheet.</p>';
-    s.downtime.forEach(function (x, i) {
+    if (full) h += '<h3>Downtime</h3>';
+    if (full && !s.downtime.length) h += '<p class="muted">None on the sheet.</p>';
+    if (full) s.downtime.forEach(function (x, i) {
       var p = "downtime." + i;
       h += '<div class="card"><div class="cardhead"><b>DOWNTIME ' + (i + 1) + '</b>' + xbtn("d", i, "downtime " + (i + 1)) + '</div>' +
         '<div class="row2">' + clockbox(p + ".start", "Started at", x.start) + clockbox(p + ".end", "Ended at", x.end) + '</div>' +
@@ -234,28 +235,29 @@
         tbox(p + ".reason", "Reason", x.reason, "what happened, like die change") + '</div>';
     });
 
-    h += '<h3>Breaks</h3>';
-    if (!s.breaks.length) h += '<p class="muted">None on the sheet.</p>';
-    s.breaks.forEach(function (b, i) {
+    if (full) h += '<h3>Breaks</h3>';
+    if (full && !s.breaks.length) h += '<p class="muted">None on the sheet.</p>';
+    if (full) s.breaks.forEach(function (b, i) {
       var p = "breaks." + i;
       h += '<div class="break-row">' + clockbox(p + ".start", "Break " + (i + 1) + " start", b.start) +
         '<div class="field"><label class="lbl" for="sc-breaks-' + i + '-minutes">Minutes</label><input class="in' + mark(p + ".minutes").cls + '" type="number" id="sc-breaks-' + i + '-minutes" data-p="' + p + '.minutes" value="' + esc(v(b.minutes)) + '" placeholder="min" inputmode="numeric" min="1" step="5"></div>' +
         '<button type="button" class="btn warn" data-scdel="b-' + i + '" aria-label="Remove break ' + (i + 1) + '">X</button></div>';
     });
 
-    h += '<h3>Maintenance</h3><div class="f"><label for="sc-maintenance">Maintenance issues to follow up on</label><textarea id="sc-maintenance" data-p="maintenance" placeholder="maintenance issues">' + esc(s.maintenance) + '</textarea></div>';
+    if (full) h += '<h3>Maintenance</h3><div class="f"><label for="sc-maintenance">Maintenance issues to follow up on</label><textarea id="sc-maintenance" data-p="maintenance" placeholder="maintenance issues">' + esc(s.maintenance) + '</textarea></div>';
     var t = s.totals || {}, said = [];
     if (t.total_weight !== "") said.push("Total Weight " + t.total_weight);
     if (t.hours !== "") said.push("Hours " + t.hours);
     if (t.goal_lbhr !== "") said.push("Goal " + t.goal_lbhr + " lb/hr");
     if (t.avg_lbhr !== "") said.push("Average " + t.avg_lbhr + " lb/hr");
-    if (said.length || s.problems) h += '<div class="panel"><b style="color:var(--white)">Also written on the sheet (for checking, not filled in):</b>' +
+    if (full && (said.length || s.problems)) h += '<div class="panel"><b style="color:var(--white)">Also written on the sheet (for checking, not filled in):</b>' +
       (said.length ? '<p class="muted' + (flagOf("totals.total_weight") ? '" style="color:var(--amber)' : "") + '">' + esc(said.join(" \u00b7 ")) + '</p>' : "") +
       (s.problems ? '<p class="muted" style="white-space:pre-wrap">' + esc(s.problems) + '</p>' : "") + '</div>';
     h += '<p class="muted" style="font-size:12px">Read by ' + esc(String(d.model || "").split("/").pop()) + ' in ' + Math.round((d.ms || 0) / 1000) + ' s. The photo is not saved.</p>';
 
     h += (o.actionNote ? '<p class="muted" style="margin:14px 0 0;font-size:13px">' + o.actionNote + '</p>' : "") +
-      '<div class="scan-actions"><div class="grid2"><button id="scan-replace" type="button" class="solid">REPLACE</button><button id="scan-add" type="button">ADD</button></div></div>' +
+      (o.applyLabel ? '<div class="scan-actions"><button id="scan-replace" type="button" class="solid big">' + esc(o.applyLabel) + '</button></div>'
+        : '<div class="scan-actions"><div class="grid2"><button id="scan-replace" type="button" class="solid">REPLACE</button><button id="scan-add" type="button">ADD</button></div></div>') +
       '<button id="scan-cancel" type="button" class="warn big" style="margin-top:4px">CANCEL</button></div>';
     c.host.innerHTML = h;
     document.body.classList.add("scan-open");
@@ -282,7 +284,7 @@
       if (ok !== false) { host.innerHTML = ""; cur = null; } else document.body.classList.add("scan-open");
     };
     host.querySelector("#scan-replace").onclick = function () { apply(true); };
-    host.querySelector("#scan-add").onclick = function () { apply(false); };
+    if (host.querySelector("#scan-add")) host.querySelector("#scan-add").onclick = function () { apply(false); };
     host.scrollIntoView({ block: "start" });
   }
   function shiftFlags(c, kind, i) {
