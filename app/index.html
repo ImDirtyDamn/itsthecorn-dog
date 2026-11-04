@@ -355,7 +355,11 @@
   /* ================= PHONE APP LAYER (PWA) ================= */
   html { touch-action: manipulation; }
   html, body { max-width: 100%; overflow-x: hidden; }
-  body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+  /* scroll fix: "hidden" on body made it a scroll box of its own, and with overscroll "contain" on it
+     a finger swipe got stuck on the body and never reached the page. "clip" trims the sides the same
+     way without making a scroll box, and the no-bounce setting lives on html, where it belongs. */
+  html { overscroll-behavior-y: contain; }
+  body { overflow-x: clip; -webkit-tap-highlight-color: transparent; }
   .wrap {
     max-width: 30rem;
     padding: calc(0.75rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
