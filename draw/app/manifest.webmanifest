@@ -1,10 +1,10 @@
 {
-  "id": "/app/",
+  "id": "/draw/app/",
   "name": "Draw Rate Tracker",
   "short_name": "Draw Rate",
   "description": "Lbs ran vs the pace car, ahead/behind, and finish projection for the draw line. Works offline.",
-  "start_url": "/app/",
-  "scope": "/app/",
+  "start_url": "/draw/app/",
+  "scope": "/draw/app/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#030a03",

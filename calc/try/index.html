@@ -172,7 +172,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 <body>
 <header>
   <h1>PRODUCTION LOG<small>P-310 helper <span class="trybadge">TRYOUT</span></small></h1>
-  <a class="back" href="../../">&larr; TRACKER</a>
+  <a class="back" href="/draw/">&larr; TRACKER</a>
 </header>
 <main id="app"></main>
 <div class="navbar" id="navbar" hidden><div class="in"><button id="nav-back" type="button" class="ghost">&larr; BACK</button><button id="nav-next" type="button" class="solid">NEXT &rarr;</button></div></div>
@@ -1478,7 +1478,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   (function () {
     var qs = /[?&]go=(avg|rate|log)\b/.exec(location.search), fr = /[?&]from=(app|root)\b/.exec(location.search);
     try { if (fr) sessionStorage.setItem("calcTryFrom", fr[1]); fr = sessionStorage.getItem("calcTryFrom"); } catch (e) { fr = fr && fr[1]; }
-    if (fr === "app") { var bk = document.querySelector("header a.back"); if (bk) bk.setAttribute("href", "../../app/"); }
+    if (fr === "app") { var bk = document.querySelector("header a.back"); if (bk) bk.setAttribute("href", "/draw/app/"); }
     if (qs) {
       if (qs[1] === "log") { S.screen = "log"; } else go(qs[1]);
       try { history.replaceState(null, "", location.pathname); } catch (e) {}
