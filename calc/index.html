@@ -148,14 +148,17 @@ body.noscroll{overflow:hidden}
 <div class="panel quick" id="quick">
   <h2>QUICK: AVG COIL WEIGHT</h2>
   <div class="grid2">
-    <div class="f"><label for="q-tot">WO Tot Avg Wgt</label><input id="q-tot" inputmode="numeric" autocomplete="off" placeholder="18444"></div>
-    <div class="f"><label for="q-coils">WO # coils</label><input id="q-coils" inputmode="numeric" autocomplete="off" placeholder="4"></div>
+    <div class="f"><label for="q-tot">Card total lb</label><input id="q-tot" inputmode="numeric" autocomplete="off" placeholder="card total lb"></div>
+    <div class="f"><label for="q-coils">Coils on card</label><input id="q-coils" inputmode="numeric" autocomplete="off" placeholder="coils on card"></div>
   </div>
-  <div class="f"><label for="q-ran">Coils I ran</label>
-    <div class="stepper"><button id="q-minus" type="button" aria-label="One less coil">&minus;</button><input id="q-ran" inputmode="decimal" autocomplete="off"><button id="q-plus" type="button" aria-label="One more coil">+</button></div>
+  <div class="f"><label for="q-ran">Coils I ran (optional)</label>
+    <div class="stepper"><button id="q-minus" type="button" aria-label="One less coil">&minus;</button><input id="q-ran" inputmode="decimal" autocomplete="off" placeholder="coils ran"><button id="q-plus" type="button" aria-label="One more coil">+</button></div>
+    <span class="hint">Only if you did not run the whole card</span>
   </div>
   <div class="qbig"><span>Avg coil weight</span><b id="q-avg">&ndash;</b></div>
-  <div class="qbig"><span id="q-wlabel">Weight for 1 coil</span><b id="q-weight">&ndash;</b></div>
+  <div class="qbig" id="q-weight-row" hidden><span id="q-wlabel">Weight ran</span><b id="q-weight">&ndash;</b></div>
+  <div class="qbig" id="q-left-coils-row" hidden><span>Coils left on card</span><b id="q-left-coils">&ndash;</b></div>
+  <div class="qbig" id="q-left-weight-row" hidden><span>Weight left on card</span><b id="q-left-weight">&ndash;</b></div>
   <p class="qmath" id="q-math"></p>
   <button class="big" id="q-add" type="button">+ ADD TO MY SHIFT REPORT</button>
 </div>
@@ -616,19 +619,31 @@ var ProdCalc = (function () {
     return L;
   }
 
-  /* ---- quick avg coil weight ---- */
+  /* ---- quick avg coil weight (optional coils-ran -> weight ran from a partial card) ---- */
   function quick(totAvgWgt, woCoils, ran) {
-    var t = num(totAvgWgt), c = num(woCoils), n = num(ran === undefined ? 1 : ran);
-    if (n === null) n = 1;
-    var res = { ok: false, avg: null, weight: null, ran: n, lines: [], error: "" };
-    if (t === null || t <= 0) { res.error = "Type the work order Tot Avg Wgt."; return res; }
-    if (c === null || c <= 0) { res.error = "Type how many coils are on the work order."; return res; }
-    if (n <= 0) { res.error = "How many coils did you run?"; return res; }
-    var avg = rhu(t / c), weight = rhu(avg * n);
-    res.ok = true; res.avg = avg; res.weight = weight;
-    res.lines = [fmtInt(rhu(t)) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(avg) + " lb each.",
-      "You ran " + fmtNum(n) + " " + plural(n, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(n) + " = " + fmtInt(weight) + " lb.",
-      "Enter " + fmtInt(weight) + " lb in the database."];
+    var t = num(totAvgWgt), c = num(woCoils);
+    var ranRaw = (ran === undefined || ran === null || String(ran).trim() === "") ? null : num(ran);
+    var res = { ok: false, avg: null, weight: null, ran: ranRaw, leftCoils: null, leftWeight: null, over: false, lines: [], error: "", note: "" };
+    if (t === null || t <= 0) { res.error = "Type the card total lb."; return res; }
+    if (c === null || c <= 0) { res.error = "Type how many coils are on the card."; return res; }
+    var avg = rhu(t / c);
+    res.ok = true; res.avg = avg;
+    res.lines = [fmtInt(rhu(t)) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(avg) + " lb each."];
+    if (ranRaw === null) return res;
+    if (ranRaw <= 0) { res.ok = false; res.error = "How many coils did you run?"; return res; }
+    if (ranRaw > c) {
+      res.over = true;
+      res.note = "Coils ran (" + fmtNum(ranRaw) + ") is more than the " + fmtNum(c) + " on the card. Check the numbers.";
+      return res;
+    }
+    var weight = rhu(avg * ranRaw);
+    res.weight = weight;
+    res.leftCoils = rhu(c - ranRaw);
+    res.leftWeight = rhu(t - weight);
+    res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lb.");
+    if (res.leftCoils > 0) {
+      res.lines.push(fmtNum(res.leftCoils) + " " + plural(res.leftCoils, "coil", "coils") + " left on the card (" + fmtInt(res.leftWeight) + " lb).");
+    }
     return res;
   }
 
@@ -798,25 +813,41 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
 
   /* ---------- quick avg coil weight (not saved) ---------- */
-  var Q = { tot: "", coils: "", ran: "1" };
+  var Q = { tot: "", coils: "", ran: "" };
   function quickUpdate() {
-    var r = P.quick(Q.tot, Q.coils, Q.ran === "" ? 1 : Q.ran);
-    $("q-avg").textContent = r.ok ? P.fmtInt(r.avg) + " lb" : "\u2013";
-    $("q-wlabel").textContent = "Weight for " + P.fmtNum(r.ran || 1) + " " + (r.ran === 1 ? "coil" : "coils");
-    $("q-weight").textContent = r.ok ? P.fmtInt(r.weight) + " lb" : "\u2013";
-    $("q-math").textContent = r.ok ? r.lines.join(" ") : r.error;
-    $("q-add").disabled = !r.ok;
+    var r = P.quick(Q.tot, Q.coils, Q.ran);
+    var hasAvg = r.ok && r.avg !== null;
+    var hasRan = r.ok && !r.over && r.weight !== null;
+    $("q-avg").textContent = hasAvg ? P.fmtInt(r.avg) + " lb" : "\u2013";
+    $("q-weight-row").hidden = !hasRan;
+    $("q-left-coils-row").hidden = !(hasRan && r.leftCoils > 0);
+    $("q-left-weight-row").hidden = !(hasRan && r.leftCoils > 0);
+    if (hasRan) {
+      $("q-wlabel").textContent = "Weight ran";
+      $("q-weight").textContent = P.fmtInt(r.weight) + " lb";
+      $("q-left-coils").textContent = P.fmtNum(r.leftCoils);
+      $("q-left-weight").textContent = P.fmtInt(r.leftWeight) + " lb";
+    }
+    if (r.over) $("q-math").textContent = r.note;
+    else if (r.ok) $("q-math").textContent = r.lines.join(" ");
+    else $("q-math").textContent = (Q.tot.trim() || Q.coils.trim() || Q.ran.trim()) ? r.error : "";
+    $("q-add").disabled = !hasRan;
   }
   function bindQuick() {
     [["q-tot", "tot"], ["q-coils", "coils"], ["q-ran", "ran"]].forEach(function (p) {
       var i = $(p[0]); i.value = Q[p[1]];
       i.addEventListener("input", function () { Q[p[1]] = i.value; quickUpdate(); });
     });
-    function bump(d) { var n = P.num(Q.ran) || 0; n = Math.max(1, n + d); Q.ran = String(n); $("q-ran").value = Q.ran; quickUpdate(); }
+    function bump(d) {
+      var n = P.num(Q.ran); if (n === null) n = 0;
+      n = Math.max(0, n + d);
+      Q.ran = n ? String(n) : "";
+      $("q-ran").value = Q.ran; quickUpdate();
+    }
     $("q-minus").addEventListener("click", function () { bump(-1); });
     $("q-plus").addEventListener("click", function () { bump(1); });
     $("q-add").addEventListener("click", function () {
-      var r = P.quick(Q.tot, Q.coils, Q.ran); if (!r.ok) return;
+      var r = P.quick(Q.tot, Q.coils, Q.ran); if (!r.ok || r.weight === null) return;
       var rows = state.shift.rows, last = rows[rows.length - 1];
       var row = blankRow(); row.woTotal = Q.tot; row.woCoils = Q.coils; row.coilsDrawn = String(r.ran);
       row.machine = (last && last.machine) || (S.machines.length === 1 ? S.machines[0].name : "");
