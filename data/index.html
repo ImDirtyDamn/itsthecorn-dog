@@ -125,6 +125,50 @@ ul.list{padding-left:22px;color:var(--white);line-height:1.45;font-size:17px;mar
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw;z-index:50}
 body.noscroll{overflow:hidden}
 .more{margin:12px 0}
+/* tabs + analyze */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 0}
+.tabs[hidden]{display:none}
+.subtabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0}
+.subtabs button{font-size:14px;padding:6px 2px;letter-spacing:.04em}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font-size:13px;padding:6px 10px;min-height:44px;letter-spacing:.03em;flex:1 1 auto}
+.seg.two button{flex:1 1 40%}
+.seg+.seg{margin-top:8px}
+.seghdr{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.fchips{display:flex;flex-wrap:wrap;gap:6px}
+.fchips button{font-size:14px;padding:4px 10px;min-height:44px;min-width:44px;letter-spacing:0}
+.lbl em{font-style:normal;text-transform:none;letter-spacing:0;font-size:12px}
+.chartbox{margin-top:12px;min-height:60px;overflow:hidden}
+svg.chart{display:block;max-width:100%}
+svg.chart .grid{stroke:rgba(57,255,106,.14);stroke-width:1}
+svg.chart .ax{fill:#1f9a3e;font:11px "Courier New",Courier,monospace}
+svg.chart .bl{fill:#eaffea;font:13px "Courier New",Courier,monospace}
+svg.chart .bv{fill:#39ff6a;font:bold 13px "Courier New",Courier,monospace}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:13px;color:var(--white)}
+.legend i,i.sw{display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:-1px}
+.legend i.dash{height:0;border-top:2px dashed var(--fg-dim);width:16px;vertical-align:3px}
+.legend i.dot{height:0;border-top:2px dotted var(--white);width:16px;vertical-align:3px}
+.legend .off,tr.off{opacity:.4;text-decoration:line-through}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--fg-faint);margin:8px 0}
+table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{padding:8px 8px;border-bottom:1px solid var(--fg-faint);text-align:right;white-space:nowrap;color:var(--white)}
+.tbl th:first-child,.tbl td:first-child{text-align:left;position:sticky;left:0;background:var(--bg);max-width:42vw;overflow:hidden;text-overflow:ellipsis}
+.tbl th{color:var(--amber);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:normal}
+.tbl th button{all:unset;cursor:pointer;min-height:36px;display:inline-flex;align-items:center}
+.tbl tr.tot td{color:var(--fg);font-weight:bold;border-top:2px solid var(--fg-dim)}
+details.info{position:relative}
+details.info>summary{list-style:none;cursor:pointer;color:var(--amber);font-size:20px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
+details.info>summary::-webkit-details-marker{display:none}
+details.info p{position:absolute;right:0;top:44px;z-index:5;width:min(320px,86vw);background:#000;border:1px solid var(--amber);color:var(--white);font-size:13px;line-height:1.45;padding:10px;margin:0}
+details.series>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;min-height:48px}
+details.series>summary::-webkit-details-marker{display:none}
+details.series .sw{width:16px;height:32px;flex:0 0 16px;margin:0}
+.sname{flex:1;min-width:0}
+.sname b{display:block;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sname small{display:block;color:var(--fg-dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbtns button{font-size:13px;min-height:44px;padding:4px 10px}
+.sbody{margin-top:12px}
+input.in.color{padding:4px;height:3.25rem}
 </style>
 </head>
 <body>
@@ -132,18 +176,22 @@ body.noscroll{overflow:hidden}
   <h1>MASTER LOG<small>every submitted production log</small></h1>
   <div class="hbtns"><button id="lockbtn" type="button" class="ghost" hidden>LOCK</button><a class="back" href="/draw/app/">&larr; TRACKER</a></div>
 </header>
+<nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button></nav>
 <main id="app"></main>
 <div class="overlay" id="detail" hidden role="dialog" aria-label="Log detail"><div class="ovtop"><b id="dtitle">LOG</b><button id="dclose" type="button">CLOSE</button></div><div id="dbody"></div></div>
 <div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm delete"><div class="box"><b>DELETE THIS LOG?</b><p id="cmsg"></p>
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
+<script src="analyze.js?v=1"></script>
 <script>
 (function () {
   "use strict";
   var API = String(window.LOGDB_API_BASE || "").replace(/\/+$/, "");
   var SKEY = "logdbAdminCode";          // sessionStorage only: gone when the tab closes
   var PAGE = 100;
+  var VKEY = "logdbView", view = (function () { try { return sessionStorage.getItem(VKEY) || (/[#&]cmp=/.test(location.hash) ? "analyze" : "logs"); } catch (e) { return "logs"; } })();
+  if (/[#&]cmp=/.test(location.hash)) view = "analyze";
   var F = { from: "", to: "", operator: "", draw: "" }, logs = [], summary = null, operators = [], hasMore = false, current = null;
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -179,8 +227,22 @@ body.noscroll{overflow:hidden}
   }
 
   /* ---------- lock screen ---------- */
+  function setTabs() {
+    $("tabs").hidden = false;
+    Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) { b.className = b.dataset.v === view ? "on" : ""; });
+  }
+  function start() {
+    try { sessionStorage.setItem(VKEY, view); } catch (e) {}
+    if (view === "analyze" && window.Analyze) {
+      setTabs(); $("lockbtn").hidden = false;
+      window.Analyze.show($("app"), { api: api, esc: esc, day: day, n0: n0, n1: n1, toast: toast });
+    } else { view = "logs"; load(false); }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
+    b.onclick = function () { if (view === b.dataset.v) return; view = b.dataset.v; closeDetail(); start(); };
+  });
   function renderLock(err) {
-    $("lockbtn").hidden = true;
+    $("lockbtn").hidden = true; $("tabs").hidden = true; if (window.Analyze) window.Analyze.reset();
     $("app").innerHTML = '<div class="lock"><form id="lockform" class="panel" autocomplete="off">' +
       '<div class="field"><label class="lbl" for="pass">Passcode</label><input class="in" id="pass" type="password" placeholder="passcode" autocomplete="current-password" required></div>' +
       (err ? '<div class="msg bad" role="alert">' + esc(err) + '</div>' : "") +
@@ -188,7 +250,7 @@ body.noscroll{overflow:hidden}
       '<p>Only people with the passcode can see logs. It is kept for this tab only and forgotten when you close it.</p></div>';
     $("lockform").onsubmit = function (e) {
       e.preventDefault(); var v = $("pass").value.trim(); if (!v) return;
-      setCode(v); load(false);
+      setCode(v); start();
     };
     setTimeout(function () { var p = $("pass"); if (p) p.focus(); }, 0);
   }
@@ -215,7 +277,7 @@ body.noscroll{overflow:hidden}
     return p.length ? p.join(" \u00b7 ") : "all logs";
   }
   function renderList() {
-    $("lockbtn").hidden = false;
+    $("lockbtn").hidden = false; setTabs();
     var s = summary || {}, rated = (s.met || 0) + (s.not_met || 0), pct = rated ? Math.round(s.met * 100 / rated) : 0;
     var opOpts = '<option value="">Everyone</option>' + operators.map(function (o) { return '<option' + (o.toLowerCase() === F.operator.toLowerCase() ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("");
     var h = '<details class="filters panel"' + (renderList.open ? " open" : "") + ' id="fbox"><summary>FILTERS <span>' + esc(filterNote()) + '</span></summary><div style="margin-top:10px">' +
@@ -344,7 +406,7 @@ body.noscroll{overflow:hidden}
   $("dclose").onclick = closeDetail;
   $("lockbtn").onclick = function () { setCode(""); closeDetail(); renderLock(""); };
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (!$("confirm").hidden) $("confirm").hidden = true; else closeDetail(); } });
-  if (code()) load(false); else renderLock("");
+  if (code()) start(); else renderLock("");
 })();
 </script>
 </body>
