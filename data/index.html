@@ -128,7 +128,7 @@ body.noscroll{overflow:hidden}
 /* tabs + analyze */
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 0}
 .tabs[hidden]{display:none}
-.subtabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0}
+.subtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0}
 .subtabs button{font-size:14px;padding:6px 2px;letter-spacing:.04em}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
 .seg button{font-size:13px;padding:6px 10px;min-height:44px;letter-spacing:.03em;flex:1 1 auto}
@@ -169,6 +169,14 @@ details.series .sw{width:16px;height:32px;flex:0 0 16px;margin:0}
 .sbtns button{font-size:13px;min-height:44px;padding:4px 10px}
 .sbody{margin-top:12px}
 input.in.color{padding:4px;height:3.25rem}
+/* throughput factors + coil details */
+.thin{display:inline-block;margin-left:6px;padding:1px 5px;border:1px solid var(--amber);color:var(--amber);font-size:11px;letter-spacing:.04em;font-weight:normal;vertical-align:1px}
+.tbl tr.thinrow td{color:#b9c9b9}
+.tbl tr.sub td{color:var(--fg-dim);font-size:13px}
+.tbl.fac td:first-child{max-width:55vw}
+.facl li{line-height:1.45}
+.daynotes{white-space:pre-wrap;color:var(--white);font-size:16px;line-height:1.45;background:#000;border:1px solid var(--fg-faint);padding:10px 12px;margin:4px 0}
+.cells .wide{grid-column:1/-1}
 </style>
 </head>
 <body>
@@ -183,7 +191,7 @@ input.in.color{padding:4px;height:3.25rem}
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=1"></script>
+<script src="analyze.js?v=2"></script>
 <script>
 (function () {
   "use strict";
@@ -299,7 +307,7 @@ input.in.color{padding:4px;height:3.25rem}
     if (!logs.length) h += '<div class="msg">No logs match. Try ALL in the filters.</div>';
     logs.forEach(function (l, i) {
       h += '<button type="button" class="logcard" data-i="' + i + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(day(l.shift_date)) + (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div>' +
-        '<div class="lc2">' + badge(l.goal_met) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + '</div>' +
+        '<div class="lc2">' + badge(l.goal_met) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + '</div>' +
         '<div class="lc3"><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
     });
     if (hasMore) h += '<button type="button" class="big more" id="more">SHOW MORE</button>';
@@ -374,7 +382,8 @@ input.in.color{padding:4px;height:3.25rem}
         ["Avg. Wgt.", n0(c.avg_wgt)], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
         ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
       if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
-      h += '<div class="svrow"><div class="cells">' + cells.map(function (x) { return '<div><i>' + esc(x[0]) + '</i><b>' + esc(x[1] === null || x[1] === undefined || x[1] === "" ? (x[0] ? "\u2013" : "") : x[1]) + '</b></div>'; }).join("") + '</div></div>';
+      if (c.part || c.tags || c.note) cells.push(["Part #", c.part, "wide"], ["Run conditions", c.tags ? String(c.tags).split(",").join(" + ") : "", "wide"], ["Note", c.note, "wide"]);
+      h += '<div class="svrow"><div class="cells">' + cells.map(function (x) { return '<div' + (x[2] ? ' class="' + x[2] + '"' : "") + '><i>' + esc(x[0]) + '</i><b>' + esc(x[1] === null || x[1] === undefined || x[1] === "" ? (x[0] ? "\u2013" : "") : x[1]) + '</b></div>'; }).join("") + '</div></div>';
     });
     h += '<h3>Breaks</h3>' + (j.breaks.length ? '<ul class="list">' + j.breaks.map(function (b) { return '<li>' + esc((b.start ? clock12(b.start) + " \u00b7 " : "") + n0(b.minutes) + " min") + '</li>'; }).join("") + '</ul>' : '<p class="muted">None</p>');
     h += '<h3' + (L.goal_met === 0 ? ' class="bad"' : "") + '>Downtime and problems</h3>';
@@ -382,6 +391,7 @@ input.in.color{padding:4px;height:3.25rem}
       return '<li>' + esc((d.machine || "All machines") + ": " + n0(d.minutes) + " min" + (d.start ? " (" + clock12(d.start) + "\u2013" + clock12(d.end) + ")" : "") + (d.reason ? " \u00b7 " + d.reason : "")) + '</li>';
     }).join("") + '</ul>' : '<p class="muted">No downtime entered.</p>';
     if (L.problems) h += '<div class="muted" style="font-size:13px;margin-top:8px">AS WRITTEN ON THE SHEET</div><ul class="list">' + L.problems.split("\n").map(function (p) { return '<li>' + esc(p) + '</li>'; }).join("") + '</ul>';
+    h += '<h3>Notes about the day</h3>' + (L.day_notes ? '<div class="daynotes">' + esc(L.day_notes) + '</div>' : '<p class="muted">None</p>');
     h += '<h3>Maintenance to follow up</h3><p style="color:var(--white);font-size:17px;margin:4px 0">' + esc(L.maintenance || "None") + '</p>';
     h += '<h3>Record</h3>' + line("Sent", L.submitted_at ? new Date(L.submitted_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "\u2013") +
       '<div class="svline"><span>Log id</span><b style="font-size:14px">' + esc(L.id) + '</b></div>';

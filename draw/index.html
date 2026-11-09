@@ -906,11 +906,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return {
       schema: SCHEMA, setupDone: false,
       shift: { id: uid("s"), date: todayStr(), operator: "", start: "", end: "", breakMode: "total",
-        breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now) },
+        breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now), dayNotes: "", details: {} },
       machines: [defaultMachine(0)], coils: [], downtime: [], settings: defaultSettings()
     };
   }
 
+  // Part #, finish size, grade, run conditions and day notes are entered in the phone app (/draw/app/); this page keeps and sends them.
+  function cleanTags(v) { var o = []; (Array.isArray(v) ? v : []).forEach(function (t) { t = typeof t === "string" ? t.trim().replace(/,/g, " ").slice(0, 30) : ""; if (t && o.indexOf(t) < 0 && o.length < 8) o.push(t); }); return o; }
   function sanitize(p) {
     if (!p || typeof p !== "object" || Array.isArray(p)) return null;
     var base = defaultState(), sh = p.shift && typeof p.shift === "object" ? p.shift : {};
@@ -927,6 +929,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }).slice(0, 12).map(function (b) { return { id: str(b.id, 64) || uid("b"), start: b.start, minutes: num(b.minutes) }; }) : [];
     if (isIso(sh.createdAt)) s.createdAt = sh.createdAt;
     if (isIso(sh.updatedAt)) s.updatedAt = sh.updatedAt;
+    s.dayNotes = str(sh.dayNotes, 2000);
 
     var seen = {};
     var ms = Array.isArray(p.machines) ? p.machines.filter(function (m) { return m && typeof m === "object"; }).slice(0, MAX_MACHINES) : [];
@@ -941,6 +944,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         timerAccumMs: acc >= 0 ? acc : 0 };
     });
     var setupDone = !!p.setupDone;
+    s.details = {};
+    if (sh.details && typeof sh.details === "object") Object.keys(sh.details).forEach(function (k) {
+      var d = sh.details[k]; if (!seen.hasOwnProperty(k) || !d || typeof d !== "object") return;
+      s.details[k] = { part: str(d.part, 60), size: str(d.size, 40), grade: str(d.grade, 40), tags: cleanTags(d.tags), note: str(d.note, 300) };
+    });
     if (!machines.length) { machines = base.machines; setupDone = false; }
     var coils = Array.isArray(p.coils) ? p.coils.filter(function (c) {
       return c && typeof c === "object" && seen.hasOwnProperty(c.machineId) && num(c.weight) > 0 && isIso(c.loggedAt);
@@ -948,6 +956,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var dt = num(c.downtimeMin);
       return { id: str(c.id, 64) || uid("c"), machineId: c.machineId, loggedAt: c.loggedAt, weight: num(c.weight),
         coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500),
+        part: str(c.part, 60), grade: str(c.grade, 40), tags: cleanTags(c.tags),
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
     }) : [];
     var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
@@ -1766,6 +1775,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (has) { try { histArchive(state, now); } catch (e) {} }   // keep a week on this phone; do not block clear/send
     state.coils = []; state.downtime = [];
     state.shift.id = uid("s"); state.shift.date = todayStr(); state.shift.createdAt = iso(now);
+    state.shift.dayNotes = ""; state.shift.details = {};
     state.machines.forEach(function (m) { m.timerStartedAt = null; m.timerAccumMs = 0; });
     state.setupDone = false; editingCoil = null;
     save();
@@ -2529,7 +2539,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var coils = st.coils.slice().sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }).slice(0, ML_COIL_MAX).map(function (c) {
       var m = (byId[c.machineId] || {}).m;
-      return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? mlDraw(m.name) : null };
+      return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? mlDraw(m.name) : null,
+        finish: str(c.size || "", 40), grade: str(c.grade || "", 40), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300) };
     });
     var downtime = [], problems = [];
     st.downtime.slice().sort(function (a, b) { return Date.parse(a.startAt) - Date.parse(b.startAt); }).forEach(function (d) {
@@ -2561,7 +2572,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       totals: { total_lbs: mlR(r.lbsRan, 1), net_hours: net != null ? mlR(Math.min(24, net), 2) : null, goal_lbs: goalLbs != null ? mlR(Math.max(0, goalLbs), 0) : null,
         goal_lbhr: r.rateSum != null ? mlR(r.rateSum, 2) : null, avg_lbhr: net > 0 ? mlR(r.lbsRan / net, 1) : null,
         goal_met: done && r.target != null ? r.lbsRan >= r.target : null },
-      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "",
+      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "", day_notes: str(s.dayNotes || "", 2000),
       raw: { source: "tracker", page: location.pathname, complete: done, phase: r.phase, sent_at: iso(now),
         state: { shift: st.shift, machines: st.machines, coils: st.coils, downtime: st.downtime, settings: st.settings } }
     };

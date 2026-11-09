@@ -22,7 +22,11 @@
       "breakTotalMin": 30,                // used when breakMode = "total"
       "breaks": [ { "id": "b_...", "start": "12:00", "minutes": 30 } ],  // breakMode = "list"
       "createdAt": "2026-10-21T10:00:00.000Z",
-      "updatedAt": "2026-10-21T10:05:00.000Z"
+      "updatedAt": "2026-10-21T10:05:00.000Z",
+      "dayNotes": "",                     // "Notes about my day" (free text, sent as day_notes)
+      "details": { "m_...": { "part": "", "size": "", "grade": "", "tags": [], "note": "" } }
+                                          // what the NEXT coils on that machine get (cleared by NEW SHIFT);
+                                          // "note" goes on the next coil only
     },
     "machines": [                         // table: machines (FK shift.id)
       { "id": "m_...", "slot": 1, "name": "Machine 1", "needRate": 2800,   // lb/hr
@@ -30,7 +34,8 @@
     ],
     "coils": [                            // table: coils (FK machines.id)
       { "id": "c_...", "machineId": "m_...", "loggedAt": ISO, "weight": 450.5,  // lb
-        "coilNo": "", "heatNo": "", "size": "", "notes": "",
+        "coilNo": "", "heatNo": "", "size": "", "notes": "",          // size = finish size in inches (".600")
+        "part": "", "grade": "", "tags": ["Grease", "Shape change", "Stainless", "Other"],  // part # (customer), grade, run conditions
         "downtimeMin": null | number, "downtimeReason": "" }
     ],
     "downtime": [                         // table: downtime (FK machines.id, or "all")
@@ -487,6 +492,27 @@
   .actions .ml-send { grid-column: 1 / -1; }
   .actions .hist-btn { grid-column: 1 / -1; }
   .ml-line { margin: 0 0 0.35rem; color: var(--white); font-size: 0.95rem; }
+  /* coil details (part #, finish size, grade, run conditions, note) + notes about my day */
+  .det-btn { display: block; width: 100%; min-width: 0; min-height: 2.75rem; margin: 0 0 0.5rem; padding: 0.3rem 0.6rem; background: none; border: 1px dashed var(--fg-dim); border-radius: 3px;
+             color: var(--fg-dim); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+             touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .det-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; margin: 0 0 0.5rem; }
+  .det-row .det-btn { margin: 0; }
+  .det-btn.notes { text-align: center; padding: 0.3rem 0.7rem; }
+  .det-btn.set { border-style: solid; border-color: var(--amber); color: var(--white); }
+  .det-btn.set b { color: var(--amber); }
+  .det-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .det-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .det-tags .chip { flex: 1 0 40%; }
+  .det-form .field { margin-bottom: 0.9rem; }
+  .det-form .in { height: 3rem; font-size: 1.1rem; }
+  .det-form textarea.in { height: auto; font-size: 1rem; }
+  .det-form .row2 .field { margin-bottom: 0.9rem; }
+  .rc-edit .det-full, .edit-grid .det-full { grid-column: 1 / -1; }
+  .rc-row .rc-det { display: block; color: var(--amber); font-size: 0.8rem; overflow-wrap: anywhere; }
+  .rb-det { color: var(--amber); font-size: 0.85rem; margin: -0.2rem 0 0.4rem; overflow-wrap: anywhere; }
+  .rb-det:empty { display: none; }
+  .hist-notes { white-space: pre-wrap; color: var(--white); font-size: 0.95rem; background: #000; border: 1px solid var(--fg-faint); padding: 0.6rem 0.75rem; margin: 0.5rem 0 0; }
   #ml { z-index: 46; }
   #ml .ldb .ldb-show { background: transparent; color: var(--fg); border: 2px solid var(--fg); border-radius: 3px; font-family: inherit; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
   #ml .ldb .ldb-show:active { background: var(--fg); color: #000; }
@@ -624,6 +650,7 @@
     <div class="actions">
       <button type="button" class="btn ml-send" id="btn-ml">SEND TO MASTER LOG</button>
       <button type="button" class="btn hist-btn" id="hist-open-2">PAST SHIFTS</button>
+      <button type="button" class="btn hist-btn" id="notes-open-2" aria-haspopup="dialog">NOTES ABOUT MY DAY</button>
       <button type="button" class="btn" id="btn-edit">EDIT SETUP</button>
       <button type="button" class="btn warn" id="btn-new">NEW SHIFT</button>
     </div>
@@ -633,6 +660,10 @@
       <div class="dock-inner">
         <div class="dock-msg" id="dock-msg" aria-live="polite"></div>
         <div class="dock-mach" id="dock-mach" role="group" aria-label="Machine"></div>
+        <div class="det-row">
+          <button type="button" class="det-btn" id="dock-det" aria-haspopup="dialog">+ PART / SIZE / CONDITIONS</button>
+          <button type="button" class="det-btn notes" id="notes-open" aria-haspopup="dialog">DAY NOTES</button>
+        </div>
         <label class="dock-lbl" for="dock-in"><span>COIL WEIGHT (LBS)</span><span class="dock-for" id="dock-for"></span></label>
         <div class="dock-row">
           <input class="in" id="dock-in" type="text" inputmode="decimal" placeholder="Weight (lbs)" enterkeyhint="done" autocomplete="off" aria-label="Coil weight in lbs">
@@ -646,6 +677,7 @@
 <div class="readback" id="readback" role="status" aria-live="assertive" hidden>
   <div class="rb-top"><span class="rb-lbl">LOGGED</span><span class="rb-mach" id="rb-mach"></span></div>
   <div class="rb-w" id="rb-w"></div>
+  <div class="rb-det" id="rb-det"></div>
   <div class="rb-act"><button type="button" class="btn solid" id="rb-undo">UNDO</button><button type="button" class="btn" id="rb-fix">FIX / RECENT</button><button type="button" class="btn" id="rb-x" aria-label="Hide">OK</button></div>
 </div>
 <div class="sheet" id="cm" hidden role="dialog" aria-modal="true" aria-labelledby="cm-title">
@@ -948,6 +980,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   "use strict";
   var KEY = "drawRateV5", V4_KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v5", MERGED_FLAG = "drawRateV4Imported";
   var HIST_KEY = "drawRateHistoryV1", HIST_DAYS = 7, HIST_MAX = 24;
+  var FORM_SHEETS = { details: 1, notes: 1 };   // sheets that are typed into: drawn once, not on every tick
   var MAX_MACHINES = 6, DEFAULT_RATE = 2800;
 
   /* ---------- small helpers ---------- */
@@ -1036,9 +1069,37 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return {
       schema: SCHEMA, setupDone: false,
       shift: { id: uid("s"), date: todayStr(), operator: "", start: "", end: "", breakMode: "total",
-        breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now) },
+        breakTotalMin: 30, breaks: [], createdAt: iso(now), updatedAt: iso(now), dayNotes: "", details: {} },
       machines: [defaultMachine(0)], coils: [], downtime: [], settings: defaultSettings()
     };
+  }
+
+  /* ---------- coil details: part #, finish size, grade, run conditions ---------- */
+  var TAGS = ["Grease", "Shape change", "Stainless", "Other"];
+  function trim(v) { return String(v == null ? "" : v).replace(/^\s+|\s+$/g, ""); }
+  function cleanTags(v) {
+    var out = [];
+    (Array.isArray(v) ? v : []).forEach(function (t) {
+      t = trim(typeof t === "string" ? t : "").replace(/,/g, " ").slice(0, 30);
+      if (t && out.indexOf(t) < 0 && out.length < 8) out.push(t);
+    });
+    return out;
+  }
+  // finish size as typed, tidied: 0.600 / .600" / .600 in  ->  .600
+  function normSize(v) {
+    var t = trim(v).replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, "");
+    if (/^0?\.\d+$/.test(t)) t = t.replace(/^0/, "");
+    return t.slice(0, 40);
+  }
+  function cleanDetail(d) {
+    d = d && typeof d === "object" ? d : {};
+    var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: trim(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)) };
+    return o.part || o.size || o.grade || o.tags.length || o.note ? o : null;
+  }
+  function detailText(d, withNote) {
+    if (!d) return "";
+    var size = d.size ? d.size + (/^\.?\d/.test(d.size) && !/"$/.test(d.size) ? '"' : "") : "";
+    return [d.part, size, d.grade, (d.tags || []).join(" + "), withNote ? d.notes || d.note : ""].filter(Boolean).join(" \u00b7 ");
   }
 
   function sanitize(p) {
@@ -1057,6 +1118,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }).slice(0, 12).map(function (b) { return { id: str(b.id, 64) || uid("b"), start: b.start, minutes: num(b.minutes) }; }) : [];
     if (isIso(sh.createdAt)) s.createdAt = sh.createdAt;
     if (isIso(sh.updatedAt)) s.updatedAt = sh.updatedAt;
+    s.dayNotes = str(sh.dayNotes, 2000);
 
     var seen = {};
     var ms = Array.isArray(p.machines) ? p.machines.filter(function (m) { return m && typeof m === "object"; }).slice(0, MAX_MACHINES) : [];
@@ -1072,12 +1134,17 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var setupDone = !!p.setupDone;
     if (!machines.length) { machines = base.machines; setupDone = false; }
+    s.details = {};
+    if (sh.details && typeof sh.details === "object") Object.keys(sh.details).forEach(function (k) {
+      if (!seen.hasOwnProperty(k)) return; var d = cleanDetail(sh.details[k]); if (d) s.details[k] = d;
+    });
     var coils = Array.isArray(p.coils) ? p.coils.filter(function (c) {
       return c && typeof c === "object" && seen.hasOwnProperty(c.machineId) && num(c.weight) > 0 && isIso(c.loggedAt);
     }).map(function (c) {
       var dt = num(c.downtimeMin);
       return { id: str(c.id, 64) || uid("c"), machineId: c.machineId, loggedAt: c.loggedAt, weight: num(c.weight),
         coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500),
+        part: str(c.part, 60), grade: str(c.grade, 40), tags: cleanTags(c.tags),
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
     }) : [];
     var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
@@ -1546,11 +1613,15 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
   // the one place a new coil is added (machine cards, phone dock)
   function addCoil(machineId, w) {
+    var d = (state.shift.details || {})[machineId] || {};
     var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
-      size: "", notes: "", downtimeMin: null, downtimeReason: "" };
+      size: d.size || "", notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(),
+      downtimeMin: null, downtimeReason: "" };
+    if (d.note) { d.note = ""; if (!cleanDetail(d)) delete state.shift.details[machineId]; }   // the note is for one coil
     state.coils.push(c);
     lastLogged[machineId] = c.id;
     save();
+    paintDet();
     tick();
     if (advOpen) renderAdvanced();
     if (rcOpen) renderRecent();
@@ -1713,7 +1784,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
           var tr = el("tr");
           tr.appendChild(el("td", null, String(n)));
           var tdT = el("td", null, fmtClock(Date.parse(c.loggedAt)));
-          var meta = [c.coilNo && "coil " + c.coilNo, c.heatNo && "heat " + c.heatNo, c.size, c.downtimeMin ? c.downtimeMin + "m down" + (c.downtimeReason ? " (" + c.downtimeReason + ")" : "") : "", c.notes].filter(Boolean).join(" · ");
+          var meta = [c.coilNo && "coil " + c.coilNo, c.heatNo && "heat " + c.heatNo, detailText(c), c.downtimeMin ? c.downtimeMin + "m down" + (c.downtimeReason ? " (" + c.downtimeReason + ")" : "") : "", c.notes].filter(Boolean).join(" · ");
           if (meta) { tdT.appendChild(el("div", "meta", meta)); }
           tr.appendChild(tdT);
           tr.appendChild(el("td", "r white", fmtW(c.weight)));
@@ -1778,7 +1849,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var iw = f("Coil weight (lbs)", "weight", "text", { inputmode: "decimal", autocomplete: "off" });
     var icn = f("Coil #", "coilNo", "text", { maxlength: "40" });
     var ih = f("Heat #", "heatNo", "text", { maxlength: "40" });
-    var is = f("Size / gauge", "size", "text", { maxlength: "40" });
+    var ip = f("Part #", "part", "text", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off" });
+    var is = f("Finish size (in)", "size", "text", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off" });
+    var ig = f("Grade", "grade", "text", { maxlength: "40", placeholder: "Grade", autocomplete: "off" });
+    var it = tagChips(c.tags, "ce-tag"); var itw = el("div", "field det-full"); itw.style.marginBottom = "0";
+    itw.appendChild(el("span", "lbl", "Run conditions")); itw.appendChild(it.el); g.appendChild(itw);
     var idm = f("Downtime min (note only)", "downtimeMin", "number", { inputmode: "numeric", min: "0" });
     var idr = f("Downtime reason", "downtimeReason", "text", { maxlength: "200" });
     var ino = f("Notes", "notes", "text", { maxlength: "500" }, true);
@@ -1786,10 +1861,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var err = el("p", "err"); box.appendChild(err);
     var line = el("div", "adv-line");
     line.appendChild(smallBtn("SAVE", "", function () {
-      var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: str(is.value, 40), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500) };
+      var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: normSize(is.value), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500),
+        part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: trim(str(ig.value, 40)), tags: it.get() };
       checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
       c.weight = w;
-      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size;
+      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size; c.part = rest.part; c.grade = rest.grade; c.tags = rest.tags;
       c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
       editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
       });
@@ -1828,10 +1904,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var breaks = s.breakMode === "list" ? s.breaks.map(function (b) { return b.start + "/" + b.minutes; }).join(" ") : s.breakTotalMin + " total";
     var head = ["record_type", "shift_id", "shift_date", "operator", "shift_start", "shift_end", "breaks", "machine_id", "machine_slot",
       "machine_name", "need_rate_lb_hr", "record_id", "logged_at", "weight_lb", "coil_no", "heat_no", "size", "notes", "downtime_min", "downtime_reason",
-      "downtime_start", "downtime_end", "downtime_lb_deducted"];
+      "downtime_start", "downtime_end", "downtime_lb_deducted", "part_no", "grade", "run_conditions", "day_notes"];
     var rows = [head];
-    var mrow = function (type, m, rec) {
-      return [type, s.id, s.date, s.operator, s.start, s.end, breaks, m.id, m.slot, m.name, m.needRate].concat(rec);
+    var mrow = function (type, m, rec, det) {
+      return [type, s.id, s.date, s.operator, s.start, s.end, breaks, m.id, m.slot, m.name, m.needRate].concat(rec).concat(det || ["", "", ""]).concat([s.dayNotes || ""]);
     };
     var drow = function (m, d) {
       var x = imp[d.id];
@@ -1843,7 +1919,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       rateSum += m.needRate;
       rows.push(mrow("machine", m, ["", "", "", "", "", "", "", "", "", "", "", ""]));
       coilsOf(m.id).forEach(function (c) {
-        rows.push(mrow("coil", m, [c.id, c.loggedAt, c.weight, c.coilNo, c.heatNo, c.size, c.notes, c.downtimeMin, c.downtimeReason, "", "", ""]));
+        rows.push(mrow("coil", m, [c.id, c.loggedAt, c.weight, c.coilNo, c.heatNo, c.size, c.notes, c.downtimeMin, c.downtimeReason, "", "", ""], [c.part || "", c.grade || "", (c.tags || []).join("; ")]));
       });
       state.downtime.filter(function (d) { return d.machineId === m.id; }).forEach(function (d) { rows.push(drow(m, d)); });
     });
@@ -1890,13 +1966,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   $("btn-new").addEventListener("click", function () {
     var has = mlHasData();
     if (!window.confirm("Start a new shift? This clears today's coils and downtime. Your schedule and machines stay as defaults." +
-      (has ? "\n\nThis shift is sent to the master log first, and kept under Past shifts for 7 days. With no signal the send stays on this phone and goes later." : ""))) return;
+      (has ? "\n\nThis shift (with its notes) is sent to the master log first, and kept under Past shifts for 7 days. With no signal the send stays on this phone and goes later." : ""))) return;
     var ask = false, sentKey = null;
     if (has) { try { ask = !mlCredsReady(); sentKey = mlBase(); mlSend(false); } catch (e) {} }   // queued before anything is cleared
     var now = Date.now();
     if (has) { try { histArchive(state, now); } catch (e) {} }   // keep a week on this phone; do not block clear/send
     state.coils = []; state.downtime = [];
     state.shift.id = uid("s"); state.shift.date = todayStr(); state.shift.createdAt = iso(now);
+    state.shift.dayNotes = ""; state.shift.details = {};          // a fresh shift starts with nothing filled in
     state.machines.forEach(function (m) { m.timerStartedAt = null; m.timerAccumMs = 0; });
     state.setupDone = false; editingCoil = null;
     save();
@@ -2075,6 +2152,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     rbCoil = c.id;
     setText($("rb-w"), fmtLb(c.weight) + " lb");
     setText($("rb-mach"), (m ? m.name : "") + " · " + fmtClock(Date.parse(c.loggedAt)));
+    setText($("rb-det"), detailText(c, true));
     setText($("rb-undo"), "UNDO"); $("rb-undo").disabled = false; setCls($("readback"), "readback");
     setText(document.querySelector("#readback .rb-lbl"), "LOGGED");
     $("readback").hidden = false;
@@ -2134,6 +2212,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var info = el("div");
       info.appendChild(el("span", "rc-w", fmtLb(c.weight) + " lb"));
       info.appendChild(el("span", "rc-meta", fmtClock(Date.parse(c.loggedAt)) + " · " + (m ? m.name : "?") + (c.coilNo ? " · coil " + c.coilNo : "")));
+      var dtx = detailText(c, true); if (dtx) info.appendChild(el("span", "rc-det", dtx));
       row.appendChild(info);
       var eb = smallBtn(rcEdit === c.id ? "CLOSE" : "EDIT", "", function () { rcEdit = rcEdit === c.id ? null : c.id; renderRecent(); }); eb.id = "rc-edit-" + k;
       var db = smallBtn("DELETE", "warn", function () {
@@ -2151,11 +2230,21 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         state.machines.forEach(function (mm) { var op = el("option", null, mm.name); op.value = mm.id; ms.appendChild(op); });
         ms.value = c.machineId;
         ed.appendChild(field("Coil weight (lbs)", wi)); ed.appendChild(field("Machine", ms));
+        var rp = input("text", "rc-part-" + k, c.part || "", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off" });
+        var rs = input("text", "rc-size-" + k, c.size || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off" });
+        var rg = input("text", "rc-grade-" + k, c.grade || "", { maxlength: "40", placeholder: "Grade", autocomplete: "off" });
+        var rn = input("text", "rc-note-" + k, c.notes || "", { maxlength: "300", placeholder: "Note for this coil", autocomplete: "off" });
+        var rt = tagChips(c.tags, "rc-tag-" + k + "-");
+        ed.appendChild(field("Part #", rp, "det-full")); ed.appendChild(field("Finish size (in)", rs)); ed.appendChild(field("Grade", rg));
+        var rtw = el("div", "field det-full"); rtw.appendChild(el("span", "lbl", "Run conditions")); rtw.appendChild(rt.el); ed.appendChild(rtw);
+        ed.appendChild(field("Note", rn, "det-full"));
         var er = el("p", "err"); er.id = "rc-err-" + k;
         var bs = el("div", "rc-btns");
         var sv = smallBtn("SAVE", "solid", function () {
           checkCoilWeight(wi.value, wi, function (msg) { setText(er, msg); }, function (w) {
             c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
+            c.part = trim(str(rp.value, 60)).replace(/\s+/g, " "); c.size = normSize(rs.value); c.grade = trim(str(rg.value, 40));
+            c.tags = rt.get(); c.notes = trim(str(rn.value, 300));
             rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
           });
         }); sv.id = "rc-save-" + k;
@@ -2264,7 +2353,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     } else if (state.machines.length < 2 && lm.childNodes.length) lm.textContent = "";
     state.machines.forEach(function (m, i) { var b = $("s-log-m-" + i); if (b) { setText(b, m.name); setCls(b, "btn" + (m.id === sSel ? " on" : "")); } });
     var sm = machineById(sSel); setText($("s-log-for"), state.machines.length > 1 && sm ? " · for " + sm.name : "");
-    if (sheetKind && sheetKind !== "panel") renderSheet(r, now);
+    if (sheetKind && sheetKind !== "panel" && !FORM_SHEETS[sheetKind]) renderSheet(r, now);
   }
   function sLog() {
     var inp = $("s-log-in"), m = machineById(sSel) || state.machines[0], msg = $("s-log-msg"); if (!m) return;
@@ -2281,11 +2370,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (sheetKind) closeSheet();
     sheetKind = kind; sheetArg = arg || null;
     $("sheet").hidden = false;
+    setText($("sheet-close"), FORM_SHEETS[kind] ? "DONE" : "CLOSE");
+    if (FORM_SHEETS[kind]) { (kind === "details" ? renderDetails : renderDayNotes)($("sheet-body"), arg); try { $("sheet-box").scrollTop = 0; } catch (e) {} return; }
     if (kind !== "panel") tick();   // one tick renders the page and the sheet from the same numbers
     try { $("sheet-box").scrollTop = 0; $("sheet-close").focus({ preventScroll: true }); } catch (e) {}
   }
   function closeSheet() {
     var k = sheetKind; sheetKind = null; sheetArg = null; $("sheet").hidden = true;
+    if (FORM_SHEETS[k]) { save(); paintDet(); paintNotes(); }
     if (k === "panel" && sheetPanel) {
       var p = sheetPanel; sheetPanel = null;
       var home = $(p === "rc" ? "rc-toggle" : "dt-toggle"), node = $(p === "rc" ? "rcp" : "dtp");
@@ -2455,6 +2547,91 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     $("sheet-box").scrollTop = keep;
   }
 
+  /* ========================= COIL DETAILS + NOTES ABOUT MY DAY =========================
+     The dock's PART # / SIZE / GRADE / CONDITIONS button sets what the NEXT coils on the selected machine get
+     (state.shift.details[machineId]); it sticks until changed so a whole card is one setup. The note goes on the
+     next coil only. NEW SHIFT clears it all, so a fresh shift starts empty. Fix an already-logged coil in RECENT COILS. */
+  function tagChips(sel, idp) {
+    var box = el("div", "det-tags"), on = cleanTags(sel);
+    box.setAttribute("role", "group"); box.setAttribute("aria-label", "Run conditions");
+    TAGS.forEach(function (t, i) {
+      var b = el("button", "btn chip" + (on.indexOf(t) >= 0 ? " on" : ""), t); b.type = "button"; b.id = idp + i;
+      b.setAttribute("aria-pressed", on.indexOf(t) >= 0 ? "true" : "false");
+      b.addEventListener("click", function () {
+        var k = on.indexOf(t); if (k >= 0) on.splice(k, 1); else on.push(t);
+        b.className = "btn chip" + (k < 0 ? " on" : ""); b.setAttribute("aria-pressed", k < 0 ? "true" : "false");
+        if (box.onchange2) box.onchange2();
+      });
+      box.appendChild(b);
+    });
+    var extra = on.filter(function (t) { return TAGS.indexOf(t) < 0; });   // tags from elsewhere are kept, not shown as chips
+    return { el: box, get: function () { return TAGS.filter(function (t) { return on.indexOf(t) >= 0; }).concat(extra); } };
+  }
+  function detMachine() { return machineById(dockSel) || state.machines[0] || null; }
+  function paintDet() {
+    var b = $("dock-det"); if (!b) return;
+    var m = detMachine(), d = m ? (state.shift.details || {})[m.id] : null, t = detailText(d);
+    b.textContent = "";
+    if (t || (d && d.note)) {
+      b.className = "det-btn set";
+      b.appendChild(el("b", null, "NEXT: ")); b.appendChild(document.createTextNode((t || "") + (d.note ? (t ? " \u00b7 " : "") + "note" : "") + " \u203a"));
+      b.setAttribute("aria-label", "Details for the next coils" + (m ? " on " + m.name : "") + ": " + (t || "note") + ". Tap to change.");
+    } else {
+      b.className = "det-btn"; b.textContent = "+ PART / SIZE / CONDITIONS";
+      b.setAttribute("aria-label", "Add part number, finish size, grade or run conditions for the next coils" + (m ? " on " + m.name : ""));
+    }
+    sizeDock();
+  }
+  function renderDetails(body, mid) {
+    var m = machineById(mid) || detMachine(); if (!m) return;
+    setText($("sheet-title"), "NEXT COILS" + (state.machines.length > 1 ? " \u00b7 " + m.name.toUpperCase() : ""));
+    body.textContent = "";
+    var cur = (state.shift.details || {})[m.id] || {};
+    body.appendChild(el("p", "sh-sub", "Goes on every coil you log" + (state.machines.length > 1 ? " on " + m.name : "") + " until you change it. All optional; skip what you don't know."));
+    var form = el("div", "det-form"); form.style.marginTop = "0.75rem";
+    var ip = input("text", "det-part", cur.part || "", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
+    var is = input("text", "det-size", cur.size || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
+    var ig = input("text", "det-grade", cur.grade || "", { maxlength: "40", placeholder: "Grade", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "done" });
+    var it = tagChips(cur.tags, "det-tag-");
+    var ino = el("textarea", "in"); ino.id = "det-note"; ino.rows = 2; ino.maxLength = 300; ino.placeholder = "Only goes on the next coil"; ino.value = cur.note || "";
+    form.appendChild(field("Part #", ip));
+    var r2 = el("div", "row2"); r2.appendChild(field("Finish size (in)", is)); r2.appendChild(field("Grade", ig)); form.appendChild(r2);
+    var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Run conditions")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
+    form.appendChild(field("Note", ino));
+    body.appendChild(form);
+    var put = function () {
+      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value });
+      if (!state.shift.details) state.shift.details = {};
+      if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
+      save(); paintDet();
+    };
+    [ip, is, ig, ino].forEach(function (x) { x.addEventListener("input", put); });
+    is.addEventListener("blur", function () { var v = normSize(is.value); if (v !== is.value) { is.value = v; put(); } });
+    it.el.onchange2 = put;
+    var clr = el("button", "btn warn sh-btn", "CLEAR ALL"); clr.type = "button"; clr.id = "det-clear";
+    clr.addEventListener("click", function () { if (state.shift.details) delete state.shift.details[m.id]; save(); paintDet(); renderDetails(body, m.id); });
+    body.appendChild(clr);
+    body.appendChild(el("p", "sh-sub", "Already logged a coil? Fix it in RECENT COILS. NEW SHIFT clears all of this."));
+  }
+  function paintNotes() {
+    var has = !!trim(state.shift.dayNotes);
+    setText($("notes-open"), has ? "DAY NOTES \u2713" : "DAY NOTES"); setCls($("notes-open"), "det-btn notes" + (has ? " set" : ""));
+    setText($("notes-open-2"), has ? "NOTES ABOUT MY DAY \u2713" : "NOTES ABOUT MY DAY");
+  }
+  function renderDayNotes(body) {
+    setText($("sheet-title"), "NOTES ABOUT MY DAY");
+    body.textContent = "";
+    body.appendChild(el("p", "sh-sub", "Anything worth knowing about today. Goes to the master log with this shift. Downtime still goes under DOWNTIME."));
+    var ta = el("textarea", "in"); ta.id = "notes-text"; ta.rows = 7; ta.maxLength = 2000; ta.style.marginTop = "0.75rem";
+    ta.placeholder = "What ran slow or fast today, and why"; ta.value = state.shift.dayNotes || "";
+    ta.setAttribute("aria-label", "Notes about my day");
+    ta.addEventListener("input", function () { state.shift.dayNotes = ta.value.slice(0, 2000); save(); paintNotes(); });
+    body.appendChild(ta);
+  }
+  $("dock-det").addEventListener("click", function () { var m = detMachine(); if (m) openSheet("details", m.id); });
+  $("notes-open").addEventListener("click", function () { openSheet("notes"); });
+  $("notes-open-2").addEventListener("click", function () { openSheet("notes"); });
+
   /* ========================= PHONE DOCK ========================= */
   var dockSel = null, dockUndoId = null, dockMsgTimer = null;
   function buildDock() {
@@ -2473,9 +2650,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         selectDock(m.id);
       });
     });
-    markDock(); sizeDock();
+    markDock(); paintDet(); paintNotes(); sizeDock();
   }
-  function selectDock(id) { dockSel = id; markDock(); }
+  function selectDock(id) { dockSel = id; markDock(); paintDet(); }
   function markDock() {
     state.machines.forEach(function (m, i) {
       var on = m.id === dockSel, b = $("dock-m-" + i), c = $("mc-" + i);
@@ -2655,6 +2832,16 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     sRow(dl, "Coils ran", fmtCoils(e.coils), "", "tot");
     sRow(dl, "Lbs ran", fmtInt(e.lbs) + " lb", "", "tot");
     body.appendChild(dl);
+    var hs = e.state || {}, notes = trim(hs.shift && hs.shift.dayNotes);
+    if (notes) { body.appendChild(el("p", "sh-sub", "Notes about my day")); body.appendChild(el("div", "hist-notes", notes)); }
+    var runs = {}, order = [];
+    (hs.coils || []).forEach(function (c) { var t = detailText(c); if (!t) return; if (!runs[t]) { runs[t] = { n: 0, lb: 0 }; order.push(t); } runs[t].n++; runs[t].lb += c.weight || 0; });
+    if (order.length) {
+      body.appendChild(el("p", "sh-sub", "Parts / sizes / conditions"));
+      var dlp = el("dl", "sh-rows");
+      order.forEach(function (t) { sRow(dlp, t, runs[t].n + " coil" + (runs[t].n === 1 ? "" : "s") + " \u00b7 " + fmtInt(runs[t].lb) + " lb"); });
+      body.appendChild(dlp);
+    }
     // per-machine breakdown from the snapshot when present
     var snap = e.state;
     if (snap && snap.machines && snap.machines.length) {
@@ -2729,7 +2916,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var coils = st.coils.slice().sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }).slice(0, ML_COIL_MAX).map(function (c) {
       var m = (byId[c.machineId] || {}).m;
-      return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? mlDraw(m.name) : null };
+      return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? mlDraw(m.name) : null,
+        finish: str(c.size || "", 40), grade: str(c.grade || "", 40), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300) };
     });
     var downtime = [], problems = [];
     st.downtime.slice().sort(function (a, b) { return Date.parse(a.startAt) - Date.parse(b.startAt); }).forEach(function (d) {
@@ -2761,7 +2949,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       totals: { total_lbs: mlR(r.lbsRan, 1), net_hours: net != null ? mlR(Math.min(24, net), 2) : null, goal_lbs: goalLbs != null ? mlR(Math.max(0, goalLbs), 0) : null,
         goal_lbhr: r.rateSum != null ? mlR(r.rateSum, 2) : null, avg_lbhr: net > 0 ? mlR(r.lbsRan / net, 1) : null,
         goal_met: done && r.target != null ? r.lbsRan >= r.target : null },
-      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "",
+      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "", day_notes: str(s.dayNotes || "", 2000),
       raw: { source: "tracker", page: location.pathname, complete: done, phase: r.phase, sent_at: iso(now),
         state: { shift: st.shift, machines: st.machines, coils: st.coils, downtime: st.downtime, settings: st.settings } }
     };

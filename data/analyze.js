@@ -23,6 +23,17 @@
   }
   function num(v) { return v === null || v === undefined || v === "" || isNaN(+v) ? null : +v; }
   function drawList(s) { return String(s || "").split(",").filter(Boolean); }
+  // part numbers are typed many ways: the key ignores case and extra spaces
+  function partKey(s) { return String(s || "").trim().replace(/\s+/g, " ").toLowerCase(); }
+  function tagList(s) { var o = []; String(s || "").split(",").forEach(function (t) { t = t.trim(); if (t && o.indexOf(t) < 0) o.push(t); }); return o; }
+  var NO_TAG = "No condition";
+  // finish size as a number of inches (".600", "0.600", '.600"' -> 0.6); null when it isn't a plain number
+  function sizeNum(s) {
+    var t = String(s || "").trim().replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, "");
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(t)) return null;
+    var v = parseFloat(t); return isFinite(v) && v > 0 && v < 10 ? v : null;
+  }
+  function sizeLabel(v) { var t = v.toFixed(3); return (t.charAt(0) === "0" ? t.slice(1) : t) + '"'; }
 
   function buildParts(data) {
     var by = function (rows) { var o = {}; (rows || []).forEach(function (r) { (o[r.log_id] = o[r.log_id] || []).push(r); }); return o; };
@@ -33,8 +44,9 @@
         shift: shiftKind(l), goal: num(l.goal_lbhr), submitted: l.submitted_at || "" };
       var raw = cs.length ? cs.map(function (c) {
         return { draw: c.draw !== null && c.draw !== undefined && c.draw !== "" ? String(c.draw) : "", grade: String(c.grade || "").trim(),
-          finish: String(c.finish || "").trim(), w: Math.max(num(c.weight) || 0, 0), coils: coilCount(c) };
-      }) : [{ draw: "", grade: "", finish: "", w: 0, coils: 0 }];
+          finish: String(c.finish || "").trim(), w: Math.max(num(c.weight) || 0, 0), coils: coilCount(c),
+          part: String(c.part || "").trim().replace(/\s+/g, " "), tags: tagList(c.tags) };
+      }) : [{ draw: "", grade: "", finish: "", w: 0, coils: 0, part: "", tags: [] }];
       var wsum = raw.reduce(function (a, r) { return a + r.w; }, 0);
       raw.forEach(function (r) { r.share = wsum > 0 ? r.w / wsum : 1 / raw.length; });
       var total = num(l.total_lbs); if (total === null && wsum > 0) total = wsum;
@@ -53,7 +65,7 @@
       raw.forEach(function (r) {
         var targets = r.draw ? [r.draw] : (D.length ? D : [""]), k = targets.length;
         targets.forEach(function (d) {
-          parts.push(Object.assign({}, base, { draw: d, grade: r.grade, finish: r.finish,
+          parts.push(Object.assign({}, base, { draw: d, grade: r.grade, finish: r.finish, part: r.part, partKey: partKey(r.part), tags: r.tags,
             lbs: total === null ? null : total * r.share / k, coils: r.coils / k, hours: hours === null ? null : hours * r.share / k,
             dt: r.dt / k, rated: total !== null && hours !== null }));
         });
@@ -62,13 +74,19 @@
     return parts;
   }
 
-  function emptyF() { return { from: "", to: "", ops: [], draws: [], shifts: [], grades: [], finishes: [] }; }
+  function emptyF() { return { from: "", to: "", ops: [], draws: [], shifts: [], grades: [], finishes: [], parts: [], tags: [] }; }
   function inSet(list, v) { return !list || !list.length || list.indexOf(v) >= 0; }
+  // a row matches the condition filter when it has ANY picked condition ("No condition" = rows with none tagged)
+  function tagHit(list, tags) {
+    if (!list || !list.length) return true;
+    tags = tags || [];
+    return tags.length ? tags.some(function (t) { return list.indexOf(t) >= 0; }) : list.indexOf(NO_TAG) >= 0;
+  }
   function filterParts(parts, f) {
     f = f || {};
     return parts.filter(function (p) {
       return (!f.from || p.date >= f.from) && (!f.to || p.date <= f.to) && inSet(f.ops, p.opKey) && inSet(f.draws, p.draw) &&
-        inSet(f.shifts, p.shift) && inSet(f.grades, p.grade) && inSet(f.finishes, p.finish);
+        inSet(f.shifts, p.shift) && inSet(f.grades, p.grade) && inSet(f.finishes, p.finish) && inSet(f.parts, p.partKey || "") && tagHit(f.tags, p.tags);
     });
   }
   function agg(parts) {
@@ -86,12 +104,49 @@
   function dayNum(s) { var d = parseYmd(s); return d ? Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5) : 0; }
   var KEYS = {
     day: function (p) { return p.date; }, week: function (p) { return weekKey(p.date); }, operator: function (p) { return p.opKey; },
-    draw: function (p) { return p.draw; }, grade: function (p) { return p.grade; }, finish: function (p) { return p.finish; }, shift: function (p) { return p.shift; }
+    draw: function (p) { return p.draw; }, grade: function (p) { return p.grade; }, finish: function (p) { return p.finish; }, shift: function (p) { return p.shift; },
+    part: function (p) { return p.partKey || ""; },
+    tag: function (p) { return p.tags && p.tags.length ? p.tags : [NO_TAG]; }     // a row with 2 conditions lands in both groups
   };
   function groupBy(parts, by) {
     var fn = KEYS[by], m = {}, order = [];
-    parts.forEach(function (p) { var k = fn(p); if (!m[k]) { m[k] = []; order.push(k); } m[k].push(p); });
-    return order.map(function (k) { var r = agg(m[k]); r.key = k; if (by === "operator") r.op = m[k][m[k].length - 1].op; return r; });
+    parts.forEach(function (p) { var ks = fn(p); (Array.isArray(ks) ? ks : [ks]).forEach(function (k) { if (!m[k]) { m[k] = []; order.push(k); } m[k].push(p); }); });
+    return order.map(function (k) { var r = agg(m[k]); r.key = k; if (by === "operator") r.op = m[k][m[k].length - 1].op; if (by === "part") r.part = m[k][m[k].length - 1].part; return r; });
+  }
+
+  /* ---- throughput factors: lb/hr by finish size, condition and part, against the machine's own baseline ---- */
+  var THIN = 3;   // fewer shifts than this = thin data, flagged
+  function factorRow(ps, base) {
+    var a = agg(ps); a.pct = a.lbhr !== null && base && base.lbhr ? a.lbhr / base.lbhr * 100 : null;
+    a.hr10k = a.lbhr ? 10000 / a.lbhr : null; a.thin = a.shifts < THIN; return a;
+  }
+  // step: 0 = exact size; else bucket width in inches (0.025, 0.05, 0.1)
+  function sizeKey(p, step) {
+    var v = sizeNum(p.finish);
+    if (v === null) return p.finish ? { k: "~" + p.finish.toLowerCase(), label: p.finish, n: Infinity } : { k: "~", label: "(not written)", n: Infinity };
+    if (!step) { var r = Math.round(v * 1000) / 1000; return { k: String(r), label: sizeLabel(r), n: r }; }
+    var lo = Math.floor(v / step + 1e-9) * step, hi = lo + step - 0.001;
+    return { k: lo.toFixed(3), label: sizeLabel(lo) + "\u2013" + sizeLabel(hi), n: lo };
+  }
+  function factors(parts, opt) {
+    opt = opt || {};
+    var base = factorRow(parts, null); base.pct = base.lbhr ? 100 : null;
+    var sz = {}, order = [];
+    parts.forEach(function (p) { var k = sizeKey(p, opt.step || 0); if (!sz[k.k]) { sz[k.k] = { label: k.label, n: k.n, ps: [] }; order.push(k.k); } sz[k.k].ps.push(p); });
+    var sizes = order.map(function (k) { var r = factorRow(sz[k].ps, base); r.key = k; r.label = sz[k].label; r.n = sz[k].n; return r; })
+      .sort(function (a, b) { return a.n !== b.n ? a.n - b.n : a.label < b.label ? -1 : 1; });
+    var tagsSeen = {}; parts.forEach(function (p) { (p.tags || []).forEach(function (t) { tagsSeen[t] = 1; }); });
+    var known = ["Grease", "Shape change", "Stainless", "Other"], tagNames = known.filter(function (t) { return tagsSeen[t]; })
+      .concat(Object.keys(tagsSeen).filter(function (t) { return known.indexOf(t) < 0; }).sort());
+    var conds = tagNames.map(function (t) {
+      var w = parts.filter(function (p) { return (p.tags || []).indexOf(t) >= 0; }), wo = parts.filter(function (p) { return (p.tags || []).indexOf(t) < 0; });
+      return { tag: t, with: factorRow(w, base), without: factorRow(wo, base) };
+    });
+    var none = factorRow(parts.filter(function (p) { return !(p.tags && p.tags.length); }), base);
+    var pt = groupBy(parts.filter(function (p) { return p.partKey; }), "part").map(function (r) {
+      var ps = parts.filter(function (p) { return p.partKey === r.key; }), x = factorRow(ps, base); x.key = r.key; x.label = r.part || r.key; return x;
+    }).sort(function (a, b) { return (b.lbs || 0) - (a.lbs || 0); });
+    return { base: base, sizes: sizes, conds: conds, none: none, parts: pt, tagged: parts.some(function (p) { return p.tags && p.tags.length; }) };
   }
   // one point per shift (log) in the parts
   function shiftPoints(parts) {
@@ -130,17 +185,18 @@
   }
   var engine = { opKey: opKey, shiftKind: shiftKind, coilCount: coilCount, buildParts: buildParts, filterParts: filterParts, agg: agg, groupBy: groupBy,
     shiftPoints: shiftPoints, fitLine: fitLine, progressStats: progressStats, bucketSeries: bucketSeries, weekKey: weekKey, dayNum: dayNum, ymd: ymd,
-    parseYmd: parseYmd, emptyF: emptyF, csvCell: csvCell };
+    parseYmd: parseYmd, emptyF: emptyF, csvCell: csvCell, partKey: partKey, tagList: tagList, sizeNum: sizeNum, sizeKey: sizeKey, factors: factors, THIN: THIN, NO_TAG: NO_TAG };
   if (typeof module !== "undefined" && module.exports) { module.exports = engine; return; }
 
   /* ================= UI ================= */
   var C, data = null, parts = [], opts = null, host = null, rerender = null;
   var LS = "analyzeSetupV1", PAL = ["#39ff6a", "#ffc23d", "#4dd0ff", "#ff6bd6", "#ff5f56", "#eaffea", "#b48cff", "#ff9a3d"];
   var METRICS = { lbs: "Total lb", coils: "Coils", hours: "Hours", lbhr: "Lb/hr", shifts: "Shifts", dt: "Downtime hr" };
-  var BYS = { day: "Day", week: "Week", operator: "Operator", draw: "Draw", grade: "Grade", finish: "Finish size", shift: "Shift" };
+  var BYS = { day: "Day", week: "Week", operator: "Operator", draw: "Draw", grade: "Grade", finish: "Finish size", part: "Part #", tag: "Condition", shift: "Shift" };
   var S = { sub: "compare", unit: "day", metric: "lbs", series: [], seq: 0,
     group: { f: emptyF(), by: "operator", metric: "lbhr", sort: { col: "", dir: -1 } },
-    prog: { op: "", from: "", to: "", cmp: "off", op2: "", from2: "", to2: "" } };
+    prog: { op: "", from: "", to: "", cmp: "off", op2: "", from2: "", to2: "" },
+    fac: { f: emptyF(), draw: "", step: 0 } };
   var open = {};   // which panels are expanded
 
   function esc(s) { return C.esc(s); }
@@ -157,6 +213,7 @@
   function keyLabel(by, r) {
     if (by === "day") return C.day(r.key); if (by === "week") return "Wk of " + C.day(r.key);
     if (by === "operator") return r.op || r.key; if (by === "draw") return r.key ? "Draw " + r.key : "No Draw";
+    if (by === "part") return r.part || r.key || "(not written)";
     return r.key || "(not written)";
   }
   function color(i) { if (i < PAL.length) return PAL[i]; var h = (i * 137) % 360; return "hsl(" + h + ",90%,62%)"; }
@@ -180,7 +237,7 @@
   function dec(s) { return JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/"))))); }
   function shareObj() { return { u: S.unit, m: S.metric, s: S.series.map(function (s) { return { name: s.name, color: s.color, hidden: s.hidden, f: s.f }; }) }; }
   function save() {
-    try { localStorage.setItem(LS, JSON.stringify({ sub: S.sub, cmp: shareObj(), group: S.group, prog: S.prog })); } catch (e) {}
+    try { localStorage.setItem(LS, JSON.stringify({ sub: S.sub, cmp: shareObj(), group: S.group, prog: S.prog, fac: S.fac })); } catch (e) {}
   }
   function applyCmp(o) {
     if (!o || typeof o !== "object") return;
@@ -192,7 +249,8 @@
     try {
       var j = JSON.parse(localStorage.getItem(LS) || "null");
       if (j) {
-        if (["compare", "group", "progress"].indexOf(j.sub) >= 0) S.sub = j.sub;
+        if (["compare", "group", "progress", "factors"].indexOf(j.sub) >= 0) S.sub = j.sub;
+        if (j.fac) { S.fac.f = cleanF(j.fac.f); S.fac.draw = /^[1-9*]?$/.test(j.fac.draw || "") ? j.fac.draw || "" : ""; S.fac.step = [0, 0.025, 0.05, 0.1].indexOf(+j.fac.step) >= 0 ? +j.fac.step : 0; }
         applyCmp(j.cmp);
         if (j.group) { S.group.f = cleanF(j.group.f); if (BYS[j.group.by]) S.group.by = j.group.by; if (METRICS[j.group.metric]) S.group.metric = j.group.metric; }
         if (j.prog) Object.keys(S.prog).forEach(function (k) { if (typeof j.prog[k] === "string") S.prog[k] = j.prog[k].slice(0, 80); });
@@ -206,12 +264,15 @@
 
   /* ---- options from the data ---- */
   function buildOpts() {
-    var ops = {}, grades = {}, fins = {};
-    parts.forEach(function (p) { ops[p.opKey] = p.op; if (p.grade) grades[p.grade] = 1; if (p.finish) fins[p.finish] = 1; });
+    var ops = {}, grades = {}, fins = {}, pts = {}, tags = {};
+    parts.forEach(function (p) { ops[p.opKey] = p.op; if (p.grade) grades[p.grade] = 1; if (p.finish) fins[p.finish] = 1; if (p.partKey) pts[p.partKey] = p.part; (p.tags || []).forEach(function (t) { tags[t] = 1; }); });
+    var known = ["Grease", "Shape change", "Stainless", "Other"], tagNames = known.filter(function (t) { return tags[t]; }).concat(Object.keys(tags).filter(function (t) { return known.indexOf(t) < 0; }).sort());
     var srt = function (o) { return Object.keys(o).sort(function (a, b) { return a.localeCompare(b, "en", { numeric: true }); }); };
     opts = { ops: srt(ops).map(function (k) { return { v: k, t: ops[k] }; }), grades: srt(grades).map(function (g) { return { v: g, t: g }; }),
       finishes: srt(fins).map(function (g) { return { v: g, t: g }; }), draws: "123456789".split("").map(function (d) { return { v: d, t: d }; }),
-      shifts: ["Day", "Night", "Not given"].map(function (s) { return { v: s, t: s }; }) };
+      shifts: ["Day", "Night", "Not given"].map(function (s) { return { v: s, t: s }; }),
+      parts: srt(pts).map(function (k) { return { v: k, t: pts[k] }; }),
+      tags: tagNames.length ? tagNames.concat([NO_TAG]).map(function (t) { return { v: t, t: t }; }) : [] };
   }
 
   /* ---- filter editor (shared by every series and the group builder) ---- */
@@ -219,7 +280,7 @@
     var p = [];
     if (f.from || f.to) p.push((f.from ? md(f.from) : "start") + "\u2013" + (f.to ? md(f.to) : "now"));
     var nm = function (list, all, pre) { if (!list.length) return; p.push(list.length > 2 ? list.length + " " + pre : list.map(function (v) { var o = all.filter(function (x) { return x.v === v; })[0]; return (pre === "draws" ? "D" : "") + (o ? o.t : v); }).join(", ")); };
-    nm(f.ops, opts.ops, "operators"); nm(f.draws, opts.draws, "draws"); nm(f.grades, opts.grades, "grades"); nm(f.finishes, opts.finishes, "sizes"); nm(f.shifts, opts.shifts, "shifts");
+    nm(f.ops, opts.ops, "operators"); nm(f.draws, opts.draws, "draws"); nm(f.grades, opts.grades, "grades"); nm(f.finishes, opts.finishes, "sizes"); nm(f.parts, opts.parts, "parts"); nm(f.tags, opts.tags, "conditions"); nm(f.shifts, opts.shifts, "shifts");
     return p.length ? p.join(" \u00b7 ") : "everything";
   }
   function chipRow(pfx, key, label, list, sel, prefix) {
@@ -234,6 +295,7 @@
       '<div class="field"><label class="lbl" for="' + pfx + 'to">To</label><input class="in" type="date" data-fd="to" id="' + pfx + 'to" value="' + esc(f.to) + '"></div></div>' +
       chipRow(pfx, "ops", "Operators", opts.ops, f.ops) + chipRow(pfx, "draws", "Machines (Draw)", opts.draws, f.draws, "D") +
       chipRow(pfx, "grades", "Grades", opts.grades, f.grades) + chipRow(pfx, "finishes", "Finish sizes", opts.finishes, f.finishes) +
+      chipRow(pfx, "parts", "Part #", opts.parts, f.parts) + chipRow(pfx, "tags", "Run conditions", opts.tags, f.tags) +
       chipRow(pfx, "shifts", "Shift", opts.shifts, f.shifts);
   }
   function wireEditor(box, f, onChange) {
@@ -310,13 +372,13 @@
   function info(text) { return '<details class="info"><summary aria-label="How this is counted">\u24d8</summary><p>' + text + '</p></details>'; }
   function render() {
     save();
-    var h = '<div class="subtabs">' + [["compare", "COMPARE"], ["group", "GROUP BY"], ["progress", "OPERATOR"]].map(function (t) {
+    var h = '<div class="subtabs">' + [["compare", "COMPARE"], ["group", "GROUP BY"], ["progress", "OPERATOR"], ["factors", "FACTORS"]].map(function (t) {
       return '<button type="button" data-sub="' + t[0] + '" class="' + (S.sub === t[0] ? "on" : "") + '">' + t[1] + '</button>'; }).join("") + '</div><div id="asub"></div>' +
       '<div class="toolbar"><button type="button" id="areload" class="ghost">REFRESH DATA</button><span class="muted" style="font-size:12px;align-self:center">' + (data.logs || []).length + ' logs loaded</span></div>';
     host.innerHTML = h;
     Array.prototype.forEach.call(host.querySelectorAll("[data-sub]"), function (b) { b.onclick = function () { S.sub = b.dataset.sub; render(); }; });
     $("areload").onclick = function () { data = null; host.innerHTML = '<p class="muted" style="margin-top:24px">Loading\u2026</p>'; load(); };
-    ({ compare: renderCompare, group: renderGroup, progress: renderProgress })[S.sub]();
+    ({ compare: renderCompare, group: renderGroup, progress: renderProgress, factors: renderFactors })[S.sub]();
   }
 
   /* ---- COMPARE: any number of filter-set series over time ---- */
@@ -492,6 +554,70 @@
         '<div class="stat"><i>Change (trend)</i><b>' + (st.change === null ? "\u2013" : sign + C.n1(Math.abs(st.change))) + '</b><small>' + (st.change === null ? "needs 2+ shifts on different days" : "lb/hr" + (st.pct !== null ? " \u00b7 " + sign + Math.abs(Math.round(st.pct)) + "%" : "")) + '</small></div>' +
         '<div class="stat"><i>Goal hit</i><b>' + (st.goalN ? st.goalMet + " of " + st.goalN : "\u2013") + '</b><small>' + (st.goalN ? "shifts with a goal" : "no goal on these logs") + '</small></div></div>';
     }).join("");
+  }
+
+  /* ---- THROUGHPUT FACTORS: what finish size, run conditions and part do to a machine's lb/hr ---- */
+  function pctTxt(v) { return v === null || v === undefined ? "\u2013" : Math.round(v) + "%"; }
+  function thinTag(r) { return r.thin ? ' <span class="thin" title="Fewer than ' + THIN + ' shifts: don\u2019t lean on this yet">THIN</span>' : ""; }
+  function facTable(head, rows, cells) {
+    return '<div class="tblwrap"><table class="tbl fac"><thead><tr>' + head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+      (rows.length ? rows.join("") : '<tr><td colspan="' + head.length + '" class="muted">' + esc(cells) + '</td></tr>') + '</tbody></table></div>';
+  }
+  function facCells(label, r, cls) {
+    return '<tr class="' + (cls || "") + (r.thin ? " thinrow" : "") + '"><td>' + label + '</td><td><b>' + pctTxt(r.pct) + '</b></td><td>' + fmt("lbhr", r.lbhr) + '</td><td>' + r.shifts + thinTag(r) +
+      '</td><td>' + (r.hr10k === null ? "\u2013" : C.n1(r.hr10k)) + '</td><td>' + fmt("lbs", r.lbs) + '</td><td>' + fmt("hours", r.hours) + '</td></tr>';
+  }
+  function renderFactors() {
+    var F = S.fac, box = $("asub");
+    var inScope = filterParts(parts, F.f), draws = {};
+    inScope.forEach(function (p) { if (p.draw) draws[p.draw] = 1; });
+    var dl = Object.keys(draws).sort();
+    if (F.draw && F.draw !== "*" && !draws[F.draw]) F.draw = "";
+    if (!F.draw) F.draw = dl.length ? dl[0] : "*";
+    var all = F.draw === "*", ps = all ? inScope : inScope.filter(function (p) { return p.draw === F.draw; }), mname = all ? "all machines" : "Draw " + F.draw;
+    var R = factors(ps, { step: F.step }), B = R.base;
+    var h = '<details class="filters panel"' + (open.ff ? " open" : "") + ' id="ffbox"><summary>FILTERS <span>' + esc(fSummary(F.f)) + '</span></summary><div style="margin-top:10px" id="ffed">' + fEditor("f", F.f) + '</div></details>' +
+      '<div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Machine</span>' + info("Baseline = this machine\u2019s own lb/hr over everything in the filters. Every other number is the lb/hr of just the matching card rows, shown as a % of that baseline. " +
+      "Hours are split across a shift\u2019s rows by weight share (the same way as Compare and Group By), so a size or condition that ran half the shift\u2019s pounds gets half its hours. " +
+      "Hr per 10k lb = how long 10,000 lb takes at that rate, for scheduling. THIN means fewer than " + THIN + " shifts: treat it as a hint, not a number to plan on. " +
+      "Conditions come from the tracker\u2019s per-coil tags (Grease, Shape change, Stainless, Other); paper logs don\u2019t have them.") + '</div>' +
+      '<div class="seg" id="fdraw">' + (dl.length ? dl.map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (F.draw === d ? "on" : "") + '">DRAW ' + d + '</button>'; }).join("") : "") +
+      '<button type="button" data-d="*" class="' + (all ? "on" : "") + '">ALL</button></div>' +
+      '<div class="stats"><div class="stat"><i>Baseline \u00b7 ' + esc(mname) + '</i><b>' + fmt("lbhr", B.lbhr) + '</b><small>lb/hr \u00b7 ' + B.shifts + ' shift' + (B.shifts === 1 ? "" : "s") + ' \u00b7 ' + fmt("lbs", B.lbs) + ' lb</small></div></div></div>';
+    // headline sentences
+    var lines = [];
+    R.conds.forEach(function (c) { if (c.with.lbhr !== null && B.lbhr) lines.push({ t: c.tag + " runs at " + pctTxt(c.with.pct) + " of " + mname + " baseline (" + fmt("lbhr", c.with.lbhr) + " vs " + fmt("lbhr", B.lbhr) + " lb/hr)", r: c.with }); });
+    var rs = R.sizes.filter(function (r) { return r.lbhr !== null && isFinite(r.n); });
+    if (rs.length >= 2) { var lo = rs[0], hi = rs[rs.length - 1]; lines.push({ t: lo.label + " runs at " + pctTxt(lo.pct) + " and " + hi.label + " at " + pctTxt(hi.pct) + " of baseline: 10,000 lb takes " + C.n1(lo.hr10k) + " hr vs " + C.n1(hi.hr10k) + " hr", r: { thin: lo.thin || hi.thin, shifts: Math.min(lo.shifts, hi.shifts) } }); }
+    if (lines.length) h += '<div class="panel"><span class="lbl">What stands out</span><ul class="list facl">' + lines.map(function (x) { return '<li>' + esc(x.t) + '.' + (x.r.thin ? ' <span class="thin">THIN DATA</span>' : "") + '</li>'; }).join("") + '</ul></div>';
+    var head = ["", "% of base", "Lb/hr", "Shifts", "Hr / 10k lb", "Lb", "Hours"];
+    h += '<h3>By finish size</h3><div class="seg" id="fstep">' + [[0, "EXACT"], [0.025, '.025"'], [0.05, '.050"'], [0.1, '.100"']].map(function (x) { return '<button type="button" data-s="' + x[0] + '" class="' + (F.step === x[0] ? "on" : "") + '">' + x[1] + '</button>'; }).join("") + '</div>' +
+      '<div id="fchart" class="chartbox"></div>' + facTable(head, R.sizes.map(function (r) { return facCells(esc(r.label), r); }), "No logs match these filters.");
+    h += '<h3>By run condition</h3>' + (R.tagged ? facTable(head, [].concat.apply([], R.conds.map(function (c) {
+      return [facCells("With " + esc(c.tag), c.with), facCells('<span class="muted">Without ' + esc(c.tag) + '</span>', c.without, "sub")];
+    })).concat([facCells("No condition tagged", R.none, "tot")]), "") : '<p class="muted">No run conditions tagged on ' + esc(mname) + ' yet. Operators tag Grease, Shape change, Stainless or Other per coil in the tracker.</p>');
+    h += '<h3>By part #</h3>' + (R.parts.length ? facTable(head, R.parts.map(function (r) { return facCells(esc(r.label), r); }), "") : '<p class="muted">No part numbers on ' + esc(mname) + ' yet. Operators add them per coil in the tracker.</p>');
+    h += '<div class="toolbar"><button type="button" id="fcsv">EXPORT FACTORS</button></div>';
+    box.innerHTML = h;
+    $("ffbox").addEventListener("toggle", function () { open.ff = $("ffbox").open; });
+    wireEditor($("ffed"), F.f, render);
+    Array.prototype.forEach.call(box.querySelectorAll("#fdraw button"), function (b) { b.onclick = function () { F.draw = b.dataset.d; render(); }; });
+    Array.prototype.forEach.call(box.querySelectorAll("#fstep button"), function (b) { b.onclick = function () { F.step = +b.dataset.s; render(); }; });
+    $("fcsv").onclick = function () {
+      var r1 = function (v, d) { return v === null || v === undefined ? "" : Math.round(v * d) / d; };
+      var lines = [["machine", mname].map(csvCell).join(","), ["filters", fSummary(F.f)].map(csvCell).join(","), ["factor", "value", "shifts", "lb", "hours", "lb_per_hr", "pct_of_baseline", "hr_per_10k_lb", "thin_data"].join(",")];
+      var row = function (k, v, r) { lines.push([k, v, r.shifts, r1(r.lbs, 1), r1(r.hours, 100), r1(r.lbhr, 10), r1(r.pct, 1), r1(r.hr10k, 100), r.thin ? "yes" : ""].map(csvCell).join(",")); };
+      row("baseline", mname, B);
+      R.sizes.forEach(function (r) { row("finish size", r.label, r); });
+      R.conds.forEach(function (c) { row("with condition", c.tag, c.with); row("without condition", c.tag, c.without); });
+      if (R.tagged) row("no condition tagged", "", R.none);
+      R.parts.forEach(function (r) { row("part", r.label, r); });
+      var blob = new Blob(["\uFEFF" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }), name = "throughput-factors-" + (all ? "all" : "draw" + F.draw) + "-" + ymd(new Date()) + ".csv";
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000); C.toast("CSV saved: " + name);
+    };
+    rerender = function () { barChart($("fchart"), R.sizes.filter(function (r) { return r.lbhr !== null; }).map(function (r) { return { label: r.label, v: r.lbhr, color: r.thin ? "#7a6a2e" : "#39ff6a" }; }), "lbhr"); };
+    rerender();
   }
 
   var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { if (rerender && host && host.isConnected && document.getElementById("asub")) rerender(); }, 200); });
