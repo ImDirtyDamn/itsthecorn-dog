@@ -280,10 +280,21 @@
   .rc-edit .in { height: 3rem; }
   .rc-edit .rc-btns { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .rc-edit .err { grid-column: 1 / -1; margin: 0; }
+
+  /* past shifts (7-day on-phone archive) */
+  .hist-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.75rem; width: 100%; background: none; border: 0; border-top: 1px solid var(--fg-faint); padding: 0.7rem 0; min-height: 3.25rem; cursor: pointer; text-align: left; color: var(--white); }
+  .hist-row:first-child { border-top: 0; }
+  .hist-row:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .hist-row .hist-date { font-weight: 700; font-size: 1.05rem; }
+  .hist-row .hist-mach { color: var(--fg-dim); font-size: 0.85rem; }
+  .hist-row .hist-nums { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.95rem; }
+  .hist-row .hist-rate { text-align: right; color: var(--fg-dim); font-size: 0.8rem; font-variant-numeric: tabular-nums; grid-column: 2; }
+  .hist-empty { color: var(--fg-dim); margin: 0.75rem 0; }
+
   /* SIMPLE / FULL view */
   .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.75rem; row-gap: 0.6rem; align-items: start; }
   .top .sub { overflow-wrap: anywhere; }
-  .tools { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.4rem; }
+  .tools { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
   #dash .tools .btn { min-height: 3rem; padding: 0.2rem 0.3rem; font-size: 0.78rem; letter-spacing: 0.04em; line-height: 1.15; white-space: normal; }
   #dash .top-r a.btn.calc-link { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; min-height: 3rem; padding: 0.2rem 0.8rem; text-decoration: none; font-size: 0.78rem; letter-spacing: 0.06em; white-space: nowrap; }
   #dash .top-r a.btn.scan-link { border-color: var(--amber, #ffc23d); color: var(--amber, #ffc23d); }
@@ -297,7 +308,9 @@
   .simple { display: none; }
   .v-simple #dash > *:not(.top):not(.simple):not(.dock) { display: none !important; }
   .v-simple .simple { display: block; }
-  .s-race { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-top: 1rem; }
+  .s-race { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-top: 1rem; }
+  .s-race .s-n { padding: 0.5rem 0.45rem; min-height: 5.5rem; }
+  .s-race .s-n b { font-size: clamp(1.75rem, 8vw, 3.8rem); }
   .s-n { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; background: none; border: 1px solid var(--fg-faint); padding: 0.6rem 0.7rem; cursor: pointer; text-align: left; min-height: 6rem; color: var(--white); }
   .s-n:active, .s-n:focus-visible, .s-status:focus-visible, .s-proj:focus-visible, .s-row:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
   .s-n b { font-size: clamp(2rem, 9.5vw, 4.4rem); line-height: 1.05; font-variant-numeric: tabular-nums; }
@@ -347,6 +360,7 @@
 
   /* PHONE FIT (browser in desktop-website mode, see script in head): keep the phone layout */
   html.fit .s-n b { font-size: clamp(2rem, calc(var(--fvw) * 9.5), 4.4rem); }
+  html.fit .s-race .s-n b { font-size: clamp(1.75rem, calc(var(--fvw) * 8), 3.8rem); }
   html.fit .s-status { font-size: clamp(1.45rem, calc(var(--fvw) * 7), 2.4rem); }
   html.fit .rb-w { font-size: clamp(2.4rem, calc(var(--fvw) * 11), 3.4rem); }
   html.fit .sheet-box { max-height: calc(var(--fvh) * 88); }
@@ -367,6 +381,7 @@
   .ml-bar.bad { color: var(--red); border-color: var(--red); }
   .ml-bar.bad .btn { border-color: var(--red); color: var(--red); }
   .actions .ml-send { grid-column: 1 / -1; }
+  .actions .hist-btn { grid-column: 1 / -1; }
   .ml-line { margin: 0 0 0.35rem; color: var(--white); font-size: 0.95rem; }
   #ml { z-index: 46; }
   #ml .ldb .ldb-show { background: transparent; color: var(--fg); border: 2px solid var(--fg); border-radius: 3px; font-family: inherit; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
@@ -412,6 +427,7 @@
         </div>
         <button type="button" class="btn small" id="rc-open">RECENT COILS</button>
         <button type="button" class="btn small" id="dt-open">DOWNTIME</button>
+        <button type="button" class="btn small" id="hist-open">PAST SHIFTS</button>
       </div>
     </header>
     <div class="ml-bar" id="ml-bar-d" hidden role="status" aria-live="polite"><span class="ml-msg"></span><button type="button" class="btn small">OPEN</button></div>
@@ -419,6 +435,7 @@
     <section id="simple" class="simple" aria-label="Simple view">
       <button type="button" class="s-down" id="s-down" hidden></button>
       <div class="s-race">
+        <button type="button" class="s-n" id="s-coils-btn" aria-label="Coils ran, tap for details"><span class="lbl">Coils ran ›</span><b class="glow" id="s-coils">0</b></button>
         <button type="button" class="s-n" id="s-ran-btn" aria-label="Lbs ran, tap for details"><span class="lbl">Lbs ran ›</span><b class="glow" id="s-ran">0</b></button>
         <button type="button" class="s-n pc" id="s-pc-btn" aria-label="Pace car, tap for details"><span class="lbl">Pace car ›</span><b class="glow" id="s-pc">0</b></button>
       </div>
@@ -488,6 +505,7 @@
 
     <div class="actions">
       <button type="button" class="btn ml-send" id="btn-ml">SEND TO MASTER LOG</button>
+      <button type="button" class="btn hist-btn" id="hist-open-2">PAST SHIFTS</button>
       <button type="button" class="btn" id="btn-edit">EDIT SETUP</button>
       <button type="button" class="btn warn" id="btn-new">NEW SHIFT</button>
     </div>
@@ -799,6 +817,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 (function () {
   "use strict";
   var KEY = "drawRateV5", V4_KEY = "drawRateV4", OLD_KEY = "drawRateMulti", SCHEMA = "draw-rate/v5", MERGED_FLAG = "drawRateV4Imported";
+  var HIST_KEY = "drawRateHistoryV1", HIST_DAYS = 7, HIST_MAX = 24;
   var MAX_MACHINES = 6, DEFAULT_RATE = 2800;
 
   /* ---------- small helpers ---------- */
@@ -825,6 +844,24 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var neg = n < 0, s = String(Math.round(Math.abs(n)));
     s = s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return (neg && s !== "0" ? "-" : "") + s;
+  }
+  // Coil count for the simple view. Whole coils as 1, 2, 3…; halves as 1½ (unicode ½).
+  // Tracker logs one entry per LOG COIL, so the live count is usually a whole number.
+  function fmtCoils(n) {
+    if (!isFinite(n)) return "—";
+    var x = Math.round(Number(n) * 2) / 2, neg = x < 0;
+    x = Math.abs(x);
+    var whole = Math.floor(x + 1e-9), half = Math.abs(x - whole - 0.5) < 1e-9;
+    var s;
+    if (half) s = (whole === 0 ? "" : fmtInt(whole)) + "\u00BD";
+    else s = fmtInt(Math.round(x));
+    return (neg && s !== "0" ? "-" : "") + s;
+  }
+  function coilsRanCount() {
+    // One logged coil entry = 1 coil ran. No half-cut field on tracker coils; if a
+    // cut-in-half piece is logged as its own weight, it counts as 1 (so 1 coil cut
+    // into 2 halves logged separately = 2). Fractions only show if a count is half.
+    return (state.coils || []).length;
   }
   function fmtSigned(n) { var s = fmtInt(n); return n > 0 && s !== "0" ? "+" + s : s; }
   function fmtPct(n) { if (n == null || !isFinite(n)) return "—"; var s = Math.abs(n).toFixed(1); return (n > 0.05 ? "+" : n < -0.05 ? "-" : "") + s + "%"; }
@@ -1722,10 +1759,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   $("btn-new").addEventListener("click", function () {
     var has = mlHasData();
     if (!window.confirm("Start a new shift? This clears today's coils and downtime. Your schedule and machines stay as defaults." +
-      (has ? "\n\nThis shift is sent to the master log first. With no signal it stays saved on this phone and sends later." : ""))) return;
+      (has ? "\n\nThis shift is sent to the master log first, and kept under Past shifts for 7 days. With no signal the send stays on this phone and goes later." : ""))) return;
     var ask = false, sentKey = null;
     if (has) { try { ask = !mlCredsReady(); sentKey = mlBase(); mlSend(false); } catch (e) {} }   // queued before anything is cleared
     var now = Date.now();
+    if (has) { try { histArchive(state, now); } catch (e) {} }   // keep a week on this phone; do not block clear/send
     state.coils = []; state.downtime = [];
     state.shift.id = uid("s"); state.shift.date = todayStr(); state.shift.createdAt = iso(now);
     state.machines.forEach(function (m) { m.timerStartedAt = null; m.timerAccumMs = 0; });
@@ -2030,6 +2068,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function downNow(id) { return runningFor(id) || runningFor("all"); }
 
   function updateSimple(r, now) {
+    setText($("s-coils"), fmtCoils(coilsRanCount()));
+    setCls($("s-coils"), "glow");
     setText($("s-ran"), $("d-ran").textContent);
     setCls($("s-ran"), "glow" + (raceReady(r) ? " pace-" + paceColor(r.delta) : ""));
     setText($("s-pc"), $("d-pc").textContent);
@@ -2153,6 +2193,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     showDowntime();
   });
   $("s-pc-btn").addEventListener("click", function () { openSheet("pc"); });
+  $("s-coils-btn").addEventListener("click", function () { openSheet("ran"); });
+  $("hist-open").addEventListener("click", openHist);
+  $("hist-open-2").addEventListener("click", openHist);
   $("s-ran-btn").addEventListener("click", function () { openSheet("ran"); });
   $("s-status").addEventListener("click", function () { openSheet("delta"); });
   $("s-proj").addEventListener("click", function () { openSheet("proj"); });
@@ -2197,8 +2240,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       body.appendChild(el("p", "sh-sub", "What you should have by now to finish the day exactly on target."));
       paceCarMath(body, r, null, null);
     } else if (sheetKind === "ran") {
-      title = "LBS RAN · BY MACHINE";
-      var b1 = el("div", "sh-big", fmtInt(r.lbsRan) + " lb"); b1.id = "sh-ran-big"; body.appendChild(b1);
+      title = "COILS + LBS RAN · BY MACHINE";
+      var n0 = coilsRanCount();
+      var b1 = el("div", "sh-big", fmtCoils(n0) + " coil" + (n0 === 1 ? "" : "s") + " · " + fmtInt(r.lbsRan) + " lb"); b1.id = "sh-ran-big"; body.appendChild(b1);
       var dl = el("dl", "sh-rows"), n = 0;
       state.machines.forEach(function (m, i) {
         var list = coilsOf(m.id), mr = r.machines[i], lc = list.length ? list[list.length - 1] : null; n += list.length;
@@ -2267,10 +2311,189 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var dtb = el("button", "btn warn sh-btn", "DOWNTIME"); dtb.type = "button"; dtb.id = "sh-m-down";
       dtb.addEventListener("click", function () { var id = m.id; closeSheet(); dtTarget = id; showDowntime(); });
       bb.appendChild(rcb); bb.appendChild(dtb); body.appendChild(bb);
+    } else if (sheetKind === "hist") {
+      renderHistSheet(body);
+      $("sheet-box").scrollTop = keep;
+      return;
+    } else if (sheetKind === "hist-one") {
+      renderHistOne(body, sheetArg || histSel);
+      $("sheet-box").scrollTop = keep;
+      return;
     }
     setText($("sheet-title"), title);
     $("sheet-box").scrollTop = keep;
   }
+
+
+  /* ========================= PAST SHIFTS (7 days on this phone) =========================
+     On NEW SHIFT, the finished shift is archived here before coils/downtime are cleared.
+     Master-log auto-send is unchanged and still runs first. Entries older than 7 days
+     (by shift date) are pruned. Past shifts open read-only. */
+  var histSel = null;   // id of the past shift open in the detail sheet
+  function histLoad() {
+    try {
+      var raw = window.localStorage.getItem(HIST_KEY);
+      if (!raw) return [];
+      var o = JSON.parse(raw);
+      var list = Array.isArray(o) ? o : (o && Array.isArray(o.shifts) ? o.shifts : []);
+      return histPrune(list);
+    } catch (e) { return []; }
+  }
+  function histSave(list) {
+    try {
+      window.localStorage.setItem(HIST_KEY, JSON.stringify({ schema: "draw-rate-history/v1", shifts: histPrune(list) }));
+    } catch (e) { /* storage full/blocked: don't block NEW SHIFT */ }
+  }
+  function histCutoffYmd() {
+    var d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - HIST_DAYS);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function histPrune(list) {
+    var cut = histCutoffYmd();
+    var out = (list || []).filter(function (e) { return e && e.date && String(e.date) >= cut; });
+    out.sort(function (a, b) {
+      var c = String(b.date).localeCompare(String(a.date));
+      if (c) return c;
+      return String(b.archivedAt || "").localeCompare(String(a.archivedAt || ""));
+    });
+    if (out.length > HIST_MAX) out = out.slice(0, HIST_MAX);
+    return out;
+  }
+  function histDrawLabel(e) {
+    var draws = (e.draws || []).filter(function (n) { return n != null; });
+    if (draws.length) return draws.map(function (n) { return "Draw " + n; }).join(" + ");
+    var names = e.machines || [];
+    return names.length ? names.join(" + ") : "—";
+  }
+  function histFmtDate(ymd) {
+    var p = String(ymd || "").split("-");
+    if (p.length !== 3) return ymd || "—";
+    var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+    if (!isFinite(dt.getTime())) return ymd;
+    return DAYS[dt.getDay()] + " " + (dt.getMonth() + 1) + "/" + dt.getDate();
+  }
+  function histEntryFromState(st, now) {
+    var r = Calc.compute(st, now), H = 3600000;
+    var done = r.phase === "after";
+    var span = done ? (r.workedTotalMs || 0) : (r.workedSoFarMs || 0);
+    var minDown = Infinity;
+    (r.machines || []).forEach(function (mr, i) {
+      var m = st.machines[i];
+      var dm = done ? (mr.downMs || 0) : (m && m.needRate > 0 ? (mr.downSoFarLb || 0) / m.needRate * H : 0);
+      minDown = Math.min(minDown, dm);
+    });
+    if (!isFinite(minDown)) minDown = 0;
+    var net = Math.max(0, (span - minDown) / H);
+    var names = (st.machines || []).map(function (m) { return m.name; });
+    var draws = names.map(function (n) {
+      var m = /\bdraw\s*#?\s*([1-9])\b/i.exec(n) || /^\s*(?:dr?|#)\s*([1-9])\s*$/i.exec(n) || /^\s*([1-9])\s*$/.exec(n);
+      return m ? Number(m[1]) : null;
+    }).filter(function (d) { return d != null; });
+    var snap;
+    try { snap = JSON.parse(JSON.stringify({ shift: st.shift, machines: st.machines, coils: st.coils, downtime: st.downtime })); }
+    catch (e) { snap = { shift: st.shift, machines: st.machines, coils: st.coils, downtime: st.downtime }; }
+    return {
+      id: st.shift.id,
+      archivedAt: iso(now),
+      date: st.shift.date,
+      start: st.shift.start,
+      end: st.shift.end,
+      operator: str(st.shift.operator || "", 60),
+      machines: names,
+      draws: draws,
+      lbs: Math.round(r.lbsRan || 0),
+      coils: (st.coils || []).length,
+      lbhr: net > 0 ? Math.round((r.lbsRan || 0) / net) : null,
+      state: snap
+    };
+  }
+  function histArchive(st, now) {
+    if (!st || !((st.coils && st.coils.length) || (st.downtime && st.downtime.length))) return;
+    now = now || Date.now();
+    var entry = histEntryFromState(st, now);
+    var list = histLoad().filter(function (e) { return e.id !== entry.id; });
+    list.unshift(entry);
+    histSave(list);
+  }
+  function histById(id) {
+    var list = histLoad();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  function openHist() { histSel = null; openSheet("hist"); }
+  function openHistOne(id) { histSel = id; openSheet("hist-one", id); }
+  function renderHistSheet(body) {
+    var list = histLoad();
+    setText($("sheet-title"), "PAST SHIFTS · LAST " + HIST_DAYS + " DAYS");
+    if (!list.length) {
+      body.appendChild(el("p", "hist-empty", "No past shifts on this phone yet. When you tap NEW SHIFT, that shift is kept here for " + HIST_DAYS + " days (and still sent to the master log)."));
+      return;
+    }
+    list.forEach(function (e) {
+      var b = el("button", "hist-row"); b.type = "button";
+      var left = el("div");
+      left.appendChild(el("div", "hist-date", histFmtDate(e.date) + " ›"));
+      left.appendChild(el("div", "hist-mach", histDrawLabel(e) + (e.operator ? " · " + e.operator : "")));
+      b.appendChild(left);
+      var nums = el("div", "hist-nums", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lb");
+      b.appendChild(nums);
+      b.appendChild(el("div", "hist-rate", e.lbhr != null ? fmtInt(e.lbhr) + " lb/hr" : "— lb/hr"));
+      b.addEventListener("click", function () { openHistOne(e.id); });
+      body.appendChild(b);
+    });
+    body.appendChild(el("p", "sh-sub", "Read-only. Older than " + HIST_DAYS + " days is removed automatically."));
+  }
+  function renderHistOne(body, id) {
+    var e = histById(id);
+    if (!e) { openHist(); return; }
+    setText($("sheet-title"), histFmtDate(e.date).toUpperCase() + " · READ ONLY");
+    body.appendChild(el("div", "sh-big", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lb"));
+    var dl = el("dl", "sh-rows");
+    sRow(dl, "Draw / machines", histDrawLabel(e));
+    sRow(dl, "Average lb/hr", e.lbhr != null ? fmtInt(e.lbhr) + " lb/hr" : "—");
+    sRow(dl, "Shift", (e.start || "—") + " – " + (e.end || "—") + (e.operator ? " · " + e.operator : ""));
+    sRow(dl, "Coils ran", fmtCoils(e.coils), "", "tot");
+    sRow(dl, "Lbs ran", fmtInt(e.lbs) + " lb", "", "tot");
+    body.appendChild(dl);
+    // per-machine breakdown from the snapshot when present
+    var snap = e.state;
+    if (snap && snap.machines && snap.machines.length) {
+      body.appendChild(el("p", "sh-sub", "By machine"));
+      var dl2 = el("dl", "sh-rows");
+      var endMs = Date.parse((snap.shift && snap.shift.date ? snap.shift.date : e.date) + "T12:00:00");
+      // use shift end clock on the shift date (overnight-aware via Calc)
+      var fake = { shift: snap.shift, machines: snap.machines, coils: snap.coils || [], downtime: snap.downtime || [] };
+      var when = Date.now();
+      try {
+        var win = null;
+        // prefer a time after the shift so totals are final
+        var cEnd = Calc.parseClock(snap.shift.end), cStart = Calc.parseClock(snap.shift.start);
+        if (cEnd && snap.shift.date) {
+          var parts = String(snap.shift.date).split("-");
+          var endAt = new Date(+parts[0], +parts[1] - 1, +parts[2], cEnd.h, cEnd.m, 0, 0).getTime();
+          if (cStart && (cEnd.h * 60 + cEnd.m) <= (cStart.h * 60 + cStart.m)) endAt += 86400000;
+          when = endAt + 60000;
+        }
+        var rr = Calc.compute(fake, when);
+        snap.machines.forEach(function (m, i) {
+          var mr = (rr.machines || [])[i] || {};
+          var n = (snap.coils || []).filter(function (c) { return c.machineId === m.id; }).length;
+          sRow(dl2, m.name + " · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(mr.lbs || 0) + " lb");
+        });
+      } catch (err) {
+        snap.machines.forEach(function (m) {
+          var lbs = 0, n = 0;
+          (snap.coils || []).forEach(function (c) { if (c.machineId === m.id) { lbs += c.weight || 0; n++; } });
+          sRow(dl2, m.name + " · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(lbs) + " lb");
+        });
+      }
+      body.appendChild(dl2);
+    }
+    var back = el("button", "btn sh-btn", "← ALL PAST SHIFTS"); back.type = "button";
+    back.addEventListener("click", function () { openHist(); });
+    body.appendChild(back);
+  }
+  try { histSave(histLoad()); } catch (e) {}
 
   /* ========================= MASTER LOG (send the shift to the log database) =========================
      NEW SHIFT packages the finished shift in the master-log format and hands it to LogDB (/data/submit.js),
