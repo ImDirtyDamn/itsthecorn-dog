@@ -1043,7 +1043,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       h += '<p class="calc-note" id="send-err"></p><div class="row2" style="margin-top:12px"><button id="send-cancel" type="button" class="big ghost">CANCEL</button><button id="send-go" type="button" class="big solid">SEND</button></div>';
     }
     body.innerHTML = h;
-    $("send").hidden = false; document.body.classList.add("noscroll");
+    $("send").hidden = false; document.body.classList.add("noscroll"); armGuard();
     $("send-cancel").onclick = sendClose;
     if ($("send-start")) $("send-start").onclick = function () { location.href = "/draw/app/" + (ts.none ? "" : "#newshift"); };
     if ($("send-anyway")) $("send-anyway").onclick = function () {
@@ -1601,6 +1601,26 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   $("sv-close").onclick = function () { $("sheetview").hidden = true; document.body.classList.remove("noscroll"); };
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeDrill(); $("sv-close").onclick(); } });
+  /* Android Back: closes SEND TO TRACKER, the step-by-step, or the sheet copy, then goes back to the calculator's
+     first screen. It only leaves the page from the first screen with nothing open. */
+  var guardOn = false;
+  function armGuard() {
+    if (guardOn) return;
+    if (history.state && history.state.calcGuard) { guardOn = true; return; }
+    try { history.pushState({ calcGuard: 1 }, ""); guardOn = true; } catch (e) {}
+  }
+  function anyOpen() { return !$("send").hidden || !$("drill").hidden || !$("sheetview").hidden || S.screen !== "home"; }
+  document.addEventListener("pointerdown", function () { if (anyOpen()) armGuard(); }, true);
+  document.addEventListener("click", function () { setTimeout(function () { if (anyOpen()) armGuard(); }, 0); }, true);
+  window.addEventListener("popstate", function () {
+    guardOn = false;
+    if (!$("send").hidden) sendClose();
+    else if (!$("drill").hidden) closeDrill();
+    else if (!$("sheetview").hidden) $("sv-close").onclick();
+    else if (S.screen !== "home") go("home");
+    else return;
+    if (anyOpen()) armGuard();
+  });
 
   (function () {
     var qs = /[?&]go=(avg|rate|log)\b/.exec(location.search), fr = /[?&]from=(app|root)\b/.exec(location.search);

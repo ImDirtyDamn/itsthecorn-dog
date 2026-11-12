@@ -376,6 +376,7 @@
       if (w && w.held && w.held.kept) lastStatus = { kind: "warn", msg: "Not sent. Kept on this phone only (looked like it was already submitted). Tap " + labels.word + " to check again." };
       else if (w && w.held) lastStatus = { kind: "warn", msg: "Not sent yet: looks like this was already submitted. Choose below." };
       else if (w && w.rejected) lastStatus = { kind: "bad", msg: "The master log turned this log down: " + w.rejected.error + " It's kept on this phone. Tap " + labels.word + " to try again." };
+      else if (w && (!get(K.op, "") || !get(K.code, ""))) lastStatus = { kind: "warn", msg: "Saved on this phone \u2713 It sends once your name and the crew code are filled in above and you tap the send button." };
       else if (w) lastStatus = { kind: "warn", msg: "Saved on this phone \u2713 It will send by itself when there's signal." + (w.error ? " (Last try: " + w.error + ")" : "") };
       else if (s) lastStatus = { kind: "ok", msg: "Already sent \u2713 " + new Date(s.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) +
         (opts.key ? ". Log more and it sends the update." : ". This log is locked.") };

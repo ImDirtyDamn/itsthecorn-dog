@@ -1,7 +1,7 @@
 /* Draw Rate Tracker phone app - service worker.
    Cache-first, versioned. The version is a hash of the app files, so any change
    to them makes a new cache and the old one is deleted on activate. */
-var CACHE = "draw-rate-app-draw-20261112-v1";
+var CACHE = "draw-rate-app-draw-20261112-v2";
 var ASSETS = [
   "./",
   "./index.html",
@@ -11,7 +11,7 @@ var ASSETS = [
   "./icons/icon-maskable-192.png",
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
-  "/data/config.js",                 // master-log sender (shared with the full page and the calculator)
+  "/data/config.js",                 // master-log sender (shared with the calculator and /data/)
   "/data/submit.js"
 ];
 var SHARED = ["/data/config.js", "/data/submit.js"];

@@ -1,5 +1,5 @@
 // Offline cache for the Production Report Calculator (scope: /calc/ only).
-var CACHE = "draw-calc-v5";
+var CACHE = "draw-calc-v6";
 var FILES = ["./", "./index.html"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));

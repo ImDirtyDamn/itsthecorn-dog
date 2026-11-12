@@ -180,7 +180,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
    you tap REPLACE/ADD (or the shift end, if the shift is already over), because the paper has no time per coil. */
 (function () {
   "use strict";
-  var KEY = "drawRateV5", BACKUP = "drawRateV5_beforeScan", SCHEMA = "draw-rate/v5", MAX_MACHINES = 6, DEFAULT_RATE = 2800;
+  var KEY = "drawRateV5", BACKUP = "drawRateV5_beforeScan", INBOX = "drawRateInboxV1", SCHEMA = "draw-rate/v5", MAX_MACHINES = 6, DEFAULT_RATE = 2800;
   var $ = function (id) { return document.getElementById(id); }, app = $("app");
   function esc(s) { return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 2200); }
@@ -232,12 +232,35 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
     var b = localStorage.getItem(BACKUP);
     if (b === null) { toast("Nothing to undo"); return; }
     if (b === "") localStorage.removeItem(KEY); else localStorage.setItem(KEY, b);
-    localStorage.removeItem(BACKUP); home(); toast("Tracker put back");
+    localStorage.removeItem(BACKUP); localStorage.removeItem(INBOX); home(); toast("Tracker put back");
   }
 
-  function apply(sc, replace) {
+  /* in-page yes/no (no browser popup) */
+  function ask(msg, yes, no, onYes) {
+    var o = document.createElement("div");
+    o.id = "scan-ask"; o.setAttribute("role", "alertdialog");
+    o.style.cssText = "position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px";
+    o.innerHTML = '<div class="panel" style="max-width:28rem;width:100%;border-color:var(--amber)"><b style="color:var(--white);font-size:18px;display:block;margin-bottom:14px">' + esc(msg) + '</b>' +
+      '<button type="button" class="big warn" id="scan-ask-no">' + esc(no) + '</button><button type="button" class="big amber" id="scan-ask-yes" style="margin-top:10px">' + esc(yes) + '</button></div>';
+    document.body.appendChild(o);
+    var close = function () { if (o.parentNode) o.parentNode.removeChild(o); window.removeEventListener("popstate", close); };
+    try { history.pushState({ scanAsk: 1 }, ""); } catch (e) {}
+    window.addEventListener("popstate", close);   // Android Back closes it
+    $("scan-ask-no").onclick = function () { close(); try { history.back(); } catch (e) {} };
+    $("scan-ask-yes").onclick = function () { close(); onYes(); };
+  }
+  function apply(sc, replace, okEnded) {
     var cur = load(), now = Date.now(), N = SheetScan.num;
     if (!replace && !cur) replace = true;
+    if (!replace && !okEnded && cur.setupDone) {   // ADD to a shift that's already over: ask first, like the tracker does
+      var e0 = at(cur.shift.date, cur.shift.start, cur.shift.start), e1 = at(cur.shift.date, cur.shift.start, cur.shift.end);
+      if (e0 !== null && e1 !== null && e1 <= e0) e1 += 86400000;
+      if (e1 !== null && e1 <= now) {
+        ask("The tracker's shift (" + (cur.shift.date || "") + ", ended " + fmt12(cur.shift.end).replace(/a$/, " AM").replace(/p$/, " PM") + ") is over. Add the sheet's coils to that shift anyway?",
+          "Add to that shift", "Cancel", function () { apply(sc, replace, true); });
+        return false;
+      }
+    }
     var base = replace ? null : cur;
     var sh = base ? JSON.parse(JSON.stringify(base.shift)) : { id: uid("s"), date: "", operator: "", start: "", end: "", breakMode: "total", breakTotalMin: 0, breaks: [], createdAt: iso(now) };
     var fill = function (k, v) { if (v && (replace || !sh[k])) sh[k] = v; };
@@ -280,15 +303,16 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
     var s0 = at(sh.date, sh.start, sh.start), s1 = at(sh.date, sh.start, sh.end);
     if (s1 !== null && s0 !== null && s1 <= s0) s1 += 86400000;
     var when = Math.max(s0 || now, Math.min(now, s1 || now));
-    var coils = base ? base.coils.slice() : [], lbs = 0, count = 0, noWeight = [];
+    var coils = base ? base.coils.slice() : [], lbs = 0, count = 0, noWeight = [], tooBig = [], fresh = [];
     sc.coils.forEach(function (c, i) {
       var m = (c.machine && find(c.machine)) || defaultMachine, cin = N(c.coils_in), avg = N(c.avg_wgt), w = N(c.weight);
       var n = cin !== null && cin >= 1 ? Math.round(cin) : 1;
       var each = avg !== null && avg > 0 ? avg : (w !== null && w > 0 ? w / n : null);
       if (each === null) { noWeight.push(i + 1); return; }
+      if (each > 100000) { tooBig.push(i + 1); return; }   // the tracker's max coil weight
       var note = ["From the scanned sheet", c.grade ? "grade " + c.grade : "", c.compound ? "compound " + c.compound : "", c.package ? "package " + c.package : "", c.coils_text && c.coils_text !== String(n) ? "coils " + c.coils_text : ""].filter(Boolean).join(", ");
       for (var k = 0; k < n; k++) {
-        coils.push({ id: uid("c"), machineId: m.id, loggedAt: iso(when + count), weight: Math.round(each * 10) / 10, coilNo: String(c.card || "").slice(0, 40), heatNo: "", size: String(c.finish || "").slice(0, 40), notes: note, downtimeMin: null, downtimeReason: "" });
+        fresh.push({ machineId: m.id, loggedAt: iso(when + count), weight: Math.round(each * 10) / 10, coilNo: String(c.card || "").slice(0, 40), size: String(c.finish || "").slice(0, 40), notes: note });
         count++; lbs += each;
       }
     });
@@ -305,8 +329,15 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
     catch (e) { toast("Couldn't save on this phone"); return false; }
     var msg = (replace ? "Tracker started from the sheet: " : "Added to the tracker: ") + count + (count === 1 ? " coil, " : " coils, ") + fmtLb(lbs) + " lb";
     if (noWeight.length) msg += ". Card " + noWeight.join(", ") + " had no weight, so it was skipped";
+    if (tooBig.length) msg += ". Card " + tooBig.join(", ") + " was over 100,000 lb a coil, so it was skipped";
     if (skipped.length) msg += ". No room for " + skipped.join(", ") + " (6 machines max)";
+    // the new coils go through the tracker's own add-coil step (same weight rule, same shift-over check, one UNDO)
+    try {
+      if (fresh.length) localStorage.setItem(INBOX, JSON.stringify({ at: Date.now(), from: "scan", shiftId: sh.id, toEnded: !!(replace || okEnded), coils: fresh }));
+      else localStorage.removeItem(INBOX);
+    } catch (e) {}
     home(msg + ".");
+    setTimeout(function () { location.replace("../"); }, noWeight.length || tooBig.length || skipped.length ? 3500 : 600);
     return true;
   }
   function focus(id) { var el = $(id); if (el) { el.scrollIntoView({ block: "center" }); el.classList.add("scan-unclear"); el.focus(); } }

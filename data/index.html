@@ -177,6 +177,19 @@ input.in.color{padding:4px;height:3.25rem}
 .facl li{line-height:1.45}
 .daynotes{white-space:pre-wrap;color:var(--white);font-size:16px;line-height:1.45;background:#000;border:1px solid var(--fg-faint);padding:10px 12px;margin:4px 0}
 .cells .wide{grid-column:1/-1}
+.lc3.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.lc3.four b{font-size:16px}
+/* revisit / edit a log */
+.edrow{border:1px solid var(--fg-faint);padding:10px;margin:8px 0;background:var(--panel)}
+.edrow .row2{margin-bottom:0}
+.edrow .field{margin-bottom:.6rem}
+.edrow .rm{width:100%;min-height:44px;font-size:14px}
+.edhead{display:flex;justify-content:space-between;align-items:center;color:var(--amber);font-size:13px;letter-spacing:.08em;margin-bottom:6px}
+textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;color:var(--white);border:2px solid var(--fg-dim);border-radius:3px;font-family:var(--font);font-size:1rem;resize:vertical}
+.edtot{border:2px solid var(--fg-dim);padding:10px;margin:10px 0;color:var(--white)}
+.edtot b{color:var(--fg);font-size:20px}
+.diffl{margin:0 0 14px;padding-left:20px;color:var(--white);line-height:1.45;max-height:45vh;overflow-y:auto}
+.edited{border:1px solid var(--amber);color:var(--amber);padding:8px 10px;margin:10px 0;font-size:14px}
 </style>
 </head>
 <body>
@@ -187,7 +200,7 @@ input.in.color{padding:4px;height:3.25rem}
 <nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button></nav>
 <main id="app"></main>
 <div class="overlay" id="detail" hidden role="dialog" aria-label="Log detail"><div class="ovtop"><b id="dtitle">LOG</b><button id="dclose" type="button">CLOSE</button></div><div id="dbody"></div></div>
-<div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm delete"><div class="box"><b>DELETE THIS LOG?</b><p id="cmsg"></p>
+<div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm"><div class="box"><b id="ctitle">DELETE THIS LOG?</b><p id="cmsg"></p><ul class="diffl" id="clist" hidden></ul>
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
@@ -265,6 +278,7 @@ input.in.color{padding:4px;height:3.25rem}
 
   /* ---------- list ---------- */
   function load(append) {
+    if (!append) coilQs = null;
     if (!API || /REPLACE-ME/.test(API)) { $("app").innerHTML = '<div class="msg bad">The database address is not set yet (data/config.js).</div>'; return; }
     if (!append) $("app").innerHTML = '<p class="muted" style="margin-top:24px">Loading\u2026</p>';
     api("/logs" + qs({ limit: PAGE, offset: append ? logs.length : 0 })).then(function (j) {
@@ -308,7 +322,7 @@ input.in.color{padding:4px;height:3.25rem}
     logs.forEach(function (l, i) {
       h += '<button type="button" class="logcard" data-i="' + i + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(day(l.shift_date)) + (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div>' +
         '<div class="lc2">' + badge(l.goal_met) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + '</div>' +
-        '<div class="lc3"><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
+        '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? n0(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
     });
     if (hasMore) h += '<button type="button" class="big more" id="more">SHOW MORE</button>';
     $("app").innerHTML = h;
@@ -329,6 +343,23 @@ input.in.color{padding:4px;height:3.25rem}
     $("csv").onclick = exportCsv;
     $("refresh").onclick = function () { load(false); };
     if ($("more")) $("more").onclick = function () { load(true); };
+    loadCoilCounts();
+  }
+  /* coils per log for the list cards (one card row can be several coils: Coils Drawn) */
+  var coilCount = {}, coilQs = null;
+  function paintCoilCounts() {
+    Array.prototype.forEach.call(document.querySelectorAll(".lc-coils"), function (b) { var n = coilCount[b.getAttribute("data-id")]; b.textContent = n != null ? n0(n) : "0"; });
+  }
+  function loadCoilCounts() {
+    var key = qs();
+    if (coilQs === key) { paintCoilCounts(); return; }
+    coilQs = key;
+    api("/analyze" + key).then(function (j) {
+      if (coilQs !== key) return;
+      var c = {}; (j.logs || []).forEach(function (l) { c[l.id] = 0; });
+      (j.coils || []).forEach(function (x) { c[x.log_id] = (c[x.log_id] || 0) + (x.coils_in > 0 ? x.coils_in : 1); });
+      coilCount = c; paintCoilCounts();
+    }).catch(function () { coilQs = null; Array.prototype.forEach.call(document.querySelectorAll(".lc-coils"), function (b) { if (b.textContent === "\u2026") b.textContent = "?"; }); });
   }
 
   function exportCsv() {
@@ -350,12 +381,12 @@ input.in.color{padding:4px;height:3.25rem}
     current = l; $("toast").style.display = "none";
     $("dtitle").textContent = (l.operator + " \u00b7 " + day(l.shift_date)).toUpperCase();
     $("dbody").innerHTML = '<p class="muted">Loading\u2026</p>';
-    $("detail").hidden = false; document.body.classList.add("noscroll"); $("dclose").focus();
+    $("detail").hidden = false; document.body.classList.add("noscroll"); $("dclose").focus(); editing = null; armGuard();
     api("/logs/" + encodeURIComponent(l.id)).then(renderDetail).catch(function (e) {
       if (e.message !== "401") $("dbody").innerHTML = '<div class="msg bad">Could not load this log: ' + esc(e.message) + '</div>';
     });
   }
-  function closeDetail() { $("detail").hidden = true; document.body.classList.remove("noscroll"); }
+  function closeDetail() { editing = null; $("detail").hidden = true; document.body.classList.remove("noscroll"); dropGuard(); }
   function renderDetail(j) {
     var L = j.log, h = '<div style="margin:12px 0">' + badge(L.goal_met) + '</div>';
     h += line("Shift", (L.shift_label ? L.shift_label + " \u00b7 " : "") + (L.shift_start ? clock12(L.shift_start) + " \u2013 " + clock12(L.shift_end) : "\u2013"));
@@ -377,12 +408,15 @@ input.in.color{padding:4px;height:3.25rem}
       });
     }
     h += '<h3>Coils (' + j.coils.length + ')</h3>';
+    var tracker = !!(j.raw && j.raw.raw && j.raw.raw.source === "tracker");
     j.coils.forEach(function (c) {
       var cells = [["Card #", c.work_order], ["Tot Avg Wgt", n0(c.tot_avg_wgt)], ["WO coils", c.wo_coils],
         ["Avg. Wgt.", n0(c.avg_wgt)], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
         ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
       if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
       if (c.part || c.tags || c.note) cells.push(["Part #", c.part, "wide"], ["Run conditions", c.tags ? String(c.tags).split(",").join(" + ") : "", "wide"], ["Note", c.note, "wide"]);
+      // tracker coils never have the paper-card fields: show only what's filled in
+      if (tracker) cells = cells.filter(function (x) { return x[0] && x[1] !== null && x[1] !== undefined && x[1] !== "" && x[1] !== "\u2013"; });
       h += '<div class="svrow"><div class="cells">' + cells.map(function (x) { return '<div' + (x[2] ? ' class="' + x[2] + '"' : "") + '><i>' + esc(x[0]) + '</i><b>' + esc(x[1] === null || x[1] === undefined || x[1] === "" ? (x[0] ? "\u2013" : "") : x[1]) + '</b></div>'; }).join("") + '</div></div>';
     });
     h += '<h3>Breaks</h3>' + (j.breaks.length ? '<ul class="list">' + j.breaks.map(function (b) { return '<li>' + esc((b.start ? clock12(b.start) + " \u00b7 " : "") + n0(b.minutes) + " min") + '</li>'; }).join("") + '</ul>' : '<p class="muted">None</p>');
@@ -395,12 +429,19 @@ input.in.color{padding:4px;height:3.25rem}
     h += '<h3>Maintenance to follow up</h3><p style="color:var(--white);font-size:17px;margin:4px 0">' + esc(L.maintenance || "None") + '</p>';
     h += '<h3>Record</h3>' + line("Sent", L.submitted_at ? new Date(L.submitted_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "\u2013") +
       '<div class="svline"><span>Log id</span><b style="font-size:14px">' + esc(L.id) + '</b></div>';
-    h += '<p class="muted" style="margin-top:14px">Logs are locked once sent. If one is wrong, delete it and have the operator send it again.</p>' +
-      '<button type="button" class="big warn" id="del" style="margin-top:6px">DELETE THIS LOG</button>';
+    if (j.raw && j.raw.edited) h = '<div class="edited">Edited by a supervisor ' + esc(j.raw.edited.at ? new Date(j.raw.edited.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "") + '. The operator\u2019s phone still has the shift as they logged it.</div>' + h;
+    h += '<p class="muted" style="margin-top:14px">Operators can\u2019t change a log once it\u2019s sent. If this one is wrong, REVISIT THIS SHIFT lets you fix it here: it saves a corrected copy in place of this one.</p>' +
+      '<button type="button" class="big solid" id="revisit" style="margin-top:6px">REVISIT THIS SHIFT</button>' +
+      '<button type="button" class="big warn" id="del" style="margin-top:10px">DELETE THIS LOG</button>';
     $("dbody").innerHTML = h;
     $("del").onclick = function () { askDelete(L); };
+    $("revisit").onclick = function () { openEdit(j); };
+    lastDetail = j;
   }
+  var lastDetail = null;
   function askDelete(L) {
+    $("ctitle").textContent = "DELETE THIS LOG?"; $("clist").hidden = true; $("cno").textContent = "CANCEL"; $("cyes").textContent = "DELETE"; $("cyes").className = "big warn";
+    armGuard();
     $("cmsg").textContent = L.operator + " \u00b7 " + day(L.shift_date) + " \u00b7 " + n0(L.total_lbs) + " lb. This can't be undone.";
     $("confirm").hidden = false; $("cno").focus();
     $("cno").onclick = function () { $("confirm").hidden = true; };
@@ -413,9 +454,205 @@ input.in.color{padding:4px;height:3.25rem}
     };
   }
 
-  $("dclose").onclick = closeDetail;
+  /* ---------- revisit a shift (supervisor only) ----------
+     There is no edit on the server: a fixed copy is sent as the next version of the same log ("replaces"), which
+     swaps the old one out in one step. That uses the crew code (the same door the phones use). The operator's
+     phone isn't touched: it can't be reached from here. */
+  var editing = null;
+  function trackerOf(j) { return !!(j.raw && j.raw.raw && j.raw.raw.source === "tracker"); }
+  function rowLb(c) { var w = +c.weight; if (c.weight !== null && c.weight !== undefined && c.weight !== "" && isFinite(w)) return w; var a = +c.avg_wgt, n = +c.coils_in; return a > 0 && n > 0 ? a * n : 0; }
+  function crewSaved() { try { var v = JSON.parse(localStorage.getItem("logdbCrewCode") || '""'); return typeof v === "string" ? v : ""; } catch (e) { return ""; } }
+  function openEdit(j) {
+    var L = j.log, raw = j.raw || {};
+    var probs = Array.isArray(raw.problems) ? raw.problems.join("\n") : (L.problems || "");
+    editing = { j: j, d: {
+      date: L.shift_date || "", start: L.shift_start || "", end: L.shift_end || "", operator: L.operator || "",
+      net: L.net_hours, total: L.total_lbs, totalTouched: false,
+      coils: (Array.isArray(raw.coils) ? raw.coils : j.coils).map(function (c) { return { orig: c, weight: c.weight != null ? c.weight : "", machine: c.machine || "", part: c.part || "", finish: c.finish || "", note: c.note || "" }; }),
+      downtime: (Array.isArray(raw.downtime) ? raw.downtime : j.downtime).map(function (d) { return { orig: d, machine: d.machine || "", minutes: d.minutes != null ? d.minutes : "", reason: d.reason || "" }; }),
+      problems: probs, maintenance: L.maintenance || "", notes: L.day_notes || "", crew: crewSaved()
+    } };
+    armGuard();
+    renderEdit();
+  }
+  function fld(label, id, val, attrs) { return '<div class="field"><label class="lbl" for="' + id + '">' + esc(label) + '</label><input class="in" id="' + id + '" value="' + esc(val == null ? "" : val) + '" ' + (attrs || 'type="text"') + '></div>'; }
+  function sumCoils(d) { return d.coils.reduce(function (a, c) { var w = parseFloat(c.weight); return a + (isFinite(w) ? w : rowLb(c.orig || {})); }, 0); }
+  function renderEdit() {
+    var e = editing, d = e.d, L = e.j.log, tr = trackerOf(e.j);
+    $("dtitle").textContent = "REVISIT \u00b7 " + (L.operator + " \u00b7 " + day(L.shift_date)).toUpperCase();
+    var h = '<p class="muted" style="margin:12px 0">Fix what\u2019s wrong, then SAVE CHANGES. You\u2019ll see every change before anything is saved. The operator\u2019s phone keeps the shift as they logged it.</p>';
+    h += '<h3>Shift</h3>' + fld("Shift date", "ed-date", d.date, 'type="date"') +
+      '<div class="row2">' + fld("Start", "ed-start", d.start, 'type="time"') + fld("End", "ed-end", d.end, 'type="time"') + '</div>' +
+      fld("Operator", "ed-op", d.operator, 'type="text" maxlength="60" autocomplete="off"');
+    h += '<h3>Coils (' + d.coils.length + ')</h3>';
+    d.coils.forEach(function (c, i) {
+      h += '<div class="edrow"><div class="edhead"><span>COIL ' + (i + 1) + '</span></div><div class="row2">' +
+        fld("Weight (lb)", "ed-cw-" + i, c.weight, 'type="text" inputmode="decimal" autocomplete="off"') + fld("Machine", "ed-cm-" + i, c.machine, 'type="text" maxlength="30" autocomplete="off"') + '</div>' +
+        '<div class="row2">' + fld("Part #", "ed-cp-" + i, c.part, 'type="text" maxlength="60" autocomplete="off"') + fld("Finish size", "ed-cf-" + i, c.finish, 'type="text" maxlength="40" autocomplete="off"') + '</div>' +
+        fld("Note", "ed-cn-" + i, c.note, 'type="text" maxlength="300" autocomplete="off"') +
+        '<button type="button" class="warn rm" data-rmc="' + i + '">REMOVE THIS COIL</button></div>';
+    });
+    h += '<button type="button" class="big" id="ed-addc">+ ADD A COIL</button>';
+    h += '<h3>Downtime (' + d.downtime.length + ')</h3>';
+    d.downtime.forEach(function (x, i) {
+      h += '<div class="edrow"><div class="row2">' + fld("Machine (blank = all)", "ed-dm-" + i, x.machine, 'type="text" maxlength="30" autocomplete="off"') +
+        fld("Minutes", "ed-dn-" + i, x.minutes, 'type="text" inputmode="decimal" autocomplete="off"') + '</div>' +
+        fld("Reason", "ed-dr-" + i, x.reason, 'type="text" maxlength="300" autocomplete="off"') +
+        '<button type="button" class="warn rm" data-rmd="' + i + '">REMOVE THIS DOWNTIME</button></div>';
+    });
+    h += '<button type="button" class="big" id="ed-addd">+ ADD DOWNTIME</button>';
+    h += '<h3>Totals</h3><div class="row2">' + fld("Total lbs", "ed-total", d.total, 'type="text" inputmode="decimal" autocomplete="off"') +
+      fld("Net run hours", "ed-net", d.net, 'type="text" inputmode="decimal" autocomplete="off"') + '</div>' +
+      '<p class="muted" style="margin-top:0">Total lbs follows the coil weights as you change them. Lb/hr and goal met are worked out again when you save.</p>';
+    h += '<h3>Problems / downtime notes</h3><textarea class="in" id="ed-prob" maxlength="4000">' + esc(d.problems) + '</textarea>';
+    h += '<h3>Notes about the day</h3><textarea class="in" id="ed-notes" maxlength="2000">' + esc(d.notes) + '</textarea>';
+    h += '<h3>Maintenance to follow up</h3><textarea class="in" id="ed-maint" maxlength="2000">' + esc(d.maintenance) + '</textarea>';
+    h += '<h3>Crew code</h3>' + fld("Crew code (the one the phones use)", "ed-crew", d.crew, 'type="password" autocomplete="off"') +
+      '<p class="muted" style="margin-top:0">Saving goes through the same door as the phones, so it needs the crew code. It isn\u2019t kept.</p>';
+    h += '<div id="ed-err"></div><button type="button" class="big solid" id="ed-save" style="margin-top:8px">SAVE CHANGES</button>' +
+      '<button type="button" class="big" id="ed-cancel" style="margin-top:10px">CANCEL</button>';
+    $("dbody").innerHTML = h;
+    try { $("detail").scrollTop = 0; } catch (x) {}
+    var bind = function (id, f) { var el = $(id); if (el) el.addEventListener("input", function () { f(el.value); }); };
+    bind("ed-date", function (v) { d.date = v; }); bind("ed-start", function (v) { d.start = v; }); bind("ed-end", function (v) { d.end = v; });
+    bind("ed-op", function (v) { d.operator = v; }); bind("ed-net", function (v) { d.net = v; });
+    bind("ed-total", function (v) { d.total = v; d.totalTouched = true; });
+    bind("ed-prob", function (v) { d.problems = v; }); bind("ed-notes", function (v) { d.notes = v; }); bind("ed-maint", function (v) { d.maintenance = v; });
+    bind("ed-crew", function (v) { d.crew = v; });
+    var retotal = function () { if (d.totalTouched) return; d.total = Math.round(sumCoils(d) * 10) / 10; if ($("ed-total")) $("ed-total").value = d.total; };
+    d.coils.forEach(function (c, i) {
+      bind("ed-cw-" + i, function (v) { c.weight = v; c.changedW = true; retotal(); }); bind("ed-cm-" + i, function (v) { c.machine = v; });
+      bind("ed-cp-" + i, function (v) { c.part = v; }); bind("ed-cf-" + i, function (v) { c.finish = v; }); bind("ed-cn-" + i, function (v) { c.note = v; });
+    });
+    d.downtime.forEach(function (x, i) { bind("ed-dm-" + i, function (v) { x.machine = v; }); bind("ed-dn-" + i, function (v) { x.minutes = v; }); bind("ed-dr-" + i, function (v) { x.reason = v; }); });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-rmc]"), function (b) { b.onclick = function () { d.coils.splice(+b.getAttribute("data-rmc"), 1); retotal(); renderEdit(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-rmd]"), function (b) { b.onclick = function () { d.downtime.splice(+b.getAttribute("data-rmd"), 1); renderEdit(); }; });
+    $("ed-addc").onclick = function () { var last = d.coils[d.coils.length - 1]; d.coils.push({ orig: null, weight: "", machine: last ? last.machine : "", part: last ? last.part : "", finish: last ? last.finish : "", note: "" }); renderEdit(); var w = $("ed-cw-" + (d.coils.length - 1)); if (w) { w.scrollIntoView({ block: "center" }); w.focus(); } };
+    $("ed-addd").onclick = function () { d.downtime.push({ orig: null, machine: "", minutes: "", reason: "" }); renderEdit(); };
+    $("ed-cancel").onclick = leaveEdit;
+    $("ed-save").onclick = reviewEdit;
+  }
+  function leaveEdit() { editing = null; if (lastDetail) { $("dtitle").textContent = (lastDetail.log.operator + " \u00b7 " + day(lastDetail.log.shift_date)).toUpperCase(); renderDetail(lastDetail); } }
+  function edErr(m) { $("ed-err").innerHTML = m ? '<div class="msg bad" role="alert">' + esc(m) + '</div>' : ""; if (m) $("ed-err").scrollIntoView({ block: "center" }); }
+  var NUM_RE = /^\s*\d+(?:\.\d+)?\s*$/;
+  function buildEdit() {
+    var e = editing, d = e.d, j = e.j, L = j.log, raw = JSON.parse(JSON.stringify(j.raw || {})), ch = [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return { err: "Pick the shift date." };
+    if (!d.operator.trim()) return { err: "Type the operator\u2019s name." };
+    var coils = [];
+    for (var i = 0; i < d.coils.length; i++) {
+      var c = d.coils[i], w = String(c.weight).replace(/,/g, "").trim();
+      if (w !== "" && (!NUM_RE.test(w) || !(+w > 0) || +w > 100000)) return { err: "Coil " + (i + 1) + ": the weight must be a number from 1 to 100,000 lb." };
+      if (w === "" && !c.orig) return { err: "Coil " + (i + 1) + ": type its weight, or remove it." };
+      var o = c.orig ? JSON.parse(JSON.stringify(c.orig)) : {};
+      var oldW = c.orig ? c.orig.weight : null;
+      o.weight = w === "" ? (oldW != null ? oldW : null) : +w;
+      // one coil per row (the tracker's rows): its avg weight is its weight
+      if (w !== "" && (!c.orig || c.orig.coils_in === 1 || c.orig.avg_wgt === oldW)) { o.avg_wgt = +w; if (!c.orig) o.coils_in = 1; }
+      if ((c.orig ? c.orig.machine || "" : "") !== c.machine.trim()) { o.machine = c.machine.trim(); delete o.draw; }
+      o.part = c.part.trim(); o.finish = c.finish.trim(); o.note = c.note.trim();
+      if (c.orig && c.orig.weight === null && o.weight === null) delete o.weight;
+      Object.keys(o).forEach(function (k) { if (o[k] === null || o[k] === undefined) delete o[k]; });
+      if (!c.orig) ch.push("Added coil " + (i + 1) + ": " + n1(o.weight) + " lb" + (o.machine ? " on " + o.machine : ""));
+      else {
+        if (oldW !== o.weight && !(oldW == null && o.weight == null)) ch.push("Coil " + (i + 1) + " weight: " + n1(oldW) + " \u2192 " + n1(o.weight) + " lb");
+        [["machine", "machine"], ["part", "part #"], ["finish", "finish size"], ["note", "note"]].forEach(function (f) {
+          if ((c.orig[f[0]] || "") !== (o[f[0]] || "")) ch.push("Coil " + (i + 1) + " " + f[1] + ": " + (c.orig[f[0]] || "blank") + " \u2192 " + (o[f[0]] || "blank"));
+        });
+      }
+      coils.push(o);
+    }
+    var origCoils = Array.isArray(raw.coils) ? raw.coils.length : j.coils.length;
+    var removedC = origCoils - d.coils.filter(function (c) { return c.orig; }).length;
+    if (removedC > 0) ch.push("Removed " + removedC + " coil" + (removedC === 1 ? "" : "s"));
+    if (!coils.length && !(trackerOf(j) && d.downtime.length)) return { err: "A log needs at least one coil." };
+    var dts = [];
+    for (var k = 0; k < d.downtime.length; k++) {
+      var x = d.downtime[k], m = String(x.minutes).trim();
+      if (!NUM_RE.test(m) || +m > 1440) return { err: "Downtime " + (k + 1) + ": minutes must be a number from 0 to 1,440." };
+      var od = x.orig ? JSON.parse(JSON.stringify(x.orig)) : {};
+      if ((x.orig ? x.orig.machine || "" : "") !== x.machine.trim()) { od.machine = x.machine.trim(); delete od.draw; }
+      od.minutes = +m; od.reason = x.reason.trim();
+      Object.keys(od).forEach(function (q) { if (od[q] === null || od[q] === undefined) delete od[q]; });
+      if (!x.orig) ch.push("Added downtime: " + n0(od.minutes) + " min" + (od.reason ? ", " + od.reason : ""));
+      else if (+x.orig.minutes !== od.minutes || (x.orig.reason || "") !== od.reason || (x.orig.machine || "") !== (od.machine || "")) ch.push("Downtime " + (k + 1) + ": " + n0(x.orig.minutes) + " min" + (x.orig.reason ? ", " + x.orig.reason : "") + " \u2192 " + n0(od.minutes) + " min" + (od.reason ? ", " + od.reason : ""));
+      dts.push(od);
+    }
+    var origD = Array.isArray(raw.downtime) ? raw.downtime.length : j.downtime.length, removedD = origD - d.downtime.filter(function (x) { return x.orig; }).length;
+    if (removedD > 0) ch.push("Removed " + removedD + " downtime entr" + (removedD === 1 ? "y" : "ies"));
+    var tot = String(d.total).replace(/,/g, "").trim(), net = String(d.net).trim();
+    if (!NUM_RE.test(tot)) return { err: "Total lbs must be a number." };
+    if (net !== "" && (!NUM_RE.test(net) || +net > 24)) return { err: "Net run hours must be a number from 0 to 24." };
+    tot = Math.round(+tot * 10) / 10; net = net === "" ? null : +net;
+    var t = Object.assign({}, raw.totals || {}), oldNet = L.net_hours;
+    if (L.total_lbs !== tot) ch.push("Total lbs: " + n0(L.total_lbs) + " \u2192 " + n0(tot));
+    if (oldNet !== net) {
+      ch.push("Net run hours: " + nh(oldNet) + " \u2192 " + nh(net));
+      if (t.goal_lbs > 0 && oldNet > 0 && net > 0) t.goal_lbs = Math.round(t.goal_lbs * net / oldNet);   // same need rate over the new hours
+    }
+    t.total_lbs = tot; t.net_hours = net; t.avg_lbhr = net > 0 ? Math.round(tot / net * 10) / 10 : null;
+    t.goal_met = t.goal_lbs > 0 ? tot >= t.goal_lbs : (L.goal_met === 1 ? true : L.goal_met === 0 ? false : null);
+    var sh = Object.assign({}, raw.shift || {});
+    [["date", "Shift date", L.shift_date], ["start", "Start", L.shift_start], ["end", "End", L.shift_end], ["operator", "Operator", L.operator]].forEach(function (f) {
+      var nv = f[0] === "operator" ? d.operator.trim() : d[f[0]];
+      if ((f[2] || "") !== nv) ch.push(f[1] + ": " + ((f[0] === "start" || f[0] === "end") ? clock12(f[2]) || "blank" : f[2] || "blank") + " \u2192 " + ((f[0] === "start" || f[0] === "end") ? clock12(nv) || "blank" : nv || "blank"));
+      sh[f[0]] = nv;
+    });
+    if ((L.problems || "") !== d.problems.trim()) ch.push("Problems / downtime notes changed");
+    if ((L.day_notes || "") !== d.notes.trim()) ch.push("Notes about the day changed");
+    if ((L.maintenance || "") !== d.maintenance.trim()) ch.push("Maintenance changed");
+    var base = L.id.replace(/-v\d+$/, ""), vm = /-v(\d+)$/.exec(L.id), v = vm ? +vm[1] : 1;
+    if (!/^[A-Za-z0-9_-]{6,58}$/.test(base)) return { err: "This log\u2019s id can\u2019t take an edit. Delete it and have it sent again instead." };
+    // supervisor versions start at v101, so a later re-send from the operator's phone (v2, v3...) can't quietly overwrite the fix
+    var nid = base + "-v" + (v < 100 ? 101 : v + 1);
+    var body = Object.assign(raw, { id: nid, replaces: L.id, force: true, shift: sh, coils: coils, downtime: dts, totals: t,
+      problems: d.problems.trim(), maintenance: d.maintenance.trim(), day_notes: d.notes.trim(),
+      edited: { by: "supervisor", at: new Date().toISOString(), from: L.id, changes: ch.slice(0, 60) } });
+    return { body: body, changes: ch };
+  }
+  function reviewEdit() {
+    var r = buildEdit();
+    if (r.err) { edErr(r.err); return; }
+    edErr("");
+    if (!r.changes.length) { edErr("Nothing changed yet."); return; }
+    if (!editing.d.crew.trim()) { edErr("Type the crew code to save."); $("ed-crew").focus(); return; }
+    $("ctitle").textContent = "SAVE THESE CHANGES?"; $("cmsg").textContent = "The fixed log replaces the one in the master log:";
+    var ul = $("clist"); ul.innerHTML = r.changes.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join(""); ul.hidden = false;
+    $("cyes").textContent = "SAVE"; $("cyes").className = "big solid"; $("cno").textContent = "GO BACK";
+    $("confirm").hidden = false; $("cno").focus();
+    $("cno").onclick = function () { $("confirm").hidden = true; $("cno").textContent = "CANCEL"; };
+    $("cyes").onclick = function () {
+      $("cyes").disabled = true;
+      fetch(API + "/submit", { method: "POST", headers: { "Content-Type": "application/json", "X-Crew-Code": editing.d.crew.trim() },
+        body: JSON.stringify(r.body), credentials: "omit", cache: "no-store" })
+        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (j) { return { res: res, j: j }; }); })
+        .then(function (x) {
+          $("confirm").hidden = true; $("cno").textContent = "CANCEL";
+          if (x.res.ok && x.j.ok) {
+            editing = null; toast("Saved. The fixed log is in the master log."); coilQs = null;
+            load(false); openDetail({ id: r.body.id, operator: r.body.shift.operator, shift_date: r.body.shift.date });
+          } else if (x.res.status === 401) edErr("The crew code is wrong. Nothing was saved.");
+          else edErr("Not saved: " + (x.j.error || "server said " + x.res.status) + (x.j.field ? " (" + x.j.field + ")" : ""));
+        }).catch(function () { $("confirm").hidden = true; $("cno").textContent = "CANCEL"; edErr("Not saved: no connection to the database. Try again."); })
+        .then(function () { $("cyes").disabled = false; });
+    };
+  }
+
+  /* ---------- Android Back: closes the top dialog, then the edit form, then the log; never leaves the page by surprise ---------- */
+  var guardOn = false, popSkip = false;
+  function armGuard() { if (guardOn) return; try { history.pushState({ logGuard: 1 }, ""); guardOn = true; } catch (e) {} }
+  function dropGuard() { if (!guardOn) return; guardOn = false; popSkip = true; try { history.back(); } catch (e) { popSkip = false; } }
+  window.addEventListener("popstate", function () {
+    if (popSkip) { popSkip = false; return; }
+    guardOn = false;
+    if (!$("confirm").hidden) { $("confirm").hidden = true; $("cno").textContent = "CANCEL"; armGuard(); return; }
+    if (editing) { leaveEdit(); armGuard(); return; }
+    if (!$("detail").hidden) { $("detail").hidden = true; document.body.classList.remove("noscroll"); }
+  });
+
+  $("dclose").onclick = function () { if (editing) leaveEdit(); else closeDetail(); };
   $("lockbtn").onclick = function () { setCode(""); closeDetail(); renderLock(""); };
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (!$("confirm").hidden) $("confirm").hidden = true; else closeDetail(); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (!$("confirm").hidden) { $("confirm").hidden = true; $("cno").textContent = "CANCEL"; } else if (editing) leaveEdit(); else if (!$("detail").hidden) closeDetail(); } });
   if (code()) start(); else renderLock("");
 })();
 </script>

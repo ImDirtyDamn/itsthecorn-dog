@@ -952,7 +952,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       var g1 = el("div", "grid2");
       g1.appendChild(field(row, "card", "Card #", "From work order: top left", "text", "c" + i + "-card"));
       var mf = el("div", "f"); var ml = el("label", "", "Machine"); ml.htmlFor = "c" + i + "-machine";
-      var ms = machineSelect(row, "c" + i + "-machine", "\u2014 pick \u2014", false); ms.className = "msel";
+      var ms = machineSelect(row, "c" + i + "-machine", "pick a machine", false); ms.className = "msel";
       mf.appendChild(ml); mf.appendChild(ms); mf.appendChild(el("span", "hint", "Sets the goal"));
       g1.appendChild(mf); p.appendChild(g1);
       var g2 = el("div", "grid2");
@@ -1030,7 +1030,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       var minF = field(d, "minutes", "Minutes down", "", "numeric", "d" + i + "-min");
       top.appendChild(minF);
       var mf = el("div", "f"); var ml = el("label", "", "Machine (optional)"); ml.htmlFor = "d" + i + "-machine";
-      var ms = machineSelect(d, "d" + i + "-machine", "\u2014 none \u2014", true); ms.className = "msel";
+      var ms = machineSelect(d, "d" + i + "-machine", "none", true); ms.className = "msel";
       mf.appendChild(ml); mf.appendChild(ms); top.appendChild(mf); p.appendChild(top);
       var tm = el("div", "grid2");
       function syncMin() {
@@ -1185,7 +1185,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   /* ---------- copy-to-sheet view ---------- */
   function renderSheetView() {
     var sh = last.sh, res = last.res, box = $("sv-body"); box.innerHTML = "";
-    function line(label, val, cls) { var d = el("div", "svline" + (cls ? " " + cls : "")); d.appendChild(el("span", "", label)); d.appendChild(el("b", "", val || "\u2014")); box.appendChild(d); }
+    function line(label, val, cls) { var d = el("div", "svline" + (cls ? " " + cls : "")); d.appendChild(el("span", "", label)); d.appendChild(el("b", "", val || "-")); box.appendChild(d); }
     line("Name", sh.name); line("Date", sh.date); line("Shift", sh.shift);
     P.sheetCells(sh, res).forEach(function (cells, i) {
       var r = res.rows[i]; if (!sh.rows[i].card && r.weight === null) return;
