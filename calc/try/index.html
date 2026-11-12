@@ -180,6 +180,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 <div class="sheetview" id="sheetview" hidden role="dialog" aria-label="Copy to sheet"><div class="svtop"><b>COPY ONTO THE P-310</b><button id="sv-close" type="button">CLOSE</button></div><div id="sv-body"></div></div>
 <datalist id="reasons"><option value="die change"><option value="coil problem"><option value="wire break"><option value="waiting on coils"><option value="maintenance"><option value="meeting"><option value="power"></datalist>
 <div class="toast" id="toast"></div>
+<div class="overlay" id="send" hidden role="dialog" aria-modal="true" aria-labelledby="send-title"><div class="sheet"><div class="top"><b id="send-title">SEND TO TRACKER</b></div><div id="send-body"></div></div></div>
 <script id="calc-core">
 
 /* ===== CALC CORE: line-for-line port of production_calc.py. Keep the two in sync. ===== */
@@ -648,11 +649,13 @@ var ProdCalc = (function () {
       res.note = "Coils ran (" + fmtNum(ranRaw) + ") is more than the " + fmtNum(c) + " on the card. Check the numbers.";
       return res;
     }
-    var weight = rhu(avg * ranRaw);
+    var weight = ranRaw === c ? rhu(t) : rhu(t * ranRaw / c);   // from the card total, so the rounding never adds or drops a pound
     res.weight = weight;
     res.leftCoils = rhu(c - ranRaw);
     res.leftWeight = rhu(t - weight);
-    res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lb.");
+    if (weight === rhu(avg * ranRaw)) res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lb.");
+    else res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(rhu(t)) + " \u00d7 " + fmtNum(ranRaw) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(weight) +
+      " lb (worked from the card total so the rounding stays exact; " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " would be " + fmtInt(rhu(avg * ranRaw)) + ").");
     if (res.leftCoils > 0) {
       res.lines.push(fmtNum(res.leftCoils) + " " + plural(res.leftCoils, "coil", "coils") + " left on the card (" + fmtInt(res.leftWeight) + " lb).");
     }
@@ -871,14 +874,14 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (S.screen === "log") return renderLog();
     return renderHome();
   }
-  function go(screen) { if (screen !== S.screen && (screen === "avg" || screen === "rate")) Q = { avg: "", lbs: "", hrs: "", min: "", scan: null }; S.screen = screen; render(); }
+  function go(screen) { if (screen !== S.screen && (screen === "avg" || screen === "rate")) Q = { avg: "", tot: "", coils: "", ran: "", lbs: "", hrs: "", min: "", scan: null }; S.screen = screen; render(); }
 
   function hasProgress() {
     return S.rows.some(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card || r.avgWgt; }) || S.shiftHours || S.slotCount || S.downtime.length;
   }
   function renderHome() {
     app.innerHTML = '<div class="home">' +
-      '<button id="go-quick" type="button">AVERAGE COIL WEIGHT<small>Total lb &divide; coils, weight ran from a partial card, a list of weights, or a photo</small></button>' +
+      '<button id="go-quick" type="button">AVERAGE COIL WEIGHT<small>Card total, coils on card and coils ran: average, weight ran from a partial card, or a photo. Send them to your tracker.</small></button>' +
       '<button id="go-rate" type="button">PRODUCTION RATE<small>Hours worked and lb produced, minus downtime: your lb per hour</small></button>' +
       '<button id="go-log" type="button" class="solid">FILL OUT MY PRODUCTION LOG<small style="color:#000">' +
       (hasProgress() ? "Picks up where you left off" : "One question per screen, then copy it onto the sheet") + '</small></button>' +
@@ -893,7 +896,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   /* ---------- quick screens: AVERAGE COIL WEIGHT and PRODUCTION RATE ----------
      Boxes start empty every time (nothing kept between visits). The math is the calc core's:
      avg = P.quick(total, coils) and lb/hr = P.compute() with just hours, minutes off and lb. */
-  var Q = { avg: "", ran: "", lbs: "", hrs: "", min: "", scan: null };
+  var Q = { avg: "", tot: "", coils: "", ran: "", lbs: "", hrs: "", min: "", scan: null };
   function qfield(label, id, val, ph, mode, sub) {
     return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in" type="text" id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) +
       '" autocomplete="off" inputmode="' + (mode || "decimal") + '" enterkeyhint="done">' + (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
@@ -918,10 +921,27 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (toks.length === 1) return { ok: false, error: "Add the number of coils (like " + P.fmtInt(Math.round(toks[0].v)) + " / 3) or type each coil weight." };
     return { ok: true, mode: "list", total: sumOf(toks), count: toks.length, weights: toks.map(function (t) { return t.v; }) };
   }
+  // the three boxes: CARD TOTAL WEIGHT, COILS ON CARD, COILS RAN (no division sign to type)
+  var PLAIN_RE = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^\.\d+$/;
+  function plainNum(v) { var t = String(v === null || v === undefined ? "" : v).trim(); return PLAIN_RE.test(t) ? parseFloat(t.replace(/,/g, "")) : null; }
+  function boxesRead() {
+    var tT = String(Q.tot || "").trim(), cT = String(Q.coils || "").trim(), rT = String(Q.ran || "").trim();
+    if (!tT && !cT && !rT) return { ok: false, error: "" };
+    var t = plainNum(tT), c = plainNum(cT), rn = rT ? plainNum(rT) : null;
+    if (!tT) return { ok: false, error: "Enter the card total weight in lb." };
+    if (t === null || !(t > 0)) return { ok: false, error: "Card total weight: enter the weight in lb as a plain number over 0, like 22895." };
+    if (t >= 1e7) return { ok: false, error: "Card total weight: " + P.fmtInt(t) + " lb is too big for one card. Check the number." };
+    if (!cT) return { ok: false, error: "Enter how many coils are on the card." };
+    if (c === null || !(c > 0) || c % 1) return { ok: false, error: "Coils on card: enter a whole number over 0, like 5." };
+    if (c > 200) return { ok: false, error: "Coils on card: " + P.fmtNum(c) + " is more than one card holds. Check the number." };
+    if (rT && (rn === null || !(rn > 0) || rn % 1)) return { ok: false, error: "Coils ran: enter a whole number over 0, or leave it blank for just the average." };
+    return { ok: true, total: t, count: c, ran: rT ? rn : null };
+  }
   function avgResult() {
-    if (Q.scan && Q.scan.text === Q.avg && !String(Q.ran || "").trim()) return Q.scan.res;
-    var r = readAvgLine(Q.avg); if (!r.ok) return r;
-    var q = P.quick(r.total, r.count, Q.ran);
+    if (Q.scan && Q.scan.tot === Q.tot && Q.scan.coils === Q.coils && !String(Q.ran || "").trim()) return Q.scan.res;
+    var r = boxesRead(); if (!r.ok) return r;
+    r.weights = null;
+    var q = P.quick(r.total, r.count, r.ran);
     if (!q.ok && !q.over) return { ok: false, error: q.error };
     var steps = [], readAs;
     if (r.weights) {
@@ -933,16 +953,17 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       leftCoils: q.leftCoils, leftWeight: q.leftWeight, over: q.over, note: q.note || "", steps: steps, readAs: readAs };
   }
   function renderAvg() {
-    app.innerHTML = '<h2>Average coil weight</h2><p class="muted">Type the card total lb and how many coils, or each coil weight. Optional: how many coils you ran, for the weight off a partial card.</p>' +
-      '<div class="panel">' + qfield("Card", "a-line", Q.avg, "card total lb / coils on card", "text",
-        "Like 22895 / 5, or a list of coil weights with spaces or commas.") +
-      qfield("Coils I ran (optional)", "a-ran", Q.ran, "coils ran", "decimal",
-        "Only if you did not run the whole card. Leave blank for just the average.") +
+    app.innerHTML = '<h2>Average coil weight</h2><p class="muted">Type the card total weight and how many coils are on the card. Add how many you ran for the weight off a partial card, and to send them to your tracker.</p>' +
+      '<div class="panel">' + qfield("Card total weight (lb)", "a-tot", Q.tot, "like 22895", "decimal") +
+      '<div class="row2">' + qfield("Coils on card", "a-coils", Q.coils, "like 5", "numeric") +
+      qfield("Coils ran", "a-ran", Q.ran, "optional", "numeric") + '</div>' +
+      '<p class="sub">Leave coils ran blank for just the average.</p>' +
       '<p class="calc-note" id="a-note" aria-live="polite"></p></div>' +
       '<div id="a-out"></div>' +
       (window.SheetScan ? '<button id="a-photo" type="button" class="big amber">TAKE A PHOTO<small style="display:block;font-weight:normal;font-size:14px;margin-top:4px">Read the coil weights off your sheet, check them, then average</small></button><div id="scan-host"></div>' : "") +
       '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
-    $("a-line").addEventListener("input", function (e) { Q.avg = e.target.value; Q.scan = null; avgOut(); });
+    $("a-tot").addEventListener("input", function (e) { Q.tot = e.target.value; Q.scan = null; avgOut(); });
+    $("a-coils").addEventListener("input", function (e) { Q.coils = e.target.value; Q.scan = null; avgOut(); });
     $("a-ran").addEventListener("input", function (e) { Q.ran = e.target.value; avgOut(); });
     $("q-home").onclick = function () { go("home"); };
     if ($("a-photo")) $("a-photo").onclick = function () {
@@ -953,7 +974,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function avgOut() {
     var r = avgResult(), el = $("a-out"), note = $("a-note");
-    if (!r.ok) { el.innerHTML = ""; note.textContent = Q.avg.trim() ? (r.error || "Type numbers, like 22895 / 5.") : ""; return; }
+    if (!r.ok) { el.innerHTML = ""; note.textContent = r.error || ""; return; }
     note.textContent = r.over ? r.note : ("Read as: " + r.readAs);
     var html = '<button class="num key" id="a-avg" type="button"><span>Avg coil weight<i>tap for the math</i></span><b>' + P.fmtInt(r.avg) + ' lb</b></button>';
     if (r.over) {
@@ -964,11 +985,90 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         html += '<div class="num"><span>Coils left on card</span><b>' + P.fmtNum(r.leftCoils) + '</b></div>';
         html += '<div class="num"><span>Weight left on card</span><b>' + P.fmtInt(r.leftWeight) + ' lb</b></div>';
       }
-    }
+      if (r.ran > 0 && r.ran % 1 === 0 && r.ran <= 60) html += '<button id="a-send" type="button" class="big solid" style="margin-top:12px">SEND TO TRACKER</button>';
+    } else if (!r.over) html += '<p class="muted" id="a-send-hint">Type coils ran to send them to your tracker.</p>';
     el.innerHTML = html;
+    if ($("a-send")) $("a-send").onclick = function () { sendOpen(r); };
     $("a-avg").onclick = function () { drill("Avg coil weight", P.fmtInt(r.avg) + " lb", r.steps); };
     if ($("a-weight")) $("a-weight").onclick = function () { drill("Weight ran", P.fmtInt(r.weight) + " lb", r.steps); };
   }
+  /* ---- SEND TO TRACKER: N coils of the average weight into the tracker's current shift.
+     This page never writes the shift itself: it leaves one request (drawRateInboxV1) and opens /draw/app/,
+     which logs the coils with its own addCoil() and shows the usual readback with UNDO. ---- */
+  var INBOX_KEY = "drawRateInboxV1";
+  function splitWeights(total, n) {     // whole pounds that add up to the exact total, e.g. 22900 over 3 -> 7634, 7633, 7633
+    var base = Math.floor(total / n), extra = Math.round(total - base * n), out = [];
+    for (var i = 0; i < n; i++) out.push(base + (i < extra ? 1 : 0));
+    return out;
+  }
+  function hm(v) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "").trim()); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; }
+  function trackerShift() {
+    var st = null; try { st = JSON.parse(localStorage.getItem(TRACKER_KEY) || "null"); } catch (e) {}
+    if (!st || !st.setupDone || !st.shift || !Array.isArray(st.machines) || !st.machines.length) return { none: true };
+    var s = st.shift, d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.date || ""), a = hm(s.start), b = hm(s.end);
+    if (!d || a === null || b === null || a === b) return { none: true };
+    var day = new Date(+d[1], +d[2] - 1, +d[3]), end = new Date(day.getTime()); end.setHours(0, b, 0, 0);
+    if (b < a) end.setDate(end.getDate() + 1);
+    return { st: st, end: end.getTime(), over: Date.now() >= end.getTime() };
+  }
+  function clockTxt(ms) {
+    var d = new Date(ms), h = d.getHours(), m = d.getMinutes(), now = new Date();
+    var same = d.toDateString() === now.toDateString();
+    return (same ? "" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " ") + ((h % 12) || 12) + ":" + (m < 10 ? "0" : "") + m + (h < 12 ? " AM" : " PM");
+  }
+  function sendClose() { $("send").hidden = true; document.body.classList.remove("noscroll"); }
+  function sendOpen(r) {
+    var n = r.ran, ws = splitWeights(r.weight, n), even = ws[0] === ws[ws.length - 1];
+    var what = P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils") + " (" + (even ? "" : "about ") + P.fmtInt(ws[0]) + " lb each, " + P.fmtInt(r.weight) + " lb total)";
+    var ts = trackerShift(), body = $("send-body"), h = "";
+    var go = function (machineId, toEnded) {
+      try { localStorage.setItem(INBOX_KEY, JSON.stringify({ at: Date.now(), shiftId: ts.st.shift.id, machineId: machineId, weights: ws, toEnded: !!toEnded, from: "calc-avg" })); }
+      catch (e) { toast("Could not send: this phone's storage is blocked."); return; }
+      location.href = "/draw/app/";
+    };
+    if (ts.none) {
+      h = '<p id="send-msg">No shift is set up in your tracker yet, so there is nowhere to log ' + esc(what) + '.</p>' +
+        '<button id="send-start" type="button" class="big solid">START A SHIFT IN THE TRACKER</button>' +
+        '<button id="send-cancel" type="button" class="big ghost" style="margin-top:10px">CANCEL</button>';
+    } else if (ts.over) {
+      h = '<p id="send-msg">Your tracker\u2019s shift ended at ' + esc(clockTxt(ts.end)) + '. Start today\u2019s shift first, then send ' + esc(what) + ' again.</p>' +
+        '<button id="send-start" type="button" class="big solid">START TODAY\u2019S SHIFT</button>' +
+        '<button id="send-anyway" type="button" class="big" style="margin-top:10px">LOG TO THE ENDED SHIFT ANYWAY</button>' +
+        '<button id="send-cancel" type="button" class="big ghost" style="margin-top:10px">CANCEL</button>';
+    } else {
+      var ms = ts.st.machines;
+      h = '<p id="send-msg">Send ' + esc(what) + ' to your tracker' + (ms.length === 1 ? ' (' + esc(ms[0].name || "your machine") + ')' : '') + '?</p>';
+      if (ms.length > 1) h += '<div class="field"><label class="lbl" for="send-mach">Which machine?</label><select id="send-mach"><option value="">Pick a machine</option>' +
+        ms.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.name || "Machine") + '</option>'; }).join("") + '</select></div>';
+      h += '<p class="calc-note" id="send-err"></p><div class="row2" style="margin-top:12px"><button id="send-cancel" type="button" class="big ghost">CANCEL</button><button id="send-go" type="button" class="big solid">SEND</button></div>';
+    }
+    body.innerHTML = h;
+    $("send").hidden = false; document.body.classList.add("noscroll");
+    $("send-cancel").onclick = sendClose;
+    if ($("send-start")) $("send-start").onclick = function () { location.href = "/draw/app/" + (ts.none ? "" : "#newshift"); };
+    if ($("send-anyway")) $("send-anyway").onclick = function () {
+      var ms = ts.st.machines;
+      if (ms.length === 1) { go(ms[0].id, true); return; }
+      sendOpenLive(r, ws, what, ts, go, true);
+    };
+    if ($("send-go")) $("send-go").onclick = function () {
+      var ms = ts.st.machines, id = ms.length === 1 ? ms[0].id : $("send-mach").value;
+      if (!id) { $("send-err").textContent = "Pick the machine these coils ran on."; return; }
+      go(id, false);
+    };
+  }
+  // ended shift, more than one machine: same picker, logging to the ended shift on purpose
+  function sendOpenLive(r, ws, what, ts, go, toEnded) {
+    var ms = ts.st.machines;
+    $("send-body").innerHTML = '<p id="send-msg">Log ' + esc(what) + ' to the ended shift?</p><div class="field"><label class="lbl" for="send-mach">Which machine?</label><select id="send-mach"><option value="">Pick a machine</option>' +
+      ms.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.name || "Machine") + '</option>'; }).join("") + '</select></div>' +
+      '<p class="calc-note" id="send-err"></p><div class="row2" style="margin-top:12px"><button id="send-cancel" type="button" class="big ghost">CANCEL</button><button id="send-go" type="button" class="big solid">SEND</button></div>';
+    $("send-cancel").onclick = sendClose;
+    $("send-go").onclick = function () { var id = $("send-mach").value; if (!id) { $("send-err").textContent = "Pick the machine these coils ran on."; return; } go(id, toEnded); };
+  }
+  $("send").addEventListener("click", function (e) { if (e.target === $("send")) sendClose(); });
+  document.addEventListener("keydown", function (e) { if (!$("send").hidden && e.key === "Escape") sendClose(); });
+
   // photo of the sheet -> SheetScan review -> each card's lb and coils -> one average
   function applyAvgScan(sc) {
     var N = SheetScan.num, tot = 0, n = 0, steps = [];
@@ -983,9 +1083,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (!q.ok) { toast("No coil weights on that sheet. Fix them in the boxes, or type them."); return false; }
     steps.push("All cards: " + P.fmtNum(tot) + " lb over " + P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils"));
     steps.push(q.lines[0]);
-    Q.avg = P.fmtNum(tot).replace(/,/g, "") + " lb " + n + " coils";
-    Q.scan = { text: Q.avg, res: { ok: true, avg: q.avg, count: n, total: tot, steps: steps, readAs: "from the photo, " + P.fmtNum(tot) + " lb over " + n + " coils" } };
-    $("a-line").value = Q.avg; avgOut();
+    Q.tot = P.fmtNum(tot).replace(/,/g, ""); Q.coils = String(n); Q.ran = "";
+    Q.scan = { tot: Q.tot, coils: Q.coils, res: { ok: true, avg: q.avg, count: n, total: tot, steps: steps, readAs: "from the photo, " + P.fmtNum(tot) + " lb over " + n + " coils" } };
+    $("a-tot").value = Q.tot; $("a-coils").value = Q.coils; $("a-ran").value = ""; avgOut();
     setTimeout(function () { var o = $("a-out"); if (o) o.scrollIntoView({ block: "center" }); }, 50);
     return true;
   }
