@@ -2873,10 +2873,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       "-",
       ["menu-new", "NEW SHIFT", simpleOnly(askNewShift), "warn"],
       "-",
-      ["menu-adv", "ADVANCED (OPENS FULL VIEW)", full(function () {
-        if (!advOpen) $("adv-toggle").click();
-        try { $("adv-toggle").scrollIntoView({ block: "start" }); } catch (e) {}
-      })],
       ["menu-full", "SWITCH TO FULL VIEW", full(null)]
     ];
   }
