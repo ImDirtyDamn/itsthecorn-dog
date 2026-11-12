@@ -191,7 +191,7 @@
   /* ================= UI ================= */
   var C, data = null, parts = [], opts = null, host = null, rerender = null;
   var LS = "analyzeSetupV1", PAL = ["#39ff6a", "#ffc23d", "#4dd0ff", "#ff6bd6", "#ff5f56", "#eaffea", "#b48cff", "#ff9a3d"];
-  var METRICS = { lbs: "Total lb", coils: "Coils", hours: "Hours", lbhr: "Lb/hr", shifts: "Shifts", dt: "Downtime hr" };
+  var METRICS = { lbs: "Total lbs", coils: "Coils", hours: "Hours", lbhr: "Lbs/hr", shifts: "Shifts", dt: "Downtime hr" };
   var BYS = { day: "Day", week: "Week", operator: "Operator", draw: "Draw", grade: "Grade", finish: "Finish size", part: "Part #", tag: "Condition", shift: "Shift" };
   var S = { sub: "compare", unit: "day", metric: "lbs", series: [], seq: 0,
     group: { f: emptyF(), by: "operator", metric: "lbhr", sort: { col: "", dir: -1 } },
@@ -385,12 +385,12 @@
   function renderCompare() {
     var box = $("asub");
     var h = '<div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Show</span>' + info("Each series is its own filter set. Grade, finish size and Draw are written per card row, so a series only counts the rows that match, using that row's weight. " +
-      "Hours are split across a shift's rows by weight share (a row that is 40% of the shift's pounds gets 40% of its hours). So lb/hr for a grade or size is the shift rate of the shifts that ran it, weighted by how much of it they ran. " +
-      "A row with no Draw on a two-machine log is split evenly between the two Draws. lb/hr is always total lb \u00f7 total hours, never an average of averages.") + '</div>' +
-      '<div class="seg" id="cmetric">' + ["lbs", "coils", "hours", "lbhr"].map(function (m) { return '<button type="button" data-m="' + m + '" class="' + (S.metric === m ? "on" : "") + '">' + (m === "lbs" ? "VOLUME (LB)" : METRICS[m].toUpperCase()) + '</button>'; }).join("") + '</div>' +
+      "Hours are split across a shift's rows by weight share (a row that is 40% of the shift's pounds gets 40% of its hours). So lbs/hr for a grade or size is the shift rate of the shifts that ran it, weighted by how much of it they ran. " +
+      "A row with no Draw on a two-machine log is split evenly between the two Draws. lbs/hr is always total lbs \u00f7 total hours, never an average of averages.") + '</div>' +
+      '<div class="seg" id="cmetric">' + ["lbs", "coils", "hours", "lbhr"].map(function (m) { return '<button type="button" data-m="' + m + '" class="' + (S.metric === m ? "on" : "") + '">' + (m === "lbs" ? "VOLUME (LBS)" : METRICS[m].toUpperCase()) + '</button>'; }).join("") + '</div>' +
       '<div class="seg two" id="cunit"><button type="button" data-u="day" class="' + (S.unit === "day" ? "on" : "") + '">BY DAY</button><button type="button" data-u="week" class="' + (S.unit === "week" ? "on" : "") + '">BY WEEK</button></div>' +
       '<div id="cchart" class="chartbox"></div><div class="legend" id="clegend"></div></div>';
-    h += '<h3>Totals per series</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Series</th><th>Shifts</th><th>Lb</th><th>Coils</th><th>Hours</th><th>Lb/hr</th><th>Down hr</th></tr></thead><tbody id="ctable"></tbody></table></div>';
+    h += '<h3>Totals per series</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Series</th><th>Shifts</th><th>Lbs</th><th>Coils</th><th>Hours</th><th>Lbs/hr</th><th>Down hr</th></tr></thead><tbody id="ctable"></tbody></table></div>';
     h += '<h3>Series</h3><div id="clist"></div><button type="button" class="big" id="cadd">+ ADD SERIES</button>' +
       '<div class="toolbar"><button type="button" id="cshare">COPY SHARE LINK</button><button type="button" id="cclear" class="ghost">START OVER</button></div>';
     box.innerHTML = h;
@@ -459,11 +459,11 @@
     var G = S.group, box = $("asub");
     var h = '<details class="filters panel"' + (open.gf ? " open" : "") + ' id="gfbox"><summary>FILTERS <span>' + esc(fSummary(G.f)) + '</span></summary><div style="margin-top:10px" id="gfed">' + fEditor("g", G.f) + '</div></details>' +
       '<div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Group by</span>' + info("Rows are counted by the shift date written on the log. Grade, finish size and Draw come from each card row, so one shift can land in several groups; its hours are split by the weight each row made, and its shift count shows in each group it touches (group shifts can add up to more than the total). " +
-      "Draw 1 & 4 and Draw 2 & 6 are often run together: pounds go to the Draw written on each row, and a row with no Draw is split evenly. lb/hr = total lb \u00f7 total hours.") + '</div>' +
+      "Draw 1 & 4 and Draw 2 & 6 are often run together: pounds go to the Draw written on each row, and a row with no Draw is split evenly. lbs/hr = total lbs \u00f7 total hours.") + '</div>' +
       '<div class="seg" id="gby">' + Object.keys(BYS).map(function (k) { return '<button type="button" data-by="' + k + '" class="' + (G.by === k ? "on" : "") + '">' + BYS[k].toUpperCase() + '</button>'; }).join("") + '</div>' +
       '<span class="lbl" style="margin-top:10px">Chart</span><div class="seg" id="gmet">' + Object.keys(METRICS).map(function (k) { return '<button type="button" data-m="' + k + '" class="' + (G.metric === k ? "on" : "") + '">' + METRICS[k].toUpperCase() + '</button>'; }).join("") + '</div>' +
       '<div id="gchart" class="chartbox"></div></div>';
-    var cols = [["label", BYS[G.by]], ["shifts", "Shifts"], ["lbs", "Lb"], ["coils", "Coils"], ["hours", "Hours"], ["lbhr", "Lb/hr"], ["dt", "Down hr"]];
+    var cols = [["label", BYS[G.by]], ["shifts", "Shifts"], ["lbs", "Lbs"], ["coils", "Coils"], ["hours", "Hours"], ["lbhr", "Lbs/hr"], ["dt", "Down hr"]];
     h += '<div class="tblwrap"><table class="tbl"><thead><tr>' + cols.map(function (c) { return '<th><button type="button" data-sort="' + c[0] + '">' + esc(c[1]) + (G.sort.col === c[0] ? (G.sort.dir > 0 ? " \u25b2" : " \u25bc") : "") + '</button></th>'; }).join("") + '</tr></thead><tbody id="gtable"></tbody></table></div>' +
       '<div class="toolbar"><button type="button" id="gcsv">EXPORT THIS TABLE</button><button type="button" id="gunsort" class="ghost">DEFAULT ORDER</button></div>';
     box.innerHTML = h;
@@ -512,7 +512,7 @@
       '<span class="lbl">Compare</span><div class="seg" id="pcmp">' + [["off", "OFF"], ["op", "2ND OPERATOR"], ["period", "2ND PERIOD"]].map(function (c) { return '<button type="button" data-c="' + c[0] + '" class="' + (P.cmp === c[0] ? "on" : "") + '">' + c[1] + '</button>'; }).join("") + '</div>';
     if (P.cmp === "op") h += '<div class="field" style="margin-top:10px"><label class="lbl" for="pop2">Second operator</label>' + sel("pop2", P.op2 || (opts.ops[1] || opts.ops[0] || {}).v) + '</div>';
     if (P.cmp === "period") h += '<div class="row2" style="margin-top:10px"><div class="field"><label class="lbl" for="pfrom2">2nd period from</label><input class="in" type="date" id="pfrom2" value="' + esc(P.from2) + '"></div><div class="field"><label class="lbl" for="pto2">2nd period to</label><input class="in" type="date" id="pto2" value="' + esc(P.to2) + '"></div></div>';
-    h += '</div><div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Lb/hr per shift</span>' + info("Each dot is one shift: its total lb \u00f7 its hours. The dashed line is the trend (best straight fit). The dotted white line is the goal lb/hr written on each log. Average = all lb \u00f7 all hours. Change = how much the trend line rose or fell from the first shift to the last, so one great or bad night doesn't swing it. In 2nd period mode both periods are lined up from their first day.") +
+    h += '</div><div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Lbs/hr per shift</span>' + info("Each dot is one shift: its total lbs \u00f7 its hours. The dashed line is the trend (best straight fit). The dotted white line is the goal lbs/hr written on each log. Average = all lbs \u00f7 all hours. Change = how much the trend line rose or fell from the first shift to the last, so one great or bad night doesn't swing it. In 2nd period mode both periods are lined up from their first day.") +
       '</div><div id="pchart" class="chartbox"></div><div class="legend" id="plegend"></div></div><div id="pstats"></div>';
     box.innerHTML = h;
     var ch = function (k, id) { $(id).onchange = function () { P[k] = this.value; render(); }; };
@@ -535,7 +535,7 @@
     var series = [], xmax = 0;
     list.forEach(function (s) {
       var o = dayNum(sameAxis ? origin : firstDate(s, s.period ? P.from2 : P.from)); s.x0 = o;
-      var pts = s.pts.filter(function (p) { return p.lbhr !== null; }).map(function (p) { var x = dayNum(p.date) - o; xmax = Math.max(xmax, x); return { x: x, y: p.lbhr, tip: p.date + ": " + C.n1(p.lbhr) + " lb/hr", goal: p.goal }; });
+      var pts = s.pts.filter(function (p) { return p.lbhr !== null; }).map(function (p) { var x = dayNum(p.date) - o; xmax = Math.max(xmax, x); return { x: x, y: p.lbhr, tip: p.date + ": " + C.n1(p.lbhr) + " lbs/hr", goal: p.goal }; });
       s.xy = pts; s.st = progressStats(s.pts, o);
       series.push({ color: s.color, pts: pts });
       if (s.st.fit && pts.length > 1) { var xa = pts[0].x, xb = pts[pts.length - 1].x; series.push({ color: s.color, dots: false, dash: "7 5", width: 1.6, pts: [{ x: xa, y: s.st.fit.a + s.st.fit.b * xa }, { x: xb, y: s.st.fit.a + s.st.fit.b * xb }] }); }
@@ -544,14 +544,14 @@
     });
     var lab = sameAxis && origin ? function (x) { var d = new Date((dayNum(origin) + x) * 864e5); return (d.getUTCMonth() + 1) + "/" + d.getUTCDate(); } : function (x) { return "day " + (x + 1); };
     if (!list.some(function (s) { return s.xy.length; })) $("pchart").innerHTML = '<div class="msg">No shifts with hours for this pick.</div>';
-    else lineChart($("pchart"), series, { min: 0, max: Math.max(xmax, 1), label: lab }, "Lb/hr");
+    else lineChart($("pchart"), series, { min: 0, max: Math.max(xmax, 1), label: lab }, "Lbs/hr");
     $("plegend").innerHTML = list.map(function (s) { return '<span><i style="background:' + s.color + '"></i>' + esc(s.name) + '</span>'; }).join("") + '<span><i class="dash"></i>trend</span><span><i class="dot"></i>goal</span>';
     $("pstats").innerHTML = list.map(function (s) {
       var st = s.st, sign = st.change === null ? "" : st.change >= 0 ? "+" : "\u2212";
       return (list.length > 1 ? '<h3 style="color:' + s.color + '">' + esc(s.name) + '</h3>' : "") + '<div class="stats">' +
-        '<div class="stat"><i>Average</i><b>' + C.n1(st.avg) + '</b><small>lb/hr \u00b7 ' + st.shifts + ' shift' + (st.shifts === 1 ? "" : "s") + '</small></div>' +
+        '<div class="stat"><i>Average</i><b>' + C.n1(st.avg) + '</b><small>lbs/hr \u00b7 ' + st.shifts + ' shift' + (st.shifts === 1 ? "" : "s") + '</small></div>' +
         '<div class="stat"><i>Best shift</i><b>' + (st.best ? C.n1(st.best.lbhr) : "\u2013") + '</b><small>' + (st.best ? esc(C.day(st.best.date)) : "\u2013") + '</small></div>' +
-        '<div class="stat"><i>Change (trend)</i><b>' + (st.change === null ? "\u2013" : sign + C.n1(Math.abs(st.change))) + '</b><small>' + (st.change === null ? "needs 2+ shifts on different days" : "lb/hr" + (st.pct !== null ? " \u00b7 " + sign + Math.abs(Math.round(st.pct)) + "%" : "")) + '</small></div>' +
+        '<div class="stat"><i>Change (trend)</i><b>' + (st.change === null ? "\u2013" : sign + C.n1(Math.abs(st.change))) + '</b><small>' + (st.change === null ? "needs 2+ shifts on different days" : "lbs/hr" + (st.pct !== null ? " \u00b7 " + sign + Math.abs(Math.round(st.pct)) + "%" : "")) + '</small></div>' +
         '<div class="stat"><i>Goal hit</i><b>' + (st.goalN ? st.goalMet + " of " + st.goalN : "\u2013") + '</b><small>' + (st.goalN ? "shifts with a goal" : "no goal on these logs") + '</small></div></div>';
     }).join("");
   }
@@ -577,20 +577,20 @@
     var all = F.draw === "*", ps = all ? inScope : inScope.filter(function (p) { return p.draw === F.draw; }), mname = all ? "all machines" : "Draw " + F.draw;
     var R = factors(ps, { step: F.step }), B = R.base;
     var h = '<details class="filters panel"' + (open.ff ? " open" : "") + ' id="ffbox"><summary>FILTERS <span>' + esc(fSummary(F.f)) + '</span></summary><div style="margin-top:10px" id="ffed">' + fEditor("f", F.f) + '</div></details>' +
-      '<div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Machine</span>' + info("Baseline = this machine\u2019s own lb/hr over everything in the filters. Every other number is the lb/hr of just the matching card rows, shown as a % of that baseline. " +
+      '<div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Machine</span>' + info("Baseline = this machine\u2019s own lbs/hr over everything in the filters. Every other number is the lbs/hr of just the matching card rows, shown as a % of that baseline. " +
       "Hours are split across a shift\u2019s rows by weight share (the same way as Compare and Group By), so a size or condition that ran half the shift\u2019s pounds gets half its hours. " +
-      "Hr per 10k lb = how long 10,000 lb takes at that rate, for scheduling. THIN means fewer than " + THIN + " shifts: treat it as a hint, not a number to plan on. " +
+      "Hr per 10k lbs = how long 10,000 lbs takes at that rate, for scheduling. THIN means fewer than " + THIN + " shifts: treat it as a hint, not a number to plan on. " +
       "Conditions come from the tracker\u2019s per-coil tags (Grease, Shape change, Stainless, Other); paper logs don\u2019t have them.") + '</div>' +
       '<div class="seg" id="fdraw">' + (dl.length ? dl.map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (F.draw === d ? "on" : "") + '">DRAW ' + d + '</button>'; }).join("") : "") +
       '<button type="button" data-d="*" class="' + (all ? "on" : "") + '">ALL</button></div>' +
-      '<div class="stats"><div class="stat"><i>Baseline \u00b7 ' + esc(mname) + '</i><b>' + fmt("lbhr", B.lbhr) + '</b><small>lb/hr \u00b7 ' + B.shifts + ' shift' + (B.shifts === 1 ? "" : "s") + ' \u00b7 ' + fmt("lbs", B.lbs) + ' lb</small></div></div></div>';
+      '<div class="stats"><div class="stat"><i>Baseline \u00b7 ' + esc(mname) + '</i><b>' + fmt("lbhr", B.lbhr) + '</b><small>lbs/hr \u00b7 ' + B.shifts + ' shift' + (B.shifts === 1 ? "" : "s") + ' \u00b7 ' + fmt("lbs", B.lbs) + ' lbs</small></div></div></div>';
     // headline sentences
     var lines = [];
-    R.conds.forEach(function (c) { if (c.with.lbhr !== null && B.lbhr) lines.push({ t: c.tag + " runs at " + pctTxt(c.with.pct) + " of " + mname + " baseline (" + fmt("lbhr", c.with.lbhr) + " vs " + fmt("lbhr", B.lbhr) + " lb/hr)", r: c.with }); });
+    R.conds.forEach(function (c) { if (c.with.lbhr !== null && B.lbhr) lines.push({ t: c.tag + " runs at " + pctTxt(c.with.pct) + " of " + mname + " baseline (" + fmt("lbhr", c.with.lbhr) + " vs " + fmt("lbhr", B.lbhr) + " lbs/hr)", r: c.with }); });
     var rs = R.sizes.filter(function (r) { return r.lbhr !== null && isFinite(r.n); });
-    if (rs.length >= 2) { var lo = rs[0], hi = rs[rs.length - 1]; lines.push({ t: lo.label + " runs at " + pctTxt(lo.pct) + " and " + hi.label + " at " + pctTxt(hi.pct) + " of baseline: 10,000 lb takes " + C.n1(lo.hr10k) + " hr vs " + C.n1(hi.hr10k) + " hr", r: { thin: lo.thin || hi.thin, shifts: Math.min(lo.shifts, hi.shifts) } }); }
+    if (rs.length >= 2) { var lo = rs[0], hi = rs[rs.length - 1]; lines.push({ t: lo.label + " runs at " + pctTxt(lo.pct) + " and " + hi.label + " at " + pctTxt(hi.pct) + " of baseline: 10,000 lbs takes " + C.n1(lo.hr10k) + " hr vs " + C.n1(hi.hr10k) + " hr", r: { thin: lo.thin || hi.thin, shifts: Math.min(lo.shifts, hi.shifts) } }); }
     if (lines.length) h += '<div class="panel"><span class="lbl">What stands out</span><ul class="list facl">' + lines.map(function (x) { return '<li>' + esc(x.t) + '.' + (x.r.thin ? ' <span class="thin">THIN DATA</span>' : "") + '</li>'; }).join("") + '</ul></div>';
-    var head = ["", "% of base", "Lb/hr", "Shifts", "Hr / 10k lb", "Lb", "Hours"];
+    var head = ["", "% of base", "Lbs/hr", "Shifts", "Hr / 10k lbs", "Lbs", "Hours"];
     h += '<h3>By finish size</h3><div class="seg" id="fstep">' + [[0, "EXACT"], [0.025, '.025"'], [0.05, '.050"'], [0.1, '.100"']].map(function (x) { return '<button type="button" data-s="' + x[0] + '" class="' + (F.step === x[0] ? "on" : "") + '">' + x[1] + '</button>'; }).join("") + '</div>' +
       '<div id="fchart" class="chartbox"></div>' + facTable(head, R.sizes.map(function (r) { return facCells(esc(r.label), r); }), "No logs match these filters.");
     h += '<h3>By run condition</h3>' + (R.tagged ? facTable(head, [].concat.apply([], R.conds.map(function (c) {

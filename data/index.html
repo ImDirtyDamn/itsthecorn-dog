@@ -205,8 +205,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=2"></script>
-<script src="lookup.js?v=2"></script>
+<script src="analyze.js?v=3"></script>
+<script src="lookup.js?v=3"></script>
 <script src="fields.js?v=1"></script>
 <script>
 (function () {
@@ -320,7 +320,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     h += '<div class="stats">' +
       '<div class="stat"><i>Logs</i><b>' + n0(s.count) + '</b><small>' + esc(n0(s.net_hours)) + ' run hrs</small></div>' +
       '<div class="stat"><i>Total lbs</i><b>' + n0(s.total_lbs) + '</b><small>goal ' + n0(s.goal_lbs) + '</small></div>' +
-      '<div class="stat"><i>Avg lb/hr</i><b>' + n1(s.avg_lbhr) + '</b><small>all lbs \u00f7 all hrs</small></div>' +
+      '<div class="stat"><i>Avg lbs/hr</i><b>' + n1(s.avg_lbhr) + '</b><small>all lbs \u00f7 all hrs</small></div>' +
       '<div class="stat"><i>Downtime</i><b>' + n1((s.downtime_minutes || 0) / 60) + ' hr</b><small>' + n0(s.downtime_minutes) + ' min</small></div>' +
       '<div class="stat wide"><i>Goal met</i><b>' + (rated ? s.met + " of " + rated + " (" + pct + "%)" : "\u2013") + '</b><div class="meter"><span style="width:' + pct + '%"></span></div>' +
       (s.count > rated ? '<small>' + (s.count - rated) + ' without a goal</small>' : "") + '</div></div>';
@@ -329,7 +329,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     logs.forEach(function (l, i) {
       h += '<button type="button" class="logcard" data-i="' + i + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(day(l.shift_date)) + (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div>' +
         '<div class="lc2">' + badge(l.goal_met) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + '</div>' +
-        '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? n0(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
+        '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? n0(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LBS/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
     });
     if (hasMore) h += '<button type="button" class="big more" id="more">SHOW MORE</button>';
     $("app").innerHTML = h;
@@ -398,7 +398,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     var L = j.log, h = '<div style="margin:12px 0">' + badge(L.goal_met) + '</div>';
     h += line("Shift", (L.shift_label ? L.shift_label + " \u00b7 " : "") + (L.shift_start ? clock12(L.shift_start) + " \u2013 " + clock12(L.shift_end) : "\u2013"));
     h += line("Total Weight Produced", n0(L.total_lbs), true) + line("Hours per shift", nh(L.net_hours), true) +
-      line("Goal: Lbs/Hour", n1(L.goal_lbhr), true) + line("Average Lbs/per Hour", n1(L.avg_lbhr), true) + line("Shift goal (lb)", n0(L.goal_lbs));
+      line("Goal: Lbs/Hour", n1(L.goal_lbhr), true) + line("Average Lbs/per Hour", n1(L.avg_lbhr), true) + line("Shift goal (lbs)", n0(L.goal_lbs));
     if (j.machines.length) {
       h += '<h3>Machines</h3>';
       [1, 2].forEach(function (slot) {
@@ -408,8 +408,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
         if (segs.length > 1 && tot > 0) h += '<div class="timeline">' + segs.map(function (m) { return '<span style="width:' + ((m.run_hours || 0) * 100 / tot) + '%">' + esc(m.machine) + '</span>'; }).join("") + '</div>';
         segs.forEach(function (m) {
           h += '<div class="cells" style="margin-top:6px"><div><i>Machine</i><b>' + esc(m.machine || "\u2013") + '</b></div><div><i>Time</i><b>' +
-            esc(m.from_time || m.to_time ? clock12(m.from_time) + "\u2013" + clock12(m.to_time) : "all shift") + '</b></div><div><i>Goal lb/hr</i><b>' + n0(m.goal_lbhr) + '</b></div>' +
-            '<div><i>Run hrs</i><b>' + nh(m.run_hours) + '</b></div><div><i>Goal lb</i><b>' + n0(m.goal_lbs) + '</b></div><div></div></div>';
+            esc(m.from_time || m.to_time ? clock12(m.from_time) + "\u2013" + clock12(m.to_time) : "all shift") + '</b></div><div><i>Goal lbs/hr</i><b>' + n0(m.goal_lbhr) + '</b></div>' +
+            '<div><i>Run hrs</i><b>' + nh(m.run_hours) + '</b></div><div><i>Goal lbs</i><b>' + n0(m.goal_lbs) + '</b></div><div></div></div>';
         });
         h += '</div>';
       });
@@ -450,7 +450,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   function askDelete(L) {
     $("ctitle").textContent = "DELETE THIS LOG?"; $("clist").hidden = true; $("cno").textContent = "CANCEL"; $("cyes").textContent = "DELETE"; $("cyes").className = "big warn";
     armGuard();
-    $("cmsg").textContent = L.operator + " \u00b7 " + day(L.shift_date) + " \u00b7 " + n0(L.total_lbs) + " lb. This can't be undone.";
+    $("cmsg").textContent = L.operator + " \u00b7 " + day(L.shift_date) + " \u00b7 " + n0(L.total_lbs) + " lbs. This can't be undone.";
     $("confirm").hidden = false; $("cno").focus();
     $("cno").onclick = function () { $("confirm").hidden = true; };
     $("cyes").onclick = function () {
@@ -496,7 +496,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     h += '<h3>Coils (' + d.coils.length + ')</h3>';
     d.coils.forEach(function (c, i) {
       h += '<div class="edrow"><div class="edhead"><span>COIL ' + (i + 1) + '</span></div><div class="row2">' +
-        fld("Weight (lb)", "ed-cw-" + i, c.weight, 'type="text" inputmode="decimal" autocomplete="off"') + fld("Machine", "ed-cm-" + i, c.machine, 'type="text" maxlength="30" autocomplete="off"') + '</div>' +
+        fld("Weight (lbs)", "ed-cw-" + i, c.weight, 'type="text" inputmode="decimal" autocomplete="off"') + fld("Machine", "ed-cm-" + i, c.machine, 'type="text" maxlength="30" autocomplete="off"') + '</div>' +
         '<div class="row2">' + fld("Part #", "ed-cp-" + i, c.part, 'type="text" maxlength="60" autocomplete="off"') + fld("Finish size (in)", "ed-cf-" + i, c.finish, 'type="text" inputmode="decimal" maxlength="40" autocomplete="off"') + '</div>' +
         '<div class="row2"><div class="field"><label class="lbl" for="ed-cs-' + i + '">Draw type</label><select class="in" id="ed-cs-' + i + '"><option value="round"' + (c.shape !== "shape" ? " selected" : "") + '>Round</option><option value="shape"' + (c.shape === "shape" ? " selected" : "") + '>Shape</option></select></div>' +
         '<div id="ed-crw-' + i + '"' + (c.shape === "shape" ? "" : " hidden") + '>' + fld("Reduction % (optional)", "ed-cr-" + i, c.red, 'type="text" inputmode="decimal" maxlength="5" autocomplete="off"') + '</div></div>' +
@@ -514,7 +514,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     h += '<button type="button" class="big" id="ed-addd">+ ADD DOWNTIME</button>';
     h += '<h3>Totals</h3><div class="row2">' + fld("Total lbs", "ed-total", d.total, 'type="text" inputmode="decimal" autocomplete="off"') +
       fld("Net run time", "ed-net", d.net, 'type="text" inputmode="numeric" data-hm="dec" autocomplete="off"') + '</div>' +
-      '<p class="muted" style="margin-top:0">Total lbs follows the coil weights as you change them. Lb/hr and goal met are worked out again when you save.</p>';
+      '<p class="muted" style="margin-top:0">Total lbs follows the coil weights as you change them. Lbs/hr and goal met are worked out again when you save.</p>';
     h += '<h3>Problems / downtime notes</h3><textarea class="in" id="ed-prob" maxlength="4000">' + esc(d.problems) + '</textarea>';
     h += '<h3>Notes about the day</h3><textarea class="in" id="ed-notes" maxlength="2000">' + esc(d.notes) + '</textarea>';
     h += '<h3>Maintenance to follow up</h3><textarea class="in" id="ed-maint" maxlength="2000">' + esc(d.maintenance) + '</textarea>';
@@ -555,7 +555,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     var coils = [];
     for (var i = 0; i < d.coils.length; i++) {
       var c = d.coils[i], w = String(c.weight).replace(/,/g, "").trim();
-      if (w !== "" && (!NUM_RE.test(w) || !(+w > 0) || +w > 100000)) return { err: "Coil " + (i + 1) + ": the weight must be a number from 1 to 100,000 lb." };
+      if (w !== "" && (!NUM_RE.test(w) || !(+w > 0) || +w > 100000)) return { err: "Coil " + (i + 1) + ": the weight must be a number from 1 to 100,000 lbs." };
       if (w === "" && !c.orig) return { err: "Coil " + (i + 1) + ": type its weight, or remove it." };
       var o = c.orig ? JSON.parse(JSON.stringify(c.orig)) : {};
       var oldW = c.orig ? c.orig.weight : null;
@@ -571,9 +571,9 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       if (o.finish !== (c.orig ? c.orig.finish || "" : "") && sizeAmbig(o.finish) && c.keep !== o.finish) return { err: "Coil " + (i + 1) + ": finish size " + o.finish + " has no decimal point. Which did you mean?", pick: i };
       if (c.orig && c.orig.weight === null && o.weight === null) delete o.weight;
       Object.keys(o).forEach(function (k) { if (o[k] === null || o[k] === undefined) delete o[k]; });
-      if (!c.orig) ch.push("Added coil " + (i + 1) + ": " + n1(o.weight) + " lb" + (o.machine ? " on " + o.machine : ""));
+      if (!c.orig) ch.push("Added coil " + (i + 1) + ": " + n1(o.weight) + " lbs" + (o.machine ? " on " + o.machine : ""));
       else {
-        if (oldW !== o.weight && !(oldW == null && o.weight == null)) ch.push("Coil " + (i + 1) + " weight: " + n1(oldW) + " \u2192 " + n1(o.weight) + " lb");
+        if (oldW !== o.weight && !(oldW == null && o.weight == null)) ch.push("Coil " + (i + 1) + " weight: " + n1(oldW) + " \u2192 " + n1(o.weight) + " lbs");
         [["machine", "machine"], ["part", "part #"], ["finish", "finish size"], ["note", "note"]].forEach(function (f) {
           if ((c.orig[f[0]] || "") !== (o[f[0]] || "")) ch.push("Coil " + (i + 1) + " " + f[1] + ": " + (c.orig[f[0]] || "blank") + " \u2192 " + (o[f[0]] || "blank"));
         });

@@ -213,8 +213,8 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
       var n = t.coils.length, lb = t.coils.reduce(function (a, c) { return a + (+c.weight || 0); }, 0);
       h += '<div class="panel"><b style="color:var(--white)">In the tracker now:</b><ul class="muted" style="padding-left:20px;margin:6px 0 0">' +
         '<li>' + esc(t.shift.date || "") + (t.shift.start ? ", " + fmt12(t.shift.start) + (t.shift.end ? " to " + fmt12(t.shift.end) : "") : "") + (t.shift.operator ? ", " + esc(t.shift.operator) : "") + '</li>' +
-        '<li>' + t.machines.map(function (m) { return esc(m.name) + " @ " + fmtLb(m.needRate) + " lb/hr"; }).join(", ") + '</li>' +
-        '<li>' + n + (n === 1 ? " coil, " : " coils, ") + fmtLb(lb) + ' lb' + (t.downtime.length ? ", " + t.downtime.length + " downtime" : "") + '</li></ul></div>';
+        '<li>' + t.machines.map(function (m) { return esc(m.name) + " @ " + fmtLb(m.needRate) + " lbs/hr"; }).join(", ") + '</li>' +
+        '<li>' + n + (n === 1 ? " coil, " : " coils, ") + fmtLb(lb) + ' lbs' + (t.downtime.length ? ", " + t.downtime.length + " downtime" : "") + '</li></ul></div>';
     } else h += '<p class="muted">The tracker is empty on this phone, so the sheet will start a new shift.</p>';
     h += '<button id="scan" type="button" class="big amber" style="margin-top:6px">SCAN MY SHEET (CAMERA)</button><div id="scan-host"></div>';
     if (!done && localStorage.getItem(BACKUP) !== null) h += '<button id="undo" type="button" class="warn big" style="margin-top:22px">UNDO THE LAST SCAN</button>';
@@ -327,9 +327,9 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
     var before = localStorage.getItem(KEY);
     try { localStorage.setItem(BACKUP, before === null ? "" : before); localStorage.setItem(KEY, JSON.stringify(st)); }
     catch (e) { toast("Couldn't save on this phone"); return false; }
-    var msg = (replace ? "Tracker started from the sheet: " : "Added to the tracker: ") + count + (count === 1 ? " coil, " : " coils, ") + fmtLb(lbs) + " lb";
+    var msg = (replace ? "Tracker started from the sheet: " : "Added to the tracker: ") + count + (count === 1 ? " coil, " : " coils, ") + fmtLb(lbs) + " lbs";
     if (noWeight.length) msg += ". Card " + noWeight.join(", ") + " had no weight, so it was skipped";
-    if (tooBig.length) msg += ". Card " + tooBig.join(", ") + " was over 100,000 lb a coil, so it was skipped";
+    if (tooBig.length) msg += ". Card " + tooBig.join(", ") + " was over 100,000 lbs a coil, so it was skipped";
     if (skipped.length) msg += ". No room for " + skipped.join(", ") + " (6 machines max)";
     // the new coils go through the tracker's own add-coil step (same weight rule, same shift-over check, one UNDO)
     try {

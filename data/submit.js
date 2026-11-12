@@ -335,7 +335,7 @@
       '<dt>Date</dt><dd>' + esc(day(m.shift_date)) + '</dd>' +
       '<dt>Shift</dt><dd>' + esc(m.shift_start && m.shift_end ? clock12(m.shift_start) + " \u2013 " + clock12(m.shift_end) : "\u2013") + '</dd>' +
       '<dt>Draws</dt><dd>' + esc((m.draws || []).map(function (d) { return "Draw " + d; }).join(", ") || "\u2013") + '</dd>' +
-      (m.total_lbs !== null && m.total_lbs !== undefined ? '<dt>Weight</dt><dd>' + esc(Number(m.total_lbs).toLocaleString()) + ' lb</dd>' : "") +
+      (m.total_lbs !== null && m.total_lbs !== undefined ? '<dt>Weight</dt><dd>' + esc(Number(m.total_lbs).toLocaleString()) + ' lbs</dd>' : "") +
       '<dt>Sent</dt><dd>' + esc(m.submitted_at ? new Date(m.submitted_at).toLocaleString([], { month: "numeric", day: "numeric", year: "2-digit", hour: "numeric", minute: "2-digit" }) : "\u2013") + '</dd></dl>' +
       '<p>If this is a different log, send it anyway. If it\'s the same one, don\'t send it again.</p>' +
       '<div class="btns"><button type="button" class="any">SEND ANYWAY</button><button type="button" class="no">DON\'T SEND</button></div>';

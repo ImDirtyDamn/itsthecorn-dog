@@ -672,7 +672,7 @@
       <div>
         <div class="lbl">Pace car</div>
         <div class="big pc glow" id="d-pc">0</div>
-        <div class="unit">lb you should have by now</div>
+        <div class="unit">lbs you should have by now</div>
       </div>
     </div>
     <div class="bar" aria-hidden="true"><div class="fill" id="d-fill"></div><div class="mark" id="d-mark"></div></div>
@@ -681,7 +681,7 @@
 
     <section class="block">
       <span class="lbl" id="d-delta-lbl">Deficit / surplus</span>
-      <div class="delta" id="d-delta"><span id="d-delta-lb">-</span><span class="pct" id="d-delta-pct"></span></div>
+      <div class="delta" id="d-delta"><span id="d-delta-lbs">-</span><span class="pct" id="d-delta-pct"></span></div>
       <div class="sub" id="d-delta-note"></div>
     </section>
 
@@ -751,7 +751,7 @@
     <h2 class="sheet-title" id="cm-title">CALCULATOR</h2>
     <div class="cm-list">
       <a class="btn cm-opt" id="cm-avg" href="/calc/try/?go=avg&amp;from=app">AVERAGE COIL WEIGHT<small>Card total, coils on card and coils ran: average, weight ran, and send them to your tracker</small></a>
-      <a class="btn cm-opt" id="cm-rate" href="/calc/try/?go=rate&amp;from=app">PRODUCTION RATE<small>Hours worked and lb produced, minus downtime: your lb per hour</small></a>
+      <a class="btn cm-opt" id="cm-rate" href="/calc/try/?go=rate&amp;from=app">PRODUCTION RATE<small>Hours worked and lbs produced, minus downtime: your lbs per hour</small></a>
       <a class="btn cm-opt" id="cm-log" href="/calc/try/?go=log&amp;from=app">FULL PRODUCTION LOG<small>Fill out the whole sheet, one screen at a time</small></a>
     </div>
     <button type="button" class="btn solid sheet-close" id="cm-close">CLOSE</button>
@@ -1522,7 +1522,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
     if (step === "machines") {
       title = d.machines.length > 1 ? "Need rate at each machine" : "Need rate for your machine";
-      help = "Pick the draw number for each machine and enter the lb/hr you need from it. The draw number is how the supervisor log sorts your shift.";
+      help = "Pick the draw number for each machine and enter the lbs/hr you need from it. The draw number is how the supervisor log sorts your shift.";
       var sels = [];
       var markTaken = function () {
         sels.forEach(function (sel, i) {
@@ -1546,7 +1546,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         ni.addEventListener("input", function () { m.nick = ni.value; });
         var row = el("div", "row2");
         row.appendChild(field("Machine " + (i + 1) + " draw #", ds));
-        row.appendChild(field("Need rate lb/hr", ri));
+        row.appendChild(field("Need rate lbs/hr", ri));
         r.appendChild(row);
         if (!m.draw && m.name) r.appendChild(el("p", "calc-note", "Was saved as \"" + m.name + "\". Pick its draw number."));
         r.appendChild(field("Nickname (optional)", ni));
@@ -1576,9 +1576,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         ? d.breaks.map(function (b) { return fmtHHMM(b.start) + " " + b.minutes + "m"; }).join(", ") || "none"
         : (d.breakTotalMin || 0) + " min total");
       add2("Worked time", nums ? fmtDur(nums.worked) : "-");
-      d.machines.forEach(function (m) { add2(m.draw ? drawName(m.draw, m.nick) : (m.name || "Machine"), fmtInt(m.needRate) + " lb/hr"); });
+      d.machines.forEach(function (m) { add2(m.draw ? drawName(m.draw, m.nick) : (m.name || "Machine"), fmtInt(m.needRate) + " lbs/hr"); });
       if (d.operator) add2("Operator", d.operator);
-      add2("Day target", nums ? fmtInt(nums.target) + " lb" : "-");
+      add2("Day target", nums ? fmtInt(nums.target) + " lbs" : "-");
       tbl.appendChild(tb); body.appendChild(tbl);
       var nowW = Date.now();
       if (nums && nums.win.end <= nowW) {
@@ -1634,7 +1634,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         var m = d.machines[j];
         if (!validDraw(m.draw)) return "Pick the draw number for machine " + (j + 1) + ".";
         for (var q = 0; q < j; q++) if (d.machines[q].draw === m.draw) return "Draw " + m.draw + " is picked twice. Each machine needs its own draw number.";
-        if (!(num(m.needRate) > 0 && num(m.needRate) < 1e6)) return "Enter a need rate (lb/hr) for Draw " + m.draw + ".";
+        if (!(num(m.needRate) > 0 && num(m.needRate) < 1e6)) return "Enter a need rate (lbs/hr) for Draw " + m.draw + ".";
       }
     }
     return "";
@@ -1658,7 +1658,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var lab = "Machine " + (i + 1);
       rows.push([lab + " draw #", m.draw ? "Draw " + m.draw : "not picked"]);
       if (m.nick) rows.push([lab + " nickname", m.nick]);
-      rows.push([lab + " need rate", fmtInt(num(m.needRate)) + " lb/hr"]);
+      rows.push([lab + " need rate", fmtInt(num(m.needRate)) + " lbs/hr"]);
       var rf = rateFlag(m.draw ? "Draw " + m.draw : lab, m.needRate); if (rf) flags.push({ t: rf });
       if (m.id && det[m.id]) {
         detRows(rows, m.draw ? "Draw " + m.draw : lab, det[m.id]);
@@ -1666,7 +1666,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       }
     });
     if (d.operator) rows.push(["Operator", d.operator]);
-    if (nums) rows.push(["Day target", fmtInt(nums.target) + " lb"]);
+    if (nums) rows.push(["Day target", fmtInt(nums.target) + " lbs"]);
     if (nums && nums.win.end <= Date.now()) {
       var nd = nextShiftDate(d.start, d.end, Date.now());
       flags.push({ t: "This shift already ended (" + fmtShiftDay(d.date) + "). The dashboard will show it as over.", fix: ["USE " + fmtShiftDay(nd).toUpperCase() + " INSTEAD", function () { d.date = nd; if (wz && STEPS[wz.step] === "review") renderWizard(); }] });
@@ -1728,7 +1728,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     state.machines.forEach(function (m, i) {
       var c = el("div", "mc"); c.id = "mc-" + i;
       var head = el("div", "mc-head");
-      var nm = el("span", "mc-name", m.name), rt = el("span", "mc-rate", "need " + fmtInt(m.needRate) + " lb/hr");
+      var nm = el("span", "mc-name", m.name), rt = el("span", "mc-rate", "need " + fmtInt(m.needRate) + " lbs/hr");
       head.appendChild(nm); head.appendChild(rt); c.appendChild(head);
       var stats = el("div", "mc-stats");
       var mk = function (label) { var dv = el("div"); dv.appendChild(el("span", "lbl", label)); var b = el("b", null, "-"); dv.appendChild(b); stats.appendChild(dv); return b; };
@@ -1767,7 +1767,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   var MAX_COIL_LB = 100000;
   function checkCoilWeight(raw, inp, showErr, onOk) {
     var t = String(raw == null ? "" : raw).trim(), set = state.settings || defaultSettings();
-    var ask = "Enter the coil weight in lb";
+    var ask = "Enter the coil weight in lbs";
     if (!t) { showErr(ask + "."); return; }
     if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^\.\d+$/.test(t)) {
       showErr(/^\s*[-\u2212]/.test(t) ? "A coil weight can't be negative. " + ask + ", like 4500." :
@@ -1778,11 +1778,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (/\.\d{2,}$/.test(t)) { showErr("Use one decimal place at most, like 4500.5. " + ask + "."); return; }
     var clean = t.replace(/,/g, ""), w = parseFloat(clean);
     if (!(w > 0)) { showErr("A coil weight has to be more than 0. " + ask + "."); return; }
-    if (w > MAX_COIL_LB) { showErr(fmtLb(w) + " lb is more than any coil (the limit is " + fmtInt(MAX_COIL_LB) + " lb). Is that the coil ID? " + ask + "."); return; }
+    if (w > MAX_COIL_LB) { showErr(fmtLb(w) + " lbs is more than any coil (the limit is " + fmtInt(MAX_COIL_LB) + " lbs). Is that the coil ID? " + ask + "."); return; }
     var q = null;
-    if (/^0\d{3,}/.test(clean)) q = "That looks like a coil ID, not a weight. Log " + fmtLb(w) + " lb anyway?";
-    else if (w > set.confirmOverLb) q = fmtLb(w) + " lb is over " + fmtInt(set.confirmOverLb) + " lb. Is that the coil weight (not the coil ID)?";
-    else if (w < set.confirmUnderLb) q = fmtLb(w) + " lb is under " + fmtInt(set.confirmUnderLb) + " lb. Is that right?";
+    if (/^0\d{3,}/.test(clean)) q = "That looks like a coil ID, not a weight. Log " + fmtLb(w) + " lbs anyway?";
+    else if (w > set.confirmOverLb) q = fmtLb(w) + " lbs is over " + fmtInt(set.confirmOverLb) + " lbs. Is that the coil weight (not the coil ID)?";
+    else if (w < set.confirmUnderLb) q = fmtLb(w) + " lbs is under " + fmtInt(set.confirmUnderLb) + " lbs. Is that right?";
     if (!q) { onOk(w); return; }
     askConfirm(q, "Yes, log it", "Fix it", function () { onOk(w); }, function () {
       showErr("Not logged. Fix the weight and log it again.");
@@ -1843,8 +1843,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   var RATE_LOW = 200, RATE_HIGH = 10000;
   function rateFlag(name, rate) {
     rate = num(rate);
-    if (rate > 0 && rate < RATE_LOW) return name + ": " + fmtInt(rate) + " lb/hr is very low for a draw machine (usual is " + fmtInt(RATE_LOW) + " to " + fmtInt(RATE_HIGH) + " lb/hr). Check it.";
-    if (rate > RATE_HIGH) return name + ": " + fmtInt(rate) + " lb/hr is very high for a draw machine (usual is " + fmtInt(RATE_LOW) + " to " + fmtInt(RATE_HIGH) + " lb/hr). Check it.";
+    if (rate > 0 && rate < RATE_LOW) return name + ": " + fmtInt(rate) + " lbs/hr is very low for a draw machine (usual is " + fmtInt(RATE_LOW) + " to " + fmtInt(RATE_HIGH) + " lbs/hr). Check it.";
+    if (rate > RATE_HIGH) return name + ": " + fmtInt(rate) + " lbs/hr is very high for a draw machine (usual is " + fmtInt(RATE_LOW) + " to " + fmtInt(RATE_HIGH) + " lbs/hr). Check it.";
     return "";
   }
   // a size typed with no point (600, 1250): one tap to say what it is; nothing is saved until one is picked
@@ -1997,18 +1997,18 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     $("d-fill").style.width = T ? Math.min(100, r.lbsRan / T * 100) + "%" : "0";
     $("d-mark").style.left = T ? Math.min(100, r.paceCar / T * 100) + "%" : "0";
     setText($("d-of-target"), T ? fmtW(r.lbsRan / T * 100) + "% of day target" : "");
-    setText($("d-target"), T ? "TARGET " + fmtInt(T) + " lb" : "");
+    setText($("d-target"), T ? "TARGET " + fmtInt(T) + " lbs" : "");
 
     // deficit / surplus
     var col = paceColor(r.delta);
     if (r.paceCar == null || r.phase === "before" || r.paceCar <= 0) {
       setText($("d-delta-lbl"), "Deficit / surplus");
-      setText($("d-delta-lb"), "-"); setText($("d-delta-pct"), "");
+      setText($("d-delta-lbs"), "-"); setText($("d-delta-pct"), "");
       setCls($("d-delta"), "delta white");
       setText($("d-delta-note"), r.phase === "before" ? "Starts when the shift starts." : "");
     } else {
       setText($("d-delta-lbl"), r.delta >= 0 ? "Surplus" : "Deficit");
-      setText($("d-delta-lb"), fmtSigned(r.delta) + " lb");
+      setText($("d-delta-lbs"), fmtSigned(r.delta) + " lbs");
       setText($("d-delta-pct"), fmtPct(r.deltaPct));
       setCls($("d-delta"), "delta glow " + col);
       setText($("d-delta-note"), (r.delta >= 0 ? "ahead of" : "behind") + " the pace car");
@@ -2020,30 +2020,30 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       ["p-pace", "p-proj", "p-vs", "p-hit", "p-catch"].forEach(function (id) { setText($(id), "-"); });
     } else {
       var paceOk = r.pace != null && r.pace > 0;
-      setText($("p-pace"), paceOk ? fmtInt(r.pace) + " lb/hr" : "-");
-      setText($("p-proj"), paceOk || r.phase === "after" ? fmtInt(r.projected == null ? r.lbsRan : r.projected) + " lb" : "-");
+      setText($("p-pace"), paceOk ? fmtInt(r.pace) + " lbs/hr" : "-");
+      setText($("p-proj"), paceOk || r.phase === "after" ? fmtInt(r.projected == null ? r.lbsRan : r.projected) + " lbs" : "-");
       var vsTxt = "-", vsCls = "";
       if (paceOk || r.phase === "after") {
         var pv = r.projected == null ? r.lbsRan : r.projected, pd = pv - T;
-        vsTxt = fmtSigned(pd) + " lb · " + fmtPct(pd / T * 100);
+        vsTxt = fmtSigned(pd) + " lbs · " + fmtPct(pd / T * 100);
         vsCls = colorFor(pd / T * 100);
       }
       setText($("p-vs"), vsTxt); setCls($("p-vs"), vsCls);
       var hit = "-", hitCls = "";
       if (r.targetHit) { hit = "TARGET HIT"; hitCls = "green"; }
       else if (hitShort(r)) {   // the hit time is well past the end of the shift: say how short instead of a clock time
-        hit = "Short by " + fmtInt(Math.max(0, T - (r.projected == null ? r.lbsRan : r.projected))) + " lb at this pace"; hitCls = "red";
+        hit = "Short by " + fmtInt(Math.max(0, T - (r.projected == null ? r.lbsRan : r.projected))) + " lbs at this pace"; hitCls = "red";
       }
       else if (r.hitAt != null) {
         var early = r.hitVsEndMs <= 0;
         hit = fmtClockDay(r.hitAt, now) + " · " + fmtDur(Math.abs(r.hitVsEndMs)) + (early ? " early" : " late");
         hitCls = early ? "green" : "red";
-      } else if (r.phase === "after") { hit = "Missed by " + fmtInt(T - r.lbsRan) + " lb"; hitCls = "red"; }
+      } else if (r.phase === "after") { hit = "Missed by " + fmtInt(T - r.lbsRan) + " lbs"; hitCls = "red"; }
       setText($("p-hit"), hit); setCls($("p-hit"), hitCls);
       setText($("p-hit-lbl"), hitShort(r) || (r.phase === "after" && !r.targetHit) ? "Target" : "Hit target at");
       var cu = "-", cuCls = "";
       if (r.targetHit) { cu = "0 · target hit"; cuCls = "green"; }
-      else if (r.catchUp != null && r.phase !== "after") { cu = fmtInt(r.catchUp) + " lb/hr"; cuCls = r.catchUp <= r.rateSum ? "" : "red"; }
+      else if (r.catchUp != null && r.phase !== "after") { cu = fmtInt(r.catchUp) + " lbs/hr"; cuCls = r.catchUp <= r.rateSum ? "" : "red"; }
       setText($("p-catch"), cu); setCls($("p-catch"), cuCls);
 
       if (r.phase === "before") note = "Projection starts once you have 10 minutes on the clock.";
@@ -2063,7 +2063,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       setCls(c.dl, mr.deltaPct == null || r.phase === "before" ? "" : colorFor(mr.deltaPct));
       var lc = null, list = coilsOf(mr.id);
       if (list.length) lc = list[list.length - 1];
-      var t = lc ? "Last coil " + fmtLb(lc.weight) + " lb at " + fmtClock(Date.parse(lc.loggedAt)) + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") : "No coils yet";
+      var t = lc ? "Last coil " + fmtLb(lc.weight) + " lbs at " + fmtClock(Date.parse(lc.loggedAt)) + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") : "No coils yet";
       if (c.last.className.indexOf("red") < 0 || lastLogged[mr.id]) { setText(c.last, t); setCls(c.last, "mc-last sub"); }
       lastLogged[mr.id] = null;
     });
@@ -2092,7 +2092,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     adv.textContent = "";
     state.machines.forEach(function (m, i) {
       var sec = el("div", "adv-mach"); sec.id = "adv-" + i;
-      sec.appendChild(el("h3", null, m.name + " · " + fmtInt(m.needRate) + " lb/hr"));
+      sec.appendChild(el("h3", null, m.name + " · " + fmtInt(m.needRate) + " lbs/hr"));
 
       // run timer (optional)
       var tl = el("div", "adv-line");
@@ -2157,14 +2157,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var sg = el("div", "row2");
     var smin = input("text", "set-min", String(state.settings.confirmUnderLb), { inputmode: "decimal", autocomplete: "off" });
     var smax = input("text", "set-max", String(state.settings.confirmOverLb), { inputmode: "decimal", autocomplete: "off" });
-    sg.appendChild(field("Ask if under (lb)", smin)); sg.appendChild(field("Ask if over (lb)", smax));
+    sg.appendChild(field("Ask if under (lbs)", smin)); sg.appendChild(field("Ask if over (lbs)", smax));
     st.appendChild(sg);
     var serr = el("p", "err"); serr.id = "set-err";
     var sb = smallBtn("SAVE CHECKS", "", function () {
       var u = num(smin.value.replace(/,/g, "")), o = num(smax.value.replace(/,/g, ""));
-      if (!(u >= 0) || !(o > 0) || u >= o) { setText(serr, "Under must be less than over, both in lb."); setCls(serr, "err"); return; }
+      if (!(u >= 0) || !(o > 0) || u >= o) { setText(serr, "Under must be less than over, both in lbs."); setCls(serr, "err"); return; }
       state.settings = cleanSettings({ confirmUnderLb: u, confirmOverLb: o, view: state.settings.view }); save();
-      setCls(serr, "err green"); setText(serr, "Saved: asks under " + fmtInt(u) + " lb and over " + fmtInt(o) + " lb.");
+      setCls(serr, "err green"); setText(serr, "Saved: asks under " + fmtInt(u) + " lbs and over " + fmtInt(o) + " lbs.");
     }); sb.id = "set-save";
     var sr = smallBtn("DEFAULTS", "", function () { smin.value = DEFAULT_CONFIRM_UNDER_LB; smax.value = DEFAULT_CONFIRM_OVER_LB; });
     var sl = el("div", "adv-line"); sl.appendChild(sb); sl.appendChild(sr); st.appendChild(sl); st.appendChild(serr);
@@ -2242,7 +2242,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       });
     }));
     line.appendChild(smallBtn("DELETE COIL", "warn", function () {
-      askConfirm("Delete this " + fmtLb(c.weight) + " lb coil?", "Delete it", "Keep it", function () {
+      askConfirm("Delete this " + fmtLb(c.weight) + " lbs coil?", "Delete it", "Keep it", function () {
         state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
         editingCoil = null; save(); tick(); renderAdvanced();
       }, function () {});
@@ -2385,7 +2385,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var own = runningFor(id), all = runningFor("all");
     if (own) endDown(own); else if (all) endDown(all); else startDown(id, "");
   }
-  function lbOff(lb) { return Math.round(lb) === 0 ? "0 lb" : MINUS + fmtInt(lb) + " lb"; }
+  function lbOff(lb) { return Math.round(lb) === 0 ? "0 lbs" : MINUS + fmtInt(lb) + " lbs"; }
   function entryText(d, r, now) {
     var a = Date.parse(d.startAt), b = d.endAt ? Date.parse(d.endAt) : now, x = (r.downEntries || {})[d.id] || { ms: 0, lb: 0 };
     var t = (d.endAt ? "" : "DOWN NOW · ") + fmtClock(a) + "–" + (d.endAt ? fmtClock(b) : "now") + " · " + dtName(d.machineId) + " · " + fmtDur(b - a) + " · " + lbOff(x.lb);
@@ -2401,7 +2401,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (dtTarget !== "all" && !machineById(dtTarget)) dtTarget = "all";
     box.appendChild(el("p", "sub", "Downtime comes off the day target and the pace car at the machine's need rate (All machines = every need rate added up). Time that falls on a break is never taken twice."));
     var sel = el("select", "in"); sel.id = "dt-target";
-    [["all", "All machines"]].concat(state.machines.map(function (m) { return [m.id, m.name + " · " + fmtInt(m.needRate) + " lb/hr"]; })).forEach(function (o) {
+    [["all", "All machines"]].concat(state.machines.map(function (m) { return [m.id, m.name + " · " + fmtInt(m.needRate) + " lbs/hr"]; })).forEach(function (o) {
       var op = el("option", null, o[1]); op.value = o[0]; sel.appendChild(op);
     });
     sel.value = dtTarget;
@@ -2457,7 +2457,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       } else {
         var xb = el("button", "btn small warn", "DELETE"); xb.type = "button"; xb.id = "dt-del-" + k;
         xb.addEventListener("click", function () {
-          askConfirm("Delete this downtime entry? Its lb go back on the target.", "Delete it", "Keep it", function () {
+          askConfirm("Delete this downtime entry? Its lbs go back on the target.", "Delete it", "Keep it", function () {
             state.downtime = state.downtime.filter(function (y) { return y.id !== d.id; }); save(); tick(); renderDowntime();
           }, function () {});
         });
@@ -2537,7 +2537,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function showReadback(c) {
     var m = machineById(c.machineId);
     rbCoil = c.id;
-    setText($("rb-w"), fmtLb(c.weight) + " lb");
+    setText($("rb-w"), fmtLb(c.weight) + " lbs");
     setText($("rb-mach"), (m ? m.name : "") + " · " + fmtClock(Date.parse(c.loggedAt)));
     setText($("rb-det"), detailText(c, true));
     setText($("rb-undo"), "UNDO"); $("rb-undo").disabled = false; setCls($("readback"), "readback");
@@ -2555,9 +2555,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     showReadback(list[list.length - 1]);
     rbCoil = list.map(function (c) { return c.id; });
     var tot = 0; list.forEach(function (c) { tot += c.weight; });
-    setText($("rb-w"), list.length + " coil" + (list.length === 1 ? "" : "s") + " · " + fmtLb(tot) + " lb");
+    setText($("rb-w"), list.length + " coil" + (list.length === 1 ? "" : "s") + " · " + fmtLb(tot) + " lbs");
     var ws = list.slice(0, 8).map(function (c) { return fmtLb(c.weight); }).join(" + ") + (list.length > 8 ? " + " + (list.length - 8) + " more" : "");
-    setText($("rb-det"), (scan ? "From the scanned sheet: " : "From the calculator: ") + ws + " lb");
+    setText($("rb-det"), (scan ? "From the scanned sheet: " : "From the calculator: ") + ws + " lbs");
     setText(document.querySelector("#readback .rb-lbl"), scan ? "LOGGED FROM SHEET" : "LOGGED FROM CARD");
   }
   $("rb-undo").addEventListener("click", function () {
@@ -2608,13 +2608,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var m = machineById(c.machineId);
       var row = el("div", "rc-row" + (c.id === rcHl ? " hl" : "")); row.id = "rc-" + k;
       var info = el("div");
-      info.appendChild(el("span", "rc-w", fmtLb(c.weight) + " lb"));
+      info.appendChild(el("span", "rc-w", fmtLb(c.weight) + " lbs"));
       info.appendChild(el("span", "rc-meta", fmtClock(Date.parse(c.loggedAt)) + " · " + (m ? m.name : "?") + (c.coilNo ? " · coil " + c.coilNo : "")));
       var dtx = detailText(c, true); if (dtx) info.appendChild(el("span", "rc-det", dtx));
       row.appendChild(info);
       var eb = smallBtn(rcEdit === c.id ? "CLOSE" : "EDIT", "", function () { rcEdit = rcEdit === c.id ? null : c.id; renderRecent(); }); eb.id = "rc-edit-" + k;
       var db = smallBtn("DELETE", "warn", function () {
-        askConfirm("Delete the " + fmtLb(c.weight) + " lb coil on " + (m ? m.name : "?") + " (" + fmtClock(Date.parse(c.loggedAt)) + ")?", "Delete it", "Keep it", function () {
+        askConfirm("Delete the " + fmtLb(c.weight) + " lbs coil on " + (m ? m.name : "?") + " (" + fmtClock(Date.parse(c.loggedAt)) + ")?", "Delete it", "Keep it", function () {
           state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
           if (rbCoil === c.id) hideReadback();
           rcEdit = null; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
@@ -2686,7 +2686,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function statusText(delta, pct) {
     if (delta == null || pct == null) return null;
     var ahead = delta >= 0;
-    return { t: fmtSigned(delta) + " lb " + (ahead ? "AHEAD" : "BEHIND") + " (" + Math.abs(pct).toFixed(1) + "%)", cls: ahead ? "green" : "red" };
+    return { t: fmtSigned(delta) + " lbs " + (ahead ? "AHEAD" : "BEHIND") + " (" + Math.abs(pct).toFixed(1) + "%)", cls: ahead ? "green" : "red" };
   }
   function raceReady(r) { return !(r.paceCar == null || r.phase === "before" || r.phase === "invalid" || r.paceCar <= 0); }
   function downNow(id) { return runningFor(id) || runningFor("all"); }
@@ -2714,7 +2714,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var T = r.target;
     $("s-fill").style.width = $("d-fill").style.width;
     $("s-mark").style.left = $("d-mark").style.left;
-    setText($("s-target"), T ? "TARGET " + fmtInt(T) + " lb" : "");
+    setText($("s-target"), T ? "TARGET " + fmtInt(T) + " lbs" : "");
     var st = raceReady(r) ? statusText(r.delta, r.deltaPct) : null;
     if (st) st.cls = paceColor(r.delta);
     setText($("s-status"), st ? st.t : (r.phase === "before" ? "Starts when the shift starts" : r.phase === "invalid" ? "Setup incomplete · tap MORE OPTIONS, then EDIT SETUP" : "-"));
@@ -2939,25 +2939,25 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var grossPc = r.fraction * gross, downSo = mr ? mr.downSoFarLb : r.downSoFarLb, downAll = mr ? mr.downLb : r.downLb;
     var pc = mr ? mr.paceCar : r.paceCar, tg = mr ? mr.target : r.target;
     var dl = el("dl", "sh-rows");
-    sRow(dl, "Need rate" + (m ? "" : " (all machines)"), fmtInt(rate) + " lb/hr");
+    sRow(dl, "Need rate" + (m ? "" : " (all machines)"), fmtInt(rate) + " lbs/hr");
     sRow(dl, "Shift worked time", fmtDur(r.workedTotalMs));
     sRow(dl, "Breaks excluded", r.breakMs > 0 ? fmtDur(r.breakMs) : "none");
-    sRow(dl, "Day target before downtime", fmtInt(gross) + " lb");
+    sRow(dl, "Day target before downtime", fmtInt(gross) + " lbs");
     sRow(dl, "Worked so far", fmtDur(r.workedSoFarMs) + " (" + (r.fraction * 100).toFixed(1) + "%)");
-    sRow(dl, "Pace car before downtime", fmtInt(grossPc) + " lb");
+    sRow(dl, "Pace car before downtime", fmtInt(grossPc) + " lbs");
     var list = m ? [[m, mr]] : state.machines.map(function (mm, i) { return [mm, r.machines[i]]; });
     list.forEach(function (x) {
       if (!x[1]) return;
       var dn = downNow(x[0].id);
       sRow(dl, "Downtime " + x[0].name + " (" + fmtDur(x[1].downMs || 0) + (dn ? ", down now" : "") + ")",
-        negLb(x[1].downSoFarLb) + " lb so far · " + negLb(x[1].downLb) + " lb off target", (x[1].downLb || 0) > 0 ? "amber" : "");
+        negLb(x[1].downSoFarLb) + " lbs so far · " + negLb(x[1].downLb) + " lbs off target", (x[1].downLb || 0) > 0 ? "amber" : "");
     });
-    sRow(dl, "Day target after downtime", fmtInt(tg) + " lb", "", "tot");
-    var pr = sRow(dl, "PACE CAR now", fmtInt(pc) + " lb", "green", "tot"); pr.id = "sh-pc";
+    sRow(dl, "Day target after downtime", fmtInt(tg) + " lbs", "", "tot");
+    var pr = sRow(dl, "PACE CAR now", fmtInt(pc) + " lbs", "green", "tot"); pr.id = "sh-pc";
     body.appendChild(dl);
     var p = el("p", "sh-math");
     p.appendChild(document.createTextNode("Pace car = need rate × worked time so far, minus need rate × downtime so far. Breaks and off-shift time don't count. "));
-    p.appendChild(el("b", null, fmtInt(rate) + " lb/hr × " + fmtDur(r.workedSoFarMs) + " = " + fmtInt(grossPc) + " lb" + (fmtInt(downSo) === "0" ? ", no downtime so far = " : ", " + MINUS + " " + fmtInt(downSo) + " lb downtime = ") + fmtInt(pc) + " lb."));
+    p.appendChild(el("b", null, fmtInt(rate) + " lbs/hr × " + fmtDur(r.workedSoFarMs) + " = " + fmtInt(grossPc) + " lbs" + (fmtInt(downSo) === "0" ? ", no downtime so far = " : ", " + MINUS + " " + fmtInt(downSo) + " lbs downtime = ") + fmtInt(pc) + " lbs."));
     if (downAll > downSo + 0.5) p.appendChild(document.createTextNode(" Downtime still running also comes off the day target as it goes."));
     body.appendChild(p);
   }
@@ -2967,20 +2967,20 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (r.phase === "invalid") { title = "DETAILS"; body.appendChild(el("p", "sh-sub", isSimple() ? "Finish setup first: tap MORE OPTIONS, then EDIT SETUP." : "Finish setup first: tap EDIT SETUP.")); }
     else if (sheetKind === "pc") {
       title = "PACE CAR · HOW IT'S WORKED OUT";
-      var b0 = el("div", "sh-big", fmtInt(r.paceCar) + " lb"); b0.id = "sh-pc-big"; body.appendChild(b0);
+      var b0 = el("div", "sh-big", fmtInt(r.paceCar) + " lbs"); b0.id = "sh-pc-big"; body.appendChild(b0);
       body.appendChild(el("p", "sh-sub", "What you should have by now to finish the day exactly on target."));
       paceCarMath(body, r, null, null);
     } else if (sheetKind === "ran") {
       title = "COILS + LBS RAN · BY MACHINE";
       var n0 = coilsRanCount();
-      var b1 = el("div", "sh-big", fmtCoils(n0) + " coil" + (n0 === 1 ? "" : "s") + " · " + fmtInt(r.lbsRan) + " lb"); b1.id = "sh-ran-big"; body.appendChild(b1);
+      var b1 = el("div", "sh-big", fmtCoils(n0) + " coil" + (n0 === 1 ? "" : "s") + " · " + fmtInt(r.lbsRan) + " lbs"); b1.id = "sh-ran-big"; body.appendChild(b1);
       var dl = el("dl", "sh-rows"), n = 0;
       state.machines.forEach(function (m, i) {
         var list = coilsOf(m.id), mr = r.machines[i], lc = list.length ? list[list.length - 1] : null; n += list.length;
-        var d = sRow(dl, m.name + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") + (lc ? " · last " + fmtClock(Date.parse(lc.loggedAt)) : ""), fmtInt(mr ? mr.lbs : 0) + " lb");
+        var d = sRow(dl, m.name + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") + (lc ? " · last " + fmtClock(Date.parse(lc.loggedAt)) : ""), fmtInt(mr ? mr.lbs : 0) + " lbs");
         d.id = "sh-ran-" + i;
       });
-      sRow(dl, "TOTAL · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(r.lbsRan) + " lb", "", "tot");
+      sRow(dl, "TOTAL · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(r.lbsRan) + " lbs", "", "tot");
       body.appendChild(dl);
       var rb = el("button", "btn sh-btn", "RECENT COILS · FIX OR DELETE ›"); rb.type = "button"; rb.id = "sh-recent";
       rb.addEventListener("click", function () { closeSheet(); openRecent(null); });
@@ -2991,14 +2991,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       if (st) st.cls = paceColor(r.delta);
       var b2 = el("div", "sh-big " + (st ? st.cls : ""), st ? st.t : "-"); b2.id = "sh-delta-big"; if (st) b2.style.color = st.cls === "green" ? "var(--fg)" : st.cls === "amber" ? "var(--amber)" : "var(--red)"; body.appendChild(b2);
       var dl2 = el("dl", "sh-rows");
-      sRow(dl2, "Lbs ran", fmtInt(r.lbsRan) + " lb");
-      sRow(dl2, "Pace car", r.paceCar == null ? "-" : fmtInt(r.paceCar) + " lb");
-      sRow(dl2, ready && r.delta >= 0 ? "Ahead by" : "Behind by", ready ? fmtInt(Math.abs(r.delta)) + " lb" : "-", st ? st.cls : "", "tot");
+      sRow(dl2, "Lbs ran", fmtInt(r.lbsRan) + " lbs");
+      sRow(dl2, "Pace car", r.paceCar == null ? "-" : fmtInt(r.paceCar) + " lbs");
+      sRow(dl2, ready && r.delta >= 0 ? "Ahead by" : "Behind by", ready ? fmtInt(Math.abs(r.delta)) + " lbs" : "-", st ? st.cls : "", "tot");
       body.appendChild(dl2);
       if (ready) {
         var p2 = el("p", "sh-math");
-        p2.appendChild(document.createTextNode("lb: lbs ran " + MINUS + " pace car = "));
-        p2.appendChild(el("b", null, fmtInt(r.lbsRan) + " " + MINUS + " " + fmtInt(r.paceCar) + " = " + fmtSigned(r.delta) + " lb"));
+        p2.appendChild(document.createTextNode("lbs: lbs ran " + MINUS + " pace car = "));
+        p2.appendChild(el("b", null, fmtInt(r.lbsRan) + " " + MINUS + " " + fmtInt(r.paceCar) + " = " + fmtSigned(r.delta) + " lbs"));
         p2.appendChild(el("br"));
         p2.appendChild(document.createTextNode("%: that ÷ pace car = "));
         p2.appendChild(el("b", null, fmtSigned(r.delta) + " ÷ " + fmtInt(r.paceCar) + " = " + fmtPct(r.deltaPct)));
@@ -3014,26 +3014,26 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var p3 = el("p", "sh-math");
       if (r.pace != null && r.pace > 0) {
         p3.appendChild(document.createTextNode("Pace = lbs ran ÷ worked hours so far: "));
-        p3.appendChild(el("b", null, fmtInt(r.lbsRan) + " ÷ " + fmtDur(r.workedSoFarMs) + " = " + fmtInt(r.pace) + " lb/hr"));
+        p3.appendChild(el("b", null, fmtInt(r.lbsRan) + " ÷ " + fmtDur(r.workedSoFarMs) + " = " + fmtInt(r.pace) + " lbs/hr"));
         p3.appendChild(el("br"));
         p3.appendChild(document.createTextNode("Finish = lbs ran + pace × worked time left: "));
-        p3.appendChild(el("b", null, fmtInt(r.lbsRan) + " + " + fmtInt(r.pace) + " × " + fmtDur(r.workedLeftMs) + " = " + fmtInt(r.projected) + " lb"));
-        p3.appendChild(document.createTextNode(" vs a day target of " + fmtInt(r.target) + " lb (after downtime). Catch-up rate is what you'd need from now on to still make it."));
+        p3.appendChild(el("b", null, fmtInt(r.lbsRan) + " + " + fmtInt(r.pace) + " × " + fmtDur(r.workedLeftMs) + " = " + fmtInt(r.projected) + " lbs"));
+        p3.appendChild(document.createTextNode(" vs a day target of " + fmtInt(r.target) + " lbs (after downtime). Catch-up rate is what you'd need from now on to still make it."));
       } else p3.appendChild(document.createTextNode($("p-note").textContent || "Projection starts after 10 minutes worked."));
       body.appendChild(p3);
     } else if (sheetKind === "machine") {
       var i = -1; state.machines.forEach(function (mm, k) { if (mm.id === sheetArg) i = k; });
       var m = state.machines[i], mr = r.machines[i];
       if (!m || !mr) { closeSheet(); return; }
-      title = m.name.toUpperCase() + " · " + fmtInt(m.needRate) + " LB/HR";
+      title = m.name.toUpperCase() + " · " + fmtInt(m.needRate) + " LBS/HR";
       var dn = downNow(m.id);
       if (dn) { var w = el("p", "sh-sub", "DOWN NOW · " + fmtDur(now - Date.parse(dn.startAt)) + " · pace car paused"); w.style.color = "var(--red)"; w.style.fontWeight = "700"; body.appendChild(w); }
       var ms = ready && mr.paceCar > 0 ? statusText(mr.delta, mr.deltaPct) : null;
       var b4 = el("div", "sh-big", ms ? ms.t : "-"); b4.id = "sh-m-big"; if (ms) b4.style.color = ms.cls === "green" ? "var(--fg)" : "var(--red)"; body.appendChild(b4);
       var list = coilsOf(m.id), lc = list.length ? list[list.length - 1] : null;
       var dl4 = el("dl", "sh-rows");
-      sRow(dl4, "Lbs ran · " + list.length + " coil" + (list.length === 1 ? "" : "s"), fmtInt(mr.lbs) + " lb").id = "sh-m-ran";
-      sRow(dl4, "Last coil", lc ? fmtLb(lc.weight) + " lb at " + fmtClock(Date.parse(lc.loggedAt)) : "none yet");
+      sRow(dl4, "Lbs ran · " + list.length + " coil" + (list.length === 1 ? "" : "s"), fmtInt(mr.lbs) + " lbs").id = "sh-m-ran";
+      sRow(dl4, "Last coil", lc ? fmtLb(lc.weight) + " lbs at " + fmtClock(Date.parse(lc.loggedAt)) : "none yet");
       body.appendChild(dl4);
       paceCarMath(body, r, mr, m);
       var bb = el("div", "row2");
@@ -3338,9 +3338,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       left.appendChild(el("div", "hist-date", histFmtDate(e.date) + " ›"));
       left.appendChild(el("div", "hist-mach", histDrawLabel(e) + (e.operator ? " · " + e.operator : "")));
       b.appendChild(left);
-      var nums = el("div", "hist-nums", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lb");
+      var nums = el("div", "hist-nums", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lbs");
       b.appendChild(nums);
-      b.appendChild(el("div", "hist-rate", e.lbhr != null ? fmtInt(e.lbhr) + " lb/hr" : "- lb/hr"));
+      b.appendChild(el("div", "hist-rate", e.lbhr != null ? fmtInt(e.lbhr) + " lbs/hr" : "- lbs/hr"));
       b.addEventListener("click", function () { openHistOne(e.id); });
       body.appendChild(b);
     });
@@ -3350,13 +3350,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var e = histById(id);
     if (!e) { openHist(); return; }
     setText($("sheet-title"), histFmtDate(e.date).toUpperCase() + " · READ ONLY");
-    body.appendChild(el("div", "sh-big", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lb"));
+    body.appendChild(el("div", "sh-big", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lbs"));
     var dl = el("dl", "sh-rows");
     sRow(dl, "Draw / machines", histDrawLabel(e));
-    sRow(dl, "Average lb/hr", e.lbhr != null ? fmtInt(e.lbhr) + " lb/hr" : "-");
+    sRow(dl, "Average lbs/hr", e.lbhr != null ? fmtInt(e.lbhr) + " lbs/hr" : "-");
     sRow(dl, "Shift", (e.start ? fmtHHMM(e.start) : "not set") + " to " + (e.end ? fmtHHMM(e.end) : "not set") + (e.operator ? " · " + e.operator : ""));
     sRow(dl, "Coils ran", fmtCoils(e.coils), "", "tot");
-    sRow(dl, "Lbs ran", fmtInt(e.lbs) + " lb", "", "tot");
+    sRow(dl, "Lbs ran", fmtInt(e.lbs) + " lbs", "", "tot");
     body.appendChild(dl);
     var hs = e.state || {}, notes = trim(hs.shift && hs.shift.dayNotes);
     if (notes) { body.appendChild(el("p", "sh-sub", "Notes about my day")); body.appendChild(el("div", "hist-notes", notes)); }
@@ -3365,7 +3365,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (order.length) {
       body.appendChild(el("p", "sh-sub", "Parts / sizes / conditions"));
       var dlp = el("dl", "sh-rows");
-      order.forEach(function (t) { sRow(dlp, t, runs[t].n + " coil" + (runs[t].n === 1 ? "" : "s") + " \u00b7 " + fmtInt(runs[t].lb) + " lb"); });
+      order.forEach(function (t) { sRow(dlp, t, runs[t].n + " coil" + (runs[t].n === 1 ? "" : "s") + " \u00b7 " + fmtInt(runs[t].lb) + " lbs"); });
       body.appendChild(dlp);
     }
     // per-machine breakdown from the snapshot when present
@@ -3391,13 +3391,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         snap.machines.forEach(function (m, i) {
           var mr = (rr.machines || [])[i] || {};
           var n = (snap.coils || []).filter(function (c) { return c.machineId === m.id; }).length;
-          sRow(dl2, m.name + " · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(mr.lbs || 0) + " lb");
+          sRow(dl2, m.name + " · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(mr.lbs || 0) + " lbs");
         });
       } catch (err) {
         snap.machines.forEach(function (m) {
           var lbs = 0, n = 0;
           (snap.coils || []).forEach(function (c) { if (c.machineId === m.id) { lbs += c.weight || 0; n++; } });
-          sRow(dl2, m.name + " · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(lbs) + " lb");
+          sRow(dl2, m.name + " · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(lbs) + " lbs");
         });
       }
       body.appendChild(dl2);
@@ -3565,7 +3565,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var c = state.coils.length, lb = 0; state.coils.forEach(function (x) { lb += x.weight; });
       var r = Calc.compute(state, Date.now());
       box.appendChild(el("p", "ml-line", "THIS SHIFT: " + (function (d) { var p = Calc.parseDate(d); return p ? p.mo + "/" + p.d : d; })(state.shift.date) + " · " + fmtHHMM(state.shift.start) + " – " + fmtHHMM(state.shift.end) +
-        " · " + c + (c === 1 ? " coil" : " coils") + " · " + fmtLb(lb) + " lb" + (state.downtime.length ? " · " + state.downtime.length + " downtime" : "")));
+        " · " + c + (c === 1 ? " coil" : " coils") + " · " + fmtLb(lb) + " lbs" + (state.downtime.length ? " · " + state.downtime.length + " downtime" : "")));
       box.appendChild(el("p", "sh-sub", !mlHasData() ? "Nothing to send yet: log a coil or downtime first."
         : r.phase === "after" ? "The shift is over, so this sends the whole shift. NEW SHIFT also sends it by itself."
         : "The shift isn't over, so this sends what you have so far. NEW SHIFT sends the finished shift and replaces this one."));
@@ -3578,7 +3578,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       q.forEach(function (o) {
         var p = o.payload || {}, sh = p.shift || {}, t = p.totals || {};
         var why = o.held ? (o.held.kept ? "kept, not sent" : "looks already submitted") : o.rejected ? "turned down: " + o.rejected.error : o.error ? "waiting (" + o.error + ")" : "waiting";
-        box.appendChild(el("p", "ml-line", (sh.date || "?") + " · " + (sh.operator || "no name yet") + (t.total_lbs != null ? " · " + fmtLb(t.total_lbs) + " lb" : "") + " · " + why));
+        box.appendChild(el("p", "ml-line", (sh.date || "?") + " · " + (sh.operator || "no name yet") + (t.total_lbs != null ? " · " + fmtLb(t.total_lbs) + " lbs" : "") + " · " + why));
       });
     }
   }
@@ -3661,7 +3661,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (o && !req.toEnded) { msg(who + " not logged: this shift is over. Start today's shift, then " + (scan ? "scan the sheet again." : "send them again.")); return; }
     // same weight rule as typing a coil: more than 0 and no more than the max coil weight
     var items = list.map(function (x) { return scan ? { m: machineById(x && x.machineId) || m || state.machines[0], w: Number(x && x.weight), x: x } : { m: m, w: Number(x) }; });
-    if (items.some(function (it) { return !it.m || !(it.w > 0 && it.w <= MAX_COIL_LB); })) { msg(who + " not logged: a weight was 0, missing or over " + fmtInt(MAX_COIL_LB) + " lb. Check them and " + (scan ? "scan again." : "send again.")); return; }
+    if (items.some(function (it) { return !it.m || !(it.w > 0 && it.w <= MAX_COIL_LB); })) { msg(who + " not logged: a weight was 0, missing or over " + fmtInt(MAX_COIL_LB) + " lbs. Check them and " + (scan ? "scan again." : "send again.")); return; }
     var added = items.map(function (it) { return addCoil(it.m.id, Math.round(it.w * 10) / 10, scan ? it.x : null); });   // no weight check prompt: the card already gave the weights
     if (scan) { state.coils.sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }); save(); }
     try { selectDock(added[added.length - 1].machineId); } catch (e) {}

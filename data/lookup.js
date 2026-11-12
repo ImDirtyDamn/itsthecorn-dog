@@ -184,7 +184,7 @@
         if (!more.length) more.push('<span class="jl-li dim">No notes were typed for this run.</span>');
         out += '<button type="button" class="jl-card" data-k="r' + i + '"><span class="jl-l1"><b>' + esc(day(r.date)) + (r.draws && r.draws.length ? " \u00b7 Draw " + r.draws.join(", ") : "") + '</b><span>' + esc(r.operator) + '</span></span>' +
           '<span class="jl-l2">' + esc(spec(r)) + '</span>' + (matchText(r, target) ? '<span class="jl-tag2">' + esc(matchText(r, target).toUpperCase()) + '</span>' : "") +
-          '<span class="jl-l3">' + r.coils + " coil" + (r.coils === 1 ? "" : "s") + " \u00b7 " + lb(r.lbs) + " lb" + ((r.notes && r.notes.length) || r.day_notes ? " \u00b7 NOTES" : "") + (r.tags && r.tags.length ? " \u00b7 " + esc(r.tags.join(" + ")) : "") + '</span>' +
+          '<span class="jl-l3">' + r.coils + " coil" + (r.coils === 1 ? "" : "s") + " \u00b7 " + lb(r.lbs) + " lbs" + ((r.notes && r.notes.length) || r.day_notes ? " \u00b7 NOTES" : "") + (r.tags && r.tags.length ? " \u00b7 " + esc(r.tags.join(" + ")) : "") + '</span>' +
           '<span class="jl-more" hidden>' + more.join("") + '</span></button>';
       });
       box.innerHTML = out;

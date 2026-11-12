@@ -224,24 +224,24 @@ var ProdCalc = (function () {
     var steps = [], warnings = [], avg = null, avgSource = "none";
     if (woCoils !== null && woTotal !== null && woCoils > 0 && woTotal > 0) {
       avg = rhu(woTotal / woCoils); avgSource = "workorder";
-      steps.push("Card " + label + ": work order " + fmtInt(rhu(woTotal)) + " lb \u00f7 " + fmtNum(woCoils) + " " +
-        plural(woCoils, "coil", "coils") + " = " + fmtInt(avg) + " lb avg per coil");
+      steps.push("Card " + label + ": work order " + fmtInt(rhu(woTotal)) + " lbs \u00f7 " + fmtNum(woCoils) + " " +
+        plural(woCoils, "coil", "coils") + " = " + fmtInt(avg) + " lbs avg per coil");
     } else if (avgIn !== null && avgIn > 0) {
       avg = rhu(avgIn); avgSource = "entered";
-      steps.push("Card " + label + ": avg weight " + fmtInt(avg) + " lb per coil (typed in)");
+      steps.push("Card " + label + ": avg weight " + fmtInt(avg) + " lbs per coil (typed in)");
     }
     var weight = null, weightSource = "none";
     if (weighed.length) {
       var parts = weighed.map(rhu);
       weight = parts.reduce(function (a, b) { return a + b; }, 0); weightSource = "weighed";
-      if (parts.length === 1) steps.push("Card " + label + ": weighed coil = " + fmtInt(weight) + " lb");
-      else steps.push("Card " + label + ": weighed coils " + parts.map(fmtInt).join(" + ") + " = " + fmtInt(weight) + " lb");
+      if (parts.length === 1) steps.push("Card " + label + ": weighed coil = " + fmtInt(weight) + " lbs");
+      else steps.push("Card " + label + ": weighed coils " + parts.map(fmtInt).join(" + ") + " = " + fmtInt(weight) + " lbs");
     } else if (avg !== null && drawn !== null && drawn > 0) {
       weight = rhu(avg * drawn); weightSource = "avg";
       if (cut) steps.push("Card " + label + ": you drew " + fmtNum(drawn) + " " + plural(drawn, "coil", "coils") + " (cut into " +
-        fmtNum(coilsOut) + "). Weight counts the coils you drew: " + fmtInt(avg) + " lb \u00d7 " + fmtNum(drawn) + " = " + fmtInt(weight) + " lb");
-      else steps.push("Card " + label + ": " + fmtInt(avg) + " lb \u00d7 " + fmtNum(drawn) + " " +
-        plural(drawn, "coil", "coils") + " drawn = " + fmtInt(weight) + " lb");
+        fmtNum(coilsOut) + "). Weight counts the coils you drew: " + fmtInt(avg) + " lbs \u00d7 " + fmtNum(drawn) + " = " + fmtInt(weight) + " lbs");
+      else steps.push("Card " + label + ": " + fmtInt(avg) + " lbs \u00d7 " + fmtNum(drawn) + " " +
+        plural(drawn, "coil", "coils") + " drawn = " + fmtInt(weight) + " lbs");
     }
     var coilsText;
     if (drawn !== null && drawn > 0) coilsText = fmtNum(drawn) + (cut ? "=" + fmtNum(coilsOut) : "");
@@ -309,13 +309,13 @@ var ProdCalc = (function () {
     var goal10 = rhu(gsum * 10 / netMin);
     var text = goal10 % 10 === 0 ? fmtInt(Math.floor(goal10 / 10)) : fmtTenths(goal10);
     if (run.length === 1 && run[0].runMin === netMin) {
-      steps.push("Goal: " + run[0].name + " goal is " + fmtInt(run[0].goal) + " lb/hr.");
+      steps.push("Goal: " + run[0].name + " goal is " + fmtInt(run[0].goal) + " lbs/hr.");
       return [goal10, text, gsum];
     }
-    run.forEach(function (m) { steps.push((m.label || m.name) + " ran " + fmtHrs(m.runMin) + " \u00d7 " + fmtInt(m.goal) + " = " + fmtInt(m.goalLbs) + " lb."); });
-    var line = "Your goal for the shift: " + fmtInt(rhu(gsum / 60)) + " lb. Spread over " + fmtHrs(netMin) + " = " + fmtTenths(goal10) + " lb/hr.";
+    run.forEach(function (m) { steps.push((m.label || m.name) + " ran " + fmtHrs(m.runMin) + " \u00d7 " + fmtInt(m.goal) + " = " + fmtInt(m.goalLbs) + " lbs."); });
+    var line = "Your goal for the shift: " + fmtInt(rhu(gsum / 60)) + " lbs. Spread over " + fmtHrs(netMin) + " = " + fmtTenths(goal10) + " lbs/hr.";
     if (run.length > 1 && allNote !== false) line += " (If " + (run.length === 2 ? "both" : "all " + run.length) + " ran all shift it would be " +
-      fmtInt(sum(run.map(function (m) { return m.goal; }))) + " lb/hr.)";
+      fmtInt(sum(run.map(function (m) { return m.goal; }))) + " lbs/hr.)";
     steps.push(line);
     return [goal10, text, gsum];
   }
@@ -353,8 +353,8 @@ var ProdCalc = (function () {
     var counted = rows.filter(function (r) { return r.weight !== null; }).map(function (r) { return r.weight; });
     var total = sum(counted);
     if (counted.length === 0) steps.push("Total Weight Produced: no rows with a weight yet");
-    else if (counted.length === 1) steps.push("Total Weight Produced = " + fmtInt(total) + " lb");
-    else steps.push("Total Weight Produced: " + counted.map(fmtInt).join(" + ") + " = " + fmtInt(total) + " lb");
+    else if (counted.length === 1) steps.push("Total Weight Produced = " + fmtInt(total) + " lbs");
+    else steps.push("Total Weight Produced: " + counted.map(fmtInt).join(" + ") + " = " + fmtInt(total) + " lbs");
 
     var run = [], seen = {};
     /* Machine slots (the tryout page): at most 2 slots; each slot is a list of segments, one per
@@ -484,8 +484,8 @@ var ProdCalc = (function () {
       fmtInt(downMin) + " min downtime = " + fmtHm(netMin) + tail);
     var rate10 = rhu(total * 1000 / hours100);
     res.rate10 = rate10; res.rateText = fmtTenths(rate10);
-    steps.push("Average Lbs/Hour: " + fmtInt(total) + " lb \u00f7 " + fmtNum(hours) + " " + plural(hours, "hour", "hours") +
-      " = " + fmtTenths(rate10) + " lb per hour");
+    steps.push("Average Lbs/Hour: " + fmtInt(total) + " lbs \u00f7 " + fmtNum(hours) + " " + plural(hours, "hour", "hours") +
+      " = " + fmtTenths(rate10) + " lbs per hour");
 
     var anyMoved = false, slotBad = false;
     if (slots) {
@@ -573,10 +573,10 @@ var ProdCalc = (function () {
       res.machineTotals = tally;
     }
     if (tally.length > 1) tally.forEach(function (m) {
-      if (m.rate10 === null) { steps.push(m.name + " made " + fmtInt(m.lbs) + " lb (no run time left)."); return; }
+      if (m.rate10 === null) { steps.push(m.name + " made " + fmtInt(m.lbs) + " lbs (no run time left)."); return; }
       var gap = m.lbs - m.goalLbs;
-      steps.push(m.name + " made " + fmtInt(m.lbs) + " lb in " + fmtHrs(m.runMin) + " = " + fmtTenths(m.rate10) + " lb/hr (its goal " +
-        fmtInt(m.goal) + " lb/hr, " + fmtInt(m.goalLbs) + " lb). " + (gap >= 0 ? fmtInt(gap) + " lb over." : fmtInt(-gap) + " lb short."));
+      steps.push(m.name + " made " + fmtInt(m.lbs) + " lbs in " + fmtHrs(m.runMin) + " = " + fmtTenths(m.rate10) + " lbs/hr (its goal " +
+        fmtInt(m.goal) + " lbs/hr, " + fmtInt(m.goalLbs) + " lbs). " + (gap >= 0 ? fmtInt(gap) + " lbs over." : fmtInt(-gap) + " lbs short."));
     });
     var diff10 = rate10 - goal10;
     var pct10 = rhu(total * 60000 / gsum);
@@ -586,16 +586,16 @@ var ProdCalc = (function () {
     res.diff10 = diff10; res.pct10 = pct10; res.shiftGoal = shiftGoal; res.overShort = overShort; res.minutesEquiv = minutes;
     if (diff10 >= 0) {
       res.status = "met";
-      steps.push("You ran " + fmtTenths(rate10) + " lb/hr, that is " + fmtTenths(diff10) + " lb/hr OVER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal). GOAL MET.");
-      steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lb. You made " + fmtInt(total) + " lb, " + fmtInt(overShort) + " lb over.");
-      res.headline = "GOAL MET +" + fmtTenths(diff10) + " lb/hr";
+      steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(diff10) + " lbs/hr OVER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal). GOAL MET.");
+      steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(overShort) + " lbs over.");
+      res.headline = "GOAL MET +" + fmtTenths(diff10) + " lbs/hr";
     } else {
       res.status = "notmet";
-      steps.push("You ran " + fmtTenths(rate10) + " lb/hr, that is " + fmtTenths(-diff10) + " lb/hr UNDER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal).");
-      steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lb. You made " + fmtInt(total) + " lb, " + fmtInt(-overShort) + " lb short (about " +
+      steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(-diff10) + " lbs/hr UNDER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal).");
+      steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(-overShort) + " lbs short (about " +
         fmtInt(minutes) + " " + plural(minutes, "minute", "minutes") + " of running at goal speed).");
       steps.push("GOAL NOT MET: you must list the problems and downtime reasons on the sheet.");
-      res.headline = "GOAL NOT MET -" + fmtTenths(-diff10) + " lb/hr";
+      res.headline = "GOAL NOT MET -" + fmtTenths(-diff10) + " lbs/hr";
       if (!problems.length) warnings.push("Goal not met: add your downtime and problems so they go on the sheet.");
     }
     return res;
@@ -623,8 +623,8 @@ var ProdCalc = (function () {
     L.push("Goal: Lbs/Hour: " + res.goalText);
     L.push("Average Lbs/per Hour: " + res.rateText);
     L.push("");
-    if (res.status === "notmet") L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lb/hr under). You must fill in the problems and downtime below.");
-    else if (res.status === "met") L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lb/hr over).");
+    if (res.status === "notmet") L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lbs/hr under). You must fill in the problems and downtime below.");
+    else if (res.status === "met") L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lbs/hr over).");
     L.push("List all problems and reasons for downtime:");
     res.problems.forEach(function (p) { L.push("  - " + p); });
     if (!res.problems.length) L.push("  (none entered)");
@@ -637,11 +637,11 @@ var ProdCalc = (function () {
     var t = num(totAvgWgt), c = num(woCoils);
     var ranRaw = (ran === undefined || ran === null || String(ran).trim() === "") ? null : num(ran);
     var res = { ok: false, avg: null, weight: null, ran: ranRaw, leftCoils: null, leftWeight: null, over: false, lines: [], error: "", note: "" };
-    if (t === null || t <= 0) { res.error = "Type the card total lb."; return res; }
+    if (t === null || t <= 0) { res.error = "Type the card total lbs."; return res; }
     if (c === null || c <= 0) { res.error = "Type how many coils are on the card."; return res; }
     var avg = rhu(t / c);
     res.ok = true; res.avg = avg;
-    res.lines = [fmtInt(rhu(t)) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(avg) + " lb each."];
+    res.lines = [fmtInt(rhu(t)) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(avg) + " lbs each."];
     if (ranRaw === null) return res;
     if (ranRaw <= 0) { res.ok = false; res.error = "How many coils did you run?"; return res; }
     if (ranRaw > c) {
@@ -653,11 +653,11 @@ var ProdCalc = (function () {
     res.weight = weight;
     res.leftCoils = rhu(c - ranRaw);
     res.leftWeight = rhu(t - weight);
-    if (weight === rhu(avg * ranRaw)) res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lb.");
+    if (weight === rhu(avg * ranRaw)) res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lbs.");
     else res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(rhu(t)) + " \u00d7 " + fmtNum(ranRaw) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(weight) +
-      " lb (worked from the card total so the rounding stays exact; " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " would be " + fmtInt(rhu(avg * ranRaw)) + ").");
+      " lbs (worked from the card total so the rounding stays exact; " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " would be " + fmtInt(rhu(avg * ranRaw)) + ").");
     if (res.leftCoils > 0) {
-      res.lines.push(fmtNum(res.leftCoils) + " " + plural(res.leftCoils, "coil", "coils") + " left on the card (" + fmtInt(res.leftWeight) + " lb).");
+      res.lines.push(fmtNum(res.leftCoils) + " " + plural(res.leftCoils, "coil", "coils") + " left on the card (" + fmtInt(res.leftWeight) + " lbs).");
     }
     return res;
   }
@@ -726,7 +726,7 @@ var ProdCalc = (function () {
       if (sizes.length > 1) note.push("Sizes: " + sizes.join(", "));
       var total = sum(ws.map(rhu));
       out.rows.push({ card: "", machine: nm, coilsDrawn: ws.length, actualWeights: ws, finish: sizes.length === 1 ? sizes[0] : "", note: note.join(" \u00b7 ") });
-      out.summary.push((nm || "No machine") + ": " + ws.length + " " + plural(ws.length, "coil", "coils") + ", " + fmtInt(total) + " lb");
+      out.summary.push((nm || "No machine") + ": " + ws.length + " " + plural(ws.length, "coil", "coils") + ", " + fmtInt(total) + " lbs");
     });
     var now = isoMs(nowIso);
     (state.downtime || []).forEach(function (d) {
@@ -850,7 +850,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (/^Breaks|^Downtime|^Hours per shift/.test(s)) return "hours";
     if (/^Average Lbs/.test(s)) return "rate";
     if (/^You ran|^Whole shift|^GOAL NOT MET/.test(s)) return "status";
-    if (/ made [\d,]+ lb/.test(s)) return "machine";
+    if (/ made [\d,]+ lbs?/.test(s)) return "machine";
     return "goal";
   }
   function drill(title, big, steps, sub) {
@@ -884,7 +884,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function renderHome() {
     app.innerHTML = '<div class="home">' +
       '<button id="go-quick" type="button">AVERAGE COIL WEIGHT<small>Card total, coils on card and coils ran: average, weight ran from a partial card, or a photo. Send them to your tracker.</small></button>' +
-      '<button id="go-rate" type="button">PRODUCTION RATE<small>Hours worked and lb produced, minus downtime: your lb per hour</small></button>' +
+      '<button id="go-rate" type="button">PRODUCTION RATE<small>Hours worked and lbs produced, minus downtime: your lbs per hour</small></button>' +
       '<button id="go-log" type="button" class="solid">FILL OUT MY PRODUCTION LOG<small style="color:#000">' +
       (hasProgress() ? "Picks up where you left off" : "One question per screen, then copy it onto the sheet") + '</small></button>' +
       (window.SheetScan ? '<button id="go-scan" type="button" class="amber">SCAN MY SHEET<small>Take a picture of your filled-in sheet (all of it, or the shift so far) and check what it read</small></button>' : "") + '</div>' +
@@ -915,7 +915,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var sumOf = function (a) { return a.reduce(function (x, t) { return x + t.v; }, 0); };
     if (cnt.length > 1) return { ok: false, error: "Type the number of coils once." };
     if (cnt.length === 1) {
-      if (!wts.length) return { ok: false, error: "Add the total lb too, like 12000 lb 3 coils." };
+      if (!wts.length) return { ok: false, error: "Add the total lbs too, like 12000 lbs 3 coils." };
       return { ok: true, mode: "total", total: sumOf(wts), count: cnt[0].v, weights: wts.length > 1 ? wts.map(function (t) { return t.v; }) : null };
     }
     if (toks.length === 2 && (div || (Number.isInteger(toks[1].v) && toks[1].v <= 60 && toks[0].v >= toks[1].v * 10)))
@@ -930,9 +930,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var tT = String(Q.tot || "").trim(), cT = String(Q.coils || "").trim(), rT = String(Q.ran || "").trim();
     if (!tT && !cT && !rT) return { ok: false, error: "" };
     var t = plainNum(tT), c = plainNum(cT), rn = rT ? plainNum(rT) : null;
-    if (!tT) return { ok: false, error: "Enter the card total weight in lb." };
-    if (t === null || !(t > 0)) return { ok: false, error: "Card total weight: enter the weight in lb as a plain number over 0, like 22895." };
-    if (t >= 1e7) return { ok: false, error: "Card total weight: " + P.fmtInt(t) + " lb is too big for one card. Check the number." };
+    if (!tT) return { ok: false, error: "Enter the card total weight in lbs." };
+    if (t === null || !(t > 0)) return { ok: false, error: "Card total weight: enter the weight in lbs as a plain number over 0, like 22895." };
+    if (t >= 1e7) return { ok: false, error: "Card total weight: " + P.fmtInt(t) + " lbs is too big for one card. Check the number." };
     if (!cT) return { ok: false, error: "Enter how many coils are on the card." };
     if (c === null || !(c > 0) || c % 1) return { ok: false, error: "Coils on card: enter a whole number over 0, like 5." };
     if (c > 200) return { ok: false, error: "Coils on card: " + P.fmtNum(c) + " is more than one card holds. Check the number." };
@@ -947,16 +947,16 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (!q.ok && !q.over) return { ok: false, error: q.error };
     var steps = [], readAs;
     if (r.weights) {
-      steps.push("Coil weights: " + r.weights.map(function (w) { return P.fmtNum(w); }).join(" + ") + " = " + P.fmtNum(r.total) + " lb");
-      readAs = r.weights.length + " coil weights, " + P.fmtNum(r.total) + " lb in all";
-    } else readAs = P.fmtNum(r.total) + " lb total, " + P.fmtNum(r.count) + " " + (r.count === 1 ? "coil" : "coils");
+      steps.push("Coil weights: " + r.weights.map(function (w) { return P.fmtNum(w); }).join(" + ") + " = " + P.fmtNum(r.total) + " lbs");
+      readAs = r.weights.length + " coil weights, " + P.fmtNum(r.total) + " lbs in all";
+    } else readAs = P.fmtNum(r.total) + " lbs total, " + P.fmtNum(r.count) + " " + (r.count === 1 ? "coil" : "coils");
     steps = steps.concat(q.lines);
     return { ok: true, avg: q.avg, count: r.count, total: r.total, weight: q.weight, ran: q.ran,
       leftCoils: q.leftCoils, leftWeight: q.leftWeight, over: q.over, note: q.note || "", steps: steps, readAs: readAs };
   }
   function renderAvg() {
     app.innerHTML = '<h2>Average coil weight</h2><p class="muted">Type the card total weight and how many coils are on the card. Add how many you ran for the weight off a partial card, and to send them to your tracker.</p>' +
-      '<div class="panel">' + qfield("Card total weight (lb)", "a-tot", Q.tot, "like 22895", "decimal") +
+      '<div class="panel">' + qfield("Card total weight (lbs)", "a-tot", Q.tot, "like 22895", "decimal") +
       '<div class="row2">' + qfield("Coils on card", "a-coils", Q.coils, "like 5", "numeric") +
       qfield("Coils ran", "a-ran", Q.ran, "optional", "numeric") + '</div>' +
       '<p class="sub">Leave coils ran blank for just the average.</p>' +
@@ -978,21 +978,21 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var r = avgResult(), el = $("a-out"), note = $("a-note");
     if (!r.ok) { el.innerHTML = ""; note.textContent = r.error || ""; return; }
     note.textContent = r.over ? r.note : ("Read as: " + r.readAs);
-    var html = '<button class="num key" id="a-avg" type="button"><span>Avg coil weight<i>tap for the math</i></span><b>' + P.fmtInt(r.avg) + ' lb</b></button>';
+    var html = '<button class="num key" id="a-avg" type="button"><span>Avg coil weight<i>tap for the math</i></span><b>' + P.fmtInt(r.avg) + ' lbs</b></button>';
     if (r.over) {
       html += '<p class="calc-note" id="a-over">' + esc(r.note) + '</p>';
     } else if (r.weight !== null && r.weight !== undefined) {
-      html += '<button class="num key" id="a-weight" type="button"><span>Weight ran<i>tap for the math</i></span><b>' + P.fmtInt(r.weight) + ' lb</b></button>';
+      html += '<button class="num key" id="a-weight" type="button"><span>Weight ran<i>tap for the math</i></span><b>' + P.fmtInt(r.weight) + ' lbs</b></button>';
       if (r.leftCoils !== null && r.leftCoils > 0) {
         html += '<div class="num"><span>Coils left on card</span><b>' + P.fmtNum(r.leftCoils) + '</b></div>';
-        html += '<div class="num"><span>Weight left on card</span><b>' + P.fmtInt(r.leftWeight) + ' lb</b></div>';
+        html += '<div class="num"><span>Weight left on card</span><b>' + P.fmtInt(r.leftWeight) + ' lbs</b></div>';
       }
       if (r.ran > 0 && r.ran % 1 === 0 && r.ran <= 60) html += '<button id="a-send" type="button" class="big solid" style="margin-top:12px">SEND TO TRACKER</button>';
     } else if (!r.over) html += '<p class="muted" id="a-send-hint">Type coils ran to send them to your tracker.</p>';
     el.innerHTML = html;
     if ($("a-send")) $("a-send").onclick = function () { sendOpen(r); };
-    $("a-avg").onclick = function () { drill("Avg coil weight", P.fmtInt(r.avg) + " lb", r.steps); };
-    if ($("a-weight")) $("a-weight").onclick = function () { drill("Weight ran", P.fmtInt(r.weight) + " lb", r.steps); };
+    $("a-avg").onclick = function () { drill("Avg coil weight", P.fmtInt(r.avg) + " lbs", r.steps); };
+    if ($("a-weight")) $("a-weight").onclick = function () { drill("Weight ran", P.fmtInt(r.weight) + " lbs", r.steps); };
   }
   /* ---- SEND TO TRACKER: N coils of the average weight into the tracker's current shift.
      This page never writes the shift itself: it leaves one request (drawRateInboxV1) and opens /draw/app/,
@@ -1021,7 +1021,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function sendClose() { $("send").hidden = true; document.body.classList.remove("noscroll"); }
   function sendOpen(r) {
     var n = r.ran, ws = splitWeights(r.weight, n), even = ws[0] === ws[ws.length - 1];
-    var what = P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils") + " (" + (even ? "" : "about ") + P.fmtInt(ws[0]) + " lb each, " + P.fmtInt(r.weight) + " lb total)";
+    var what = P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils") + " (" + (even ? "" : "about ") + P.fmtInt(ws[0]) + " lbs each, " + P.fmtInt(r.weight) + " lbs total)";
     var ts = trackerShift(), body = $("send-body"), h = "";
     var go = function (machineId, toEnded) {
       try { localStorage.setItem(INBOX_KEY, JSON.stringify({ at: Date.now(), shiftId: ts.st.shift.id, machineId: machineId, weights: ws, toEnded: !!toEnded, from: "calc-avg" })); }
@@ -1077,16 +1077,16 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     (sc.coils || []).forEach(function (c, i) {
       var cp = SheetScan.coilsParse(c.coils_text), cin = N(c.coils_in) !== null ? N(c.coils_in) : cp.in;
       var w = N(c.weight), a = N(c.avg_wgt), lab = "Card " + (c.card || i + 1);
-      if (w !== null && w > 0 && cin !== null && cin > 0) { tot += w; n += cin; steps.push(lab + ": " + P.fmtNum(w) + " lb, " + P.fmtNum(cin) + " " + (cin === 1 ? "coil" : "coils")); }
-      else if (a !== null && a > 0 && cin !== null && cin > 0) { var ww = a * cin; tot += ww; n += cin; steps.push(lab + ": " + P.fmtNum(a) + " lb avg \u00d7 " + P.fmtNum(cin) + " = " + P.fmtNum(ww) + " lb"); }
-      else if (w !== null && w > 0) { tot += w; n += 1; steps.push(lab + ": " + P.fmtNum(w) + " lb (no coil count, counted as 1 coil)"); }
+      if (w !== null && w > 0 && cin !== null && cin > 0) { tot += w; n += cin; steps.push(lab + ": " + P.fmtNum(w) + " lbs, " + P.fmtNum(cin) + " " + (cin === 1 ? "coil" : "coils")); }
+      else if (a !== null && a > 0 && cin !== null && cin > 0) { var ww = a * cin; tot += ww; n += cin; steps.push(lab + ": " + P.fmtNum(a) + " lbs avg \u00d7 " + P.fmtNum(cin) + " = " + P.fmtNum(ww) + " lbs"); }
+      else if (w !== null && w > 0) { tot += w; n += 1; steps.push(lab + ": " + P.fmtNum(w) + " lbs (no coil count, counted as 1 coil)"); }
     });
     var q = P.quick(tot, n, 1);
     if (!q.ok) { toast("No coil weights on that sheet. Fix them in the boxes, or type them."); return false; }
-    steps.push("All cards: " + P.fmtNum(tot) + " lb over " + P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils"));
+    steps.push("All cards: " + P.fmtNum(tot) + " lbs over " + P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils"));
     steps.push(q.lines[0]);
     Q.tot = P.fmtNum(tot).replace(/,/g, ""); Q.coils = String(n); Q.ran = "";
-    Q.scan = { tot: Q.tot, coils: Q.coils, res: { ok: true, avg: q.avg, count: n, total: tot, steps: steps, readAs: "from the photo, " + P.fmtNum(tot) + " lb over " + n + " coils" } };
+    Q.scan = { tot: Q.tot, coils: Q.coils, res: { ok: true, avg: q.avg, count: n, total: tot, steps: steps, readAs: "from the photo, " + P.fmtNum(tot) + " lbs over " + n + " coils" } };
     $("a-tot").value = Q.tot; $("a-coils").value = Q.coils; $("a-ran").value = ""; avgOut();
     setTimeout(function () { var o = $("a-out"); if (o) o.scrollIntoView({ block: "center" }); }, 50);
     return true;
@@ -1103,21 +1103,21 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (!Q.hrs.trim() && !Q.lbs.trim()) return { ok: false, error: "" };
     if (hm === null || !(hm > 0)) return { ok: false, error: "Type the hours worked, like 8 or 7:30." };
     if (hm > 24 * 60) return { ok: false, error: "Hours worked is more than 24. Check it." };
-    if (!lbs.length) return { ok: false, error: "Type the lb you produced." };
+    if (!lbs.length) return { ok: false, error: "Type the lbs you produced." };
     var total = lbs.reduce(function (a, b) { return a + b; }, 0);
     var res = P.compute({ shiftHours: hm / 60, breaks: [], downtime: mins.map(function (x) { return { minutes: x }; }),
       rows: [{ avgWgt: total, coilsDrawn: 1 }], machines: [] });
     if (res.rate10 === undefined || res.rate10 === null) return { ok: false, error: (res.warnings || []).filter(function (w) { return !/machine/i.test(w); })[0] || "Check the numbers." };
     var steps = [];
-    if (lbs.length > 1) steps.push("Lb produced: " + lbs.map(function (x) { return P.fmtNum(x); }).join(" + ") + " = " + P.fmtNum(total) + " lb");
+    if (lbs.length > 1) steps.push("Lbs produced: " + lbs.map(function (x) { return P.fmtNum(x); }).join(" + ") + " = " + P.fmtNum(total) + " lbs");
     steps = steps.concat(res.steps.filter(function (s) { return !/^Card /.test(s); }).map(function (s) {
       return s.replace(/^Hours per shift: /, "Hours: ").replace(/ hr shift \u2212 0 min breaks \u2212 /, " hr worked \u2212 ").replace(/ min downtime = /, " min off = ");
     }));
     return { ok: true, rateText: res.rateText, hoursText: res.hoursText, hm: res.hmText, steps: steps, total: res.total };
   }
   function renderRate() {
-    app.innerHTML = '<h2>Production rate</h2><p class="muted">Your lb per hour for the time you worked.</p>' +
-      '<div class="panel">' + qfield("Hours worked", "r-hrs", Q.hrs, "8 or 7:30", "numeric", "", "hm") + qfield("Lbs produced", "r-lbs", Q.lbs, "lb") +
+    app.innerHTML = '<h2>Production rate</h2><p class="muted">Your lbs per hour for the time you worked.</p>' +
+      '<div class="panel">' + qfield("Hours worked", "r-hrs", Q.hrs, "8 or 7:30", "numeric", "", "hm") + qfield("Lbs produced", "r-lbs", Q.lbs, "lbs") +
       qfield("Downtime / breaks", "r-min", Q.min, "optional, like 30 or 15 30", "numeric", "Time not running, all added up. Leave it blank if the hours above are already run time.", "min") +
       '<p class="calc-note" id="r-note" aria-live="polite"></p></div><div id="r-out"></div>' +
       '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
@@ -1130,9 +1130,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     note.textContent = r.ok ? "" : r.error;
     if (!r.ok) { el.innerHTML = ""; return; }
     el.innerHTML = '<button class="num" id="r-h" type="button"><span>Hours running<i>tap for the math</i></span><b>' + esc(r.hoursText) + '</b></button>' +
-      '<button class="num key" id="r-rate" type="button"><span>Production rate<i>lb per hour &middot; tap for the math</i></span><b>' + esc(r.rateText) + '</b></button>';
+      '<button class="num key" id="r-rate" type="button"><span>Production rate<i>lbs per hour &middot; tap for the math</i></span><b>' + esc(r.rateText) + '</b></button>';
     $("r-h").onclick = function () { drill("Hours running", r.hm, r.steps.filter(function (s) { return /^Hours|^Downtime/.test(s); })); };
-    $("r-rate").onclick = function () { drill("Production rate", r.rateText + " lb/hr", r.steps); };
+    $("r-rate").onclick = function () { drill("Production rate", r.rateText + " lbs/hr", r.steps); };
   }
 
   /* ---------- production log wizard ---------- */
@@ -1191,8 +1191,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       html += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + (S.rows.length > 1 ? '<button class="xbtn" type="button" data-delrow="' + i + '" aria-label="Remove card ' + (i + 1) + '">&times;</button>' : "") + '</div>' +
         field("Card #", "r" + i + "-card", r.card, "card number", 'inputmode="numeric"') +
         (r.actualWeights && r.actualWeights.length ? '<p class="muted">' + (r.fromScan ? "From the sheet: " : "From the tracker: ") + r.actualWeights.length + ' weighed ' + (r.actualWeights.length === 1 ? "coil" : "coils") + '. ' + esc(r.note || "") + '</p>' :
-        r.avgWgt !== undefined && r.avgWgt !== "" ? field("Avg. Wgt. (lb, from the sheet)", "r" + i + "-avgWgt", r.avgWgt, "avg weight", 'inputmode="decimal"') :
-        field("Work order Tot Avg Wgt (lb)", "r" + i + "-woTotal", r.woTotal, "Tot Avg Wgt", 'inputmode="decimal"') +
+        r.avgWgt !== undefined && r.avgWgt !== "" ? field("Avg. Wgt. (lbs, from the sheet)", "r" + i + "-avgWgt", r.avgWgt, "avg weight", 'inputmode="decimal"') :
+        field("Work order Tot Avg Wgt (lbs)", "r" + i + "-woTotal", r.woTotal, "Tot Avg Wgt", 'inputmode="decimal"') +
         field("Coils on the work order", "r" + i + "-woCoils", r.woCoils, "work order coils", 'inputmode="numeric"')) +
         '<div class="grid2">' + field("Coils IN", "r" + i + "-coilsDrawn", r.coilsDrawn, "coils in") +
         field("Coils OUT", "r" + i + "-coilsOut", r.coilsOut, "coils out") + '</div>' +
@@ -1448,7 +1448,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     return '<div class="tl" aria-label="Timeline, tap a part to change its time">' + parts + '</div><div class="tlx">' + (ok ? '<span>' + fmt12(st) + '</span><span>tap to change times</span><span>' + fmt12(st + total) + '</span>' : '<span style="color:var(--amber)">check the switch times</span>') + '</div>';
   }
   function goalInput(id, name) {
-    return field(esc(name) + " need rate (lb/hr)", id, S.goals[name] === undefined ? "" : S.goals[name], "need rate (lb/hr)", 'inputmode="numeric" data-goal="' + esc(name) + '"');
+    return field(esc(name) + " need rate (lbs/hr)", id, S.goals[name] === undefined ? "" : S.goals[name], "need rate (lbs/hr)", 'inputmode="numeric" data-goal="' + esc(name) + '"');
   }
   var moveOpen = {};
   function stepMachines() {
@@ -1485,7 +1485,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       }
       html += '</div>';
     });
-    if (S.slotCount) html += '<button class="num key" id="m-goal" type="button"><span>Goal lb/hr<i>tap for the math</i></span><b id="m-goal-out">\u2013</b></button><ul class="warnbox" id="m-warn"></ul>';
+    if (S.slotCount) html += '<button class="num key" id="m-goal" type="button"><span>Goal lbs/hr<i>tap for the math</i></span><b id="m-goal-out">\u2013</b></button><ul class="warnbox" id="m-warn"></ul>';
     return html;
   }
   function machLive() {
@@ -1549,7 +1549,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     });
     if ($("m-goal")) $("m-goal").onclick = function () {
       var r = calc().res;
-      drill("Goal lb/hr", r.goal10 !== null ? r.goalText + " lb/hr" : "", r.steps.filter(function (s) { return cat(s) === "goal"; }).concat(r.goal10 === null ? r.warnings : []));
+      drill("Goal lbs/hr", r.goal10 !== null ? r.goalText + " lbs/hr" : "", r.steps.filter(function (s) { return cat(s) === "goal"; }).concat(r.goal10 === null ? r.warnings : []));
     };
     machLive();
   }
@@ -1564,11 +1564,11 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     html += row("n-rate", "Average Lbs/per Hour", r.rate10 !== null ? r.rateText : "\u2013", true);
     if (r.status !== "incomplete") {
       html += '<button type="button" id="n-status" class="banner ' + r.status + '">' + (r.status === "met" ? "GOAL MET" : "GOAL NOT MET") +
-        '<small>' + (r.status === "met" ? "+" + P.fmtTenths(r.diff10) + " lb/hr over" : P.fmtTenths(-r.diff10) + " lb/hr under: list problems and downtime on the sheet") + '</small></button>';
+        '<small>' + (r.status === "met" ? "+" + P.fmtTenths(r.diff10) + " lbs/hr over" : P.fmtTenths(-r.diff10) + " lbs/hr under: list problems and downtime on the sheet") + '</small></button>';
     }
     var tot = r.machineTotals || [];
     if (tot.length > 1 && r.goal10 !== null) tot.forEach(function (m, i) {
-      html += row("n-m" + i, esc(m.name) + " lb/hr<i>made " + P.fmtInt(m.lbs) + " of " + P.fmtInt(m.goalLbs) + " lb goal</i>", m.rate10 !== null ? P.fmtTenths(m.rate10) : "\u2013");
+      html += row("n-m" + i, esc(m.name) + " lbs/hr<i>made " + P.fmtInt(m.lbs) + " of " + P.fmtInt(m.goalLbs) + " lbs goal</i>", m.rate10 !== null ? P.fmtTenths(m.rate10) : "\u2013");
     });
     if (r.warnings.length) html += '<b style="color:var(--amber);display:block;margin-top:12px">Still to fix:</b><ul class="warnbox">' + r.warnings.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + '</ul>';
     html += '<h2' + (r.status === "notmet" ? ' style="color:var(--red)"' : "") + '>Problems and downtime</h2><div class="panel">' +
@@ -1580,15 +1580,15 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function bindResults() {
     var r = calc().res, pick = function (cats) { return r.steps.filter(function (s) { return cats.indexOf(cat(s)) >= 0; }); };
-    $("n-total").onclick = function () { drill("Total Weight Produced", r.total ? P.fmtInt(r.total) + " lb" : "", pick(["total"])); };
+    $("n-total").onclick = function () { drill("Total Weight Produced", r.total ? P.fmtInt(r.total) + " lbs" : "", pick(["total"])); };
     $("n-hours").onclick = function () { drill("Hours per shift", r.hours !== null ? r.hoursText + " hr (" + r.hmText + ")" : "", pick(["hours"])); };
-    $("n-goal").onclick = function () { drill("Goal: Lbs/Hour", r.goal10 !== null ? r.goalText + " lb/hr" : "", pick(["goal"])); };
-    $("n-rate").onclick = function () { drill("Average Lbs/per Hour", r.rate10 !== null ? r.rateText + " lb/hr" : "", pick(["rate", "status"])); };
+    $("n-goal").onclick = function () { drill("Goal: Lbs/Hour", r.goal10 !== null ? r.goalText + " lbs/hr" : "", pick(["goal"])); };
+    $("n-rate").onclick = function () { drill("Average Lbs/per Hour", r.rate10 !== null ? r.rateText + " lbs/hr" : "", pick(["rate", "status"])); };
     if ($("n-status")) $("n-status").onclick = function () { drill(r.status === "met" ? "GOAL MET" : "GOAL NOT MET", "", pick(["status"])); };
     (r.machineTotals || []).forEach(function (m, i) {
       var b = $("n-m" + i); if (!b) return;
       b.onclick = function () {
-        drill(m.name, m.rate10 !== null ? P.fmtTenths(m.rate10) + " lb/hr" : "", r.steps.filter(function (s) { return s.indexOf(m.name + " ") === 0 && cat(s) !== "total"; }));
+        drill(m.name, m.rate10 !== null ? P.fmtTenths(m.rate10) + " lbs/hr" : "", r.steps.filter(function (s) { return s.indexOf(m.name + " ") === 0 && cat(s) !== "total"; }));
       };
     });
     $("maint").addEventListener("input", function (e) { S.maintenance = e.target.value; save(); });

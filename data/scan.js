@@ -208,7 +208,7 @@
       sl.segments.forEach(function (sg, j) {
         var p = "machines." + si + ".segments." + j;
         h += (j ? '<div class="seg"><b style="color:var(--amber);font-size:13px;letter-spacing:.08em">MOVED TO</b>' : "") +
-          '<div class="grid2">' + machbox(p + ".machine", "Machine", sg.machine) + tbox(p + ".goal", "Need rate (lb/hr)", v(sg.goal), "need rate", "decimal") + '</div>' +
+          '<div class="grid2">' + machbox(p + ".machine", "Machine", sg.machine) + tbox(p + ".goal", "Need rate (lbs/hr)", v(sg.goal), "need rate", "decimal") + '</div>' +
           (j ? clockbox(p + ".from", "Switch time", sg.from) + '</div>' : "");
       });
       h += '</div>';
@@ -220,8 +220,8 @@
       var p = "coils." + i;
       h += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + xbtn("c", i, "card " + (i + 1)) + '</div>' +
         tbox(p + ".card", "Card #", r.card, "card number", "numeric") +
-        '<div class="grid2">' + tbox(p + ".avg_wgt", "Avg. Wgt. (lb)", v(r.avg_wgt), "avg weight", "decimal") + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
-        '<div class="grid2">' + tbox(p + ".weight", "Weight (lb)", v(r.weight), "weight", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
+        '<div class="grid2">' + tbox(p + ".avg_wgt", "Avg. Wgt. (lbs)", v(r.avg_wgt), "avg weight", "decimal") + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".weight", "Weight (lbs)", v(r.weight), "weight", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
         '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
         '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound") + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
     });
@@ -249,8 +249,8 @@
     var t = s.totals || {}, said = [];
     if (t.total_weight !== "") said.push("Total Weight " + t.total_weight);
     if (t.hours !== "") said.push("Hours " + t.hours);
-    if (t.goal_lbhr !== "") said.push("Goal " + t.goal_lbhr + " lb/hr");
-    if (t.avg_lbhr !== "") said.push("Average " + t.avg_lbhr + " lb/hr");
+    if (t.goal_lbhr !== "") said.push("Goal " + t.goal_lbhr + " lbs/hr");
+    if (t.avg_lbhr !== "") said.push("Average " + t.avg_lbhr + " lbs/hr");
     if (full && (said.length || s.problems)) h += '<div class="panel"><b style="color:var(--white)">Also written on the sheet (for checking, not filled in):</b>' +
       (said.length ? '<p class="muted' + (flagOf("totals.total_weight") ? '" style="color:var(--amber)' : "") + '">' + esc(said.join(" \u00b7 ")) + '</p>' : "") +
       (s.problems ? '<p class="muted" style="white-space:pre-wrap">' + esc(s.problems) + '</p>' : "") + '</div>';
