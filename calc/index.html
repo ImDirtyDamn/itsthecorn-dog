@@ -191,7 +191,7 @@ body.noscroll{overflow:hidden}
 <h2>3. Your shift: breaks and downtime</h2>
 <div class="panel">
   <div class="grid2">
-    <div class="f"><label for="shiftHours">Shift length (hr)</label><input id="shiftHours" inputmode="decimal" autocomplete="off"><span class="hint">Remembered</span></div>
+    <div class="f"><label for="shiftHours">Shift length</label><input id="shiftHours" inputmode="numeric" data-hm="dec" autocomplete="off"><span class="hint">Remembered</span></div>
     <div class="f"><label for="shiftStart">Shift starts at</label><input id="shiftStart" type="time" autocomplete="off"><span class="hint">Only needed for times</span></div>
   </div>
   <b style="color:var(--white)">Breaks</b>
@@ -804,7 +804,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var wrap = el("div", "f");
     var lab = el("label", "", label); lab.htmlFor = id;
     var inp = el("input"); inp.id = id; inp.autocomplete = "off";
-    if (mode && mode !== "text") inp.inputMode = mode;
+    if (mode === "hm-min") { inp.inputMode = "numeric"; inp.setAttribute("data-hm", "min"); }   // hrs + mins boxes (/data/fields.js), stored as minutes
+    else if (mode && mode !== "text") inp.inputMode = mode;
+    if (inp.inputMode === "numeric") inp.setAttribute("pattern", "[0-9]*");
     inp.value = obj[key] === undefined || obj[key] === null ? "" : obj[key];
     inp.addEventListener("input", function () { obj[key] = inp.value; if (onChange) onChange(inp.value); update(); });
     wrap.appendChild(lab); wrap.appendChild(inp);
@@ -1009,7 +1011,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     state.shift.breaks.forEach(function (b, i) {
       var r = el("div", "brow");
       var g = el("div", "grid2");
-      g.appendChild(field(b, "minutes", "Break " + (i + 1) + " (min)", "", "numeric", "b" + i + "-min", saveBreakDefault));
+      g.appendChild(field(b, "minutes", "Break " + (i + 1), "", "hm-min", "b" + i + "-min", saveBreakDefault));
       var tf = field(b, "start", "Starts at", "", "text", "b" + i + "-start", saveBreakDefault);
       tf.querySelector("input").type = "time"; g.appendChild(tf); r.appendChild(g);
       var del = el("button", "warn", "\u2715"); del.setAttribute("aria-label", "Remove break " + (i + 1));
@@ -1027,16 +1029,17 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     state.shift.downtime.forEach(function (d, i) {
       var p = el("div", "drow");
       var top = el("div", "grid2");
-      var minF = field(d, "minutes", "Minutes down", "", "numeric", "d" + i + "-min");
+      var minF = field(d, "minutes", "Time down", "", "hm-min", "d" + i + "-min");
       top.appendChild(minF);
       var mf = el("div", "f"); var ml = el("label", "", "Machine (optional)"); ml.htmlFor = "d" + i + "-machine";
       var ms = machineSelect(d, "d" + i + "-machine", "none", true); ms.className = "msel";
       mf.appendChild(ml); mf.appendChild(ms); top.appendChild(mf); p.appendChild(top);
       var tm = el("div", "grid2");
       function syncMin() {
-        var a = P.clock(d.start), b = P.clock(d.end), inp = minF.querySelector("input");
+        var a = P.clock(d.start), b = P.clock(d.end), inp = minF.querySelector("input[data-hm]");
         if (a !== null && b !== null) { d.minutes = String(((b - a) % 1440 + 1440) % 1440); inp.value = d.minutes; inp.readOnly = true; }
         else inp.readOnly = false;
+        if (inp._hmSync) inp._hmSync();
       }
       [["start", "From (optional)"], ["end", "To"]].forEach(function (x) {
         var f = field(d, x[0], x[1], "", "text", "d" + i + "-" + x[0], syncMin);
@@ -1259,7 +1262,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   /* ---------- wiring ---------- */
   function bindHeader() {
     [["h-name", "name"], ["h-date", "date"], ["h-shift", "shift"], ["shiftHours", "shiftHours"], ["shiftStart", "start"], ["maint", "maintenance"]].forEach(function (p) {
-      var e = $(p[0]); e.value = state.shift[p[1]] || "";
+      var e = $(p[0]); e.value = state.shift[p[1]] || ""; if (e._hmSync) e._hmSync();
       if (!e._bound) { e._bound = true; e.addEventListener("input", function () { state.shift[p[1]] = e.value; update(); }); }
     });
   }
@@ -1303,5 +1306,6 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(function () {});
 })();
 </script>
+<script src="/data/fields.js"></script>
 </body>
 </html>

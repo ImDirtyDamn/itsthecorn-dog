@@ -168,9 +168,10 @@
     else if (f === "check") note = '<span class="scan-hint">The math doesn\u2019t add up. Check it.</span>';
     return { cls: cls, note: note };
   }
-  function tbox(p, label, val, ph, mode) {
+  function tbox(p, label, val, ph, mode, extra) {
     var m = mark(p), id = "sc-" + p.replace(/\./g, "-");
-    return '<div class="f"><label for="' + id + '">' + label + '</label><input id="' + id + '" data-p="' + p + '" class="' + m.cls.trim() + '" value="' + esc(val) + '" placeholder="' + esc(ph) + '" autocomplete="off" inputmode="' + (mode || "text") + '">' + m.note + '</div>';
+    return '<div class="f"><label for="' + id + '">' + label + '</label><input id="' + id + '" data-p="' + p + '" class="' + m.cls.trim() + '" value="' + esc(val) + '" placeholder="' + esc(ph) + '" autocomplete="off" inputmode="' + (mode || "text") + '"' +
+      (mode === "numeric" ? ' pattern="[0-9]*"' : "") + (extra || "") + '>' + m.note + '</div>';
   }
   function clockbox(p, label, val) {
     var ok = isClock(val), m = mark(p, ok ? "" : val), id = "sc-" + p.replace(/\./g, "-");
@@ -207,7 +208,7 @@
       sl.segments.forEach(function (sg, j) {
         var p = "machines." + si + ".segments." + j;
         h += (j ? '<div class="seg"><b style="color:var(--amber);font-size:13px;letter-spacing:.08em">MOVED TO</b>' : "") +
-          '<div class="grid2">' + machbox(p + ".machine", "Machine", sg.machine) + tbox(p + ".goal", "Need rate (lb/hr)", v(sg.goal), "need rate", "numeric") + '</div>' +
+          '<div class="grid2">' + machbox(p + ".machine", "Machine", sg.machine) + tbox(p + ".goal", "Need rate (lb/hr)", v(sg.goal), "need rate", "decimal") + '</div>' +
           (j ? clockbox(p + ".from", "Switch time", sg.from) + '</div>' : "");
       });
       h += '</div>';
@@ -219,9 +220,9 @@
       var p = "coils." + i;
       h += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + xbtn("c", i, "card " + (i + 1)) + '</div>' +
         tbox(p + ".card", "Card #", r.card, "card number", "numeric") +
-        '<div class="grid2">' + tbox(p + ".avg_wgt", "Avg. Wgt. (lb)", v(r.avg_wgt), "avg weight", "numeric") + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
-        '<div class="grid2">' + tbox(p + ".weight", "Weight (lb)", v(r.weight), "weight", "numeric") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
-        '<div class="grid2">' + tbox(p + ".finish", "Finish Size", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".avg_wgt", "Avg. Wgt. (lb)", v(r.avg_wgt), "avg weight", "decimal") + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".weight", "Weight (lb)", v(r.weight), "weight", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
+        '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
         '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound") + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
     });
 
@@ -231,7 +232,7 @@
       var p = "downtime." + i;
       h += '<div class="card"><div class="cardhead"><b>DOWNTIME ' + (i + 1) + '</b>' + xbtn("d", i, "downtime " + (i + 1)) + '</div>' +
         '<div class="row2">' + clockbox(p + ".start", "Started at", x.start) + clockbox(p + ".end", "Ended at", x.end) + '</div>' +
-        '<div class="grid2">' + tbox(p + ".minutes", "Minutes down", v(x.minutes), "minutes down", "numeric") + machbox(p + ".machine", "Machine", x.machine, "All machines") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".minutes", "Time down", v(x.minutes), "minutes down", "numeric", ' data-hm="min"') + machbox(p + ".machine", "Machine", x.machine, "All machines") + '</div>' +
         tbox(p + ".reason", "Reason", x.reason, "what happened, like die change") + '</div>';
     });
 
@@ -240,7 +241,7 @@
     if (full) s.breaks.forEach(function (b, i) {
       var p = "breaks." + i;
       h += '<div class="break-row">' + clockbox(p + ".start", "Break " + (i + 1) + " start", b.start) +
-        '<div class="field"><label class="lbl" for="sc-breaks-' + i + '-minutes">Minutes</label><input class="in' + mark(p + ".minutes").cls + '" type="number" id="sc-breaks-' + i + '-minutes" data-p="' + p + '.minutes" value="' + esc(v(b.minutes)) + '" placeholder="min" inputmode="numeric" min="1" step="5"></div>' +
+        '<div class="field"><label class="lbl" for="sc-breaks-' + i + '-minutes">How long</label><input class="in' + mark(p + ".minutes").cls + '" type="number" id="sc-breaks-' + i + '-minutes" data-p="' + p + '.minutes" value="' + esc(v(b.minutes)) + '" placeholder="min" inputmode="numeric" pattern="[0-9]*" min="1" step="5" data-hm="min"></div>' +
         '<button type="button" class="btn warn" data-scdel="b-' + i + '" aria-label="Remove break ' + (i + 1) + '">X</button></div>';
     });
 
@@ -279,6 +280,10 @@
       collect(c);
       var q = Array.prototype.slice.call(host.querySelectorAll("input[data-p]")).filter(function (el) { return /\?/.test(el.value); });
       if (q.length) { q[0].scrollIntoView({ block: "center" }); q[0].focus(); return toast("Fix the boxes with a ? first"); }
+      // a finish size with no point (600, 1250): one tap to say what it is, before anything is filled in
+      var fins = Array.prototype.slice.call(host.querySelectorAll('input[data-p$=".finish"]'));
+      var need = window.Fields ? Fields.sizeNeedsPick(fins) : null;
+      if (need) { Fields.sizePick(need, "Card " + (+need.getAttribute("data-p").split(".")[1] + 1) + " finish size", function () { apply(replace); }); return; }
       document.body.classList.remove("scan-open");
       var ok = o.onApply(JSON.parse(JSON.stringify(s)), replace);
       if (ok !== false) { host.innerHTML = ""; cur = null; } else document.body.classList.add("scan-open");

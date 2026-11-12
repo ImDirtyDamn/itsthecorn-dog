@@ -167,7 +167,7 @@ input.flash{outline:3px solid var(--amber)}
 .calc-note:empty{min-height:0;margin:0}
 html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 </style>
-<script src="/data/config.js"></script><script src="/data/submit.js"></script><script src="/data/scan.js"></script>
+<script src="/data/config.js"></script><script src="/data/submit.js"></script><script src="/data/fields.js"></script><script src="/data/scan.js"></script>
 </head>
 <body>
 <header>
@@ -899,9 +899,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
      Boxes start empty every time (nothing kept between visits). The math is the calc core's:
      avg = P.quick(total, coils) and lb/hr = P.compute() with just hours, minutes off and lb. */
   var Q = { avg: "", tot: "", coils: "", ran: "", lbs: "", hrs: "", min: "", scan: null };
-  function qfield(label, id, val, ph, mode, sub) {
+  function qfield(label, id, val, ph, mode, sub, hm) {
     return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in" type="text" id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) +
-      '" autocomplete="off" inputmode="' + (mode || "decimal") + '"' + (mode === "numeric" ? ' pattern="[0-9]*"' : "") + ' enterkeyhint="done">' + (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
+      '" autocomplete="off" inputmode="' + (mode || "decimal") + '"' + (mode === "numeric" ? ' pattern="[0-9]*"' : "") + (hm ? ' data-hm="' + hm + '"' : "") + ' enterkeyhint="done">' + (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
   }
   /* One smart line: "12000 / 3", "12,000 lb 3 coils", "3 coils 12000" (total and coil count)
      or "4400 4250 3800" / "4400, 4250, 3800" / "4400+4250" (a list of coil weights). */
@@ -1117,8 +1117,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function renderRate() {
     app.innerHTML = '<h2>Production rate</h2><p class="muted">Your lb per hour for the time you worked.</p>' +
-      '<div class="panel"><div class="row2">' + qfield("Hours worked", "r-hrs", Q.hrs, "8 or 7:30") + qfield("Lbs produced", "r-lbs", Q.lbs, "lb") + '</div>' +
-      qfield("Downtime / breaks (minutes)", "r-min", Q.min, "optional, like 30 or 15 30", "text", "Minutes not running. Leave it blank if the hours above are already run time.") +
+      '<div class="panel">' + qfield("Hours worked", "r-hrs", Q.hrs, "8 or 7:30", "numeric", "", "hm") + qfield("Lbs produced", "r-lbs", Q.lbs, "lb") +
+      qfield("Downtime / breaks", "r-min", Q.min, "optional, like 30 or 15 30", "numeric", "Time not running, all added up. Leave it blank if the hours above are already run time.", "min") +
       '<p class="calc-note" id="r-note" aria-live="polite"></p></div><div id="r-out"></div>' +
       '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
     [["r-hrs", "hrs"], ["r-lbs", "lbs"], ["r-min", "min"]].forEach(function (x) { $(x[0]).addEventListener("input", function (e) { Q[x[1]] = e.target.value; rateOut(); }); });
@@ -1148,7 +1148,20 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     $("nav-next").textContent = S.step === 3 ? "SHEET VIEW" : "NEXT \u2192";
   }
   $("nav-back").onclick = function () { if (S.step === 0) go("home"); else { S.step--; render(); } };
-  $("nav-next").onclick = function () { if (S.step === 3) openSheet(); else { S.step++; render(); } };
+  // a finish size with no point (600, 1250): one tap to say what it is before moving on or sending
+  function finishPick(then) {
+    for (var i = 0; i < S.rows.length; i++) {
+      var r = S.rows[i], v = String(r.finish || "").trim();
+      if (!(window.Fields && Fields.sizeAmbig(v) && r.finishKeep !== v)) continue;
+      if (S.screen !== "log" || S.step !== 0) { S.step = 0; S.screen = "log"; render(); }
+      var el = $("r" + i + "-finish"); if (!el) return false;
+      (function (r, v) { Fields.sizePick(el, "Card " + (i + 1) + " finish size", function (nv) { if (nv === v) r.finishKeep = v; save(); finishPick(then); }); })(r, v);
+      return true;
+    }
+    then();
+    return false;
+  }
+  $("nav-next").onclick = function () { if (S.step === 3) finishPick(openSheet); else if (S.step === 0) finishPick(function () { S.step++; render(); }); else { S.step++; render(); } };
 
   /* chips: Draw 1-9 shown as numbers, plus any other machine name already in use (from the tracker) */
   function extraNames() {
@@ -1188,7 +1201,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         }).join("") + '</div>' +
         '<span class="lbl">Which Draw? <span style="color:var(--ph)">(skip if you ran one machine)</span></span>' + chips("row" + i, r.machine) +
         '<details><summary>+ Finish size, grade, compound, package</summary><div class="grid2">' +
-        field("Finish Size", "r" + i + "-finish", r.finish, "finish size", 'inputmode="decimal"') + field("Grade", "r" + i + "-grade", r.grade, "grade", 'inputmode="text"') +
+        field("Finish Size (in)", "r" + i + "-finish", r.finish, "finish size", 'inputmode="decimal"') + field("Grade", "r" + i + "-grade", r.grade, "grade", 'inputmode="text"') +
         field("Draw Compound", "r" + i + "-compound", r.compound, "compound", 'inputmode="text"') + field("Package", "r" + i + "-package", r.package, "package", 'inputmode="text"') +
         '</div></details>' +
         '<div class="live"><span>IN=OUT <b id="r' + i + '-io" style="font-size:16px">' + esc(rr.coilsText || "\u2013") + '</b> &middot; Avg</span><b id="r' + i + '-avg">' + (rr.avg !== null ? P.fmtInt(rr.avg) : "\u2013") + '</b></div>' +
@@ -1217,6 +1230,10 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
           save(); rowLive(i);
         });
       });
+    });
+    S.rows.forEach(function (r, i) {
+      var fe = $("r" + i + "-finish");
+      if (fe && window.Fields) fe.addEventListener("change", function () { var v = fe.value.trim(); if (Fields.sizeAmbig(v) && r.finishKeep !== v) Fields.sizePick(fe, "Card " + (i + 1) + " finish size", function (nv) { if (nv === v) { r.finishKeep = v; save(); } }); });
     });
     app.querySelectorAll("[data-cut]").forEach(function (b) {
       b.onclick = function () {
@@ -1355,7 +1372,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     html += '<h2>Breaks</h2>';
     S.breaks.forEach(function (b, i) {
       html += '<div class="break-row">' + tfield("Break " + (i + 1) + " start", "b" + i + "-start", b.start) +
-        '<div class="field"><label class="lbl" for="b' + i + '-min">Minutes</label><input class="in" type="number" id="b' + i + '-min" value="' + esc(b.minutes) + '" placeholder="min" inputmode="numeric" pattern="[0-9]*" min="1" step="5"></div>' +
+        '<div class="field"><label class="lbl" for="b' + i + '-min">How long</label><input class="in" type="number" id="b' + i + '-min" value="' + esc(b.minutes) + '" placeholder="min" inputmode="numeric" pattern="[0-9]*" min="1" step="5" data-hm="min"></div>' +
         '<button type="button" class="btn warn" data-delbrk="' + i + '" aria-label="Remove break ' + (i + 1) + '">X</button></div>';
     });
     html += '<button class="big" id="add-brk" type="button">+ ADD BREAK</button>';
@@ -1363,7 +1380,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     S.downtime.forEach(function (d, i) {
       var timed = P.clock(d.start) !== null && P.clock(d.end) !== null;
       html += '<div class="drow"><div class="row2">' + tfield("Started at", "d" + i + "-start", d.start) + tfield("Ended at", "d" + i + "-end", d.end) + '</div>' +
-        '<div class="grid2">' + field("Minutes down", "d" + i + "-min", d.minutes, "minutes down", 'inputmode="numeric"' + (timed ? " readonly" : "")) +
+        '<div class="grid2">' + field("Time down", "d" + i + "-min", d.minutes, "minutes down", 'inputmode="numeric" data-hm="min"' + (timed ? " readonly" : "")) +
         '<div class="f"><label for="d' + i + '-mach">Machine</label><select id="d' + i + '-mach"><option value="">All machines</option>' +
         DRAWS.concat(extraNames()).map(function (n) { return '<option' + (d.machine === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select></div></div>' +
         field("Reason", "d" + i + "-reason", d.reason, "what happened, like die change", 'inputmode="text" list="reasons"') +
@@ -1388,6 +1405,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       var sync = function () {
         var a = P.clock(d.start), b = P.clock(d.end), m = $("d" + i + "-min");
         if (a !== null && b !== null) { d.minutes = String(((b - a) % 1440 + 1440) % 1440); m.value = d.minutes; m.readOnly = true; } else m.readOnly = false;
+        if (m._hmSync) m._hmSync();
         save(); timeLive();
       };
       ["input", "change"].forEach(function (ev) {
@@ -1445,7 +1463,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         html += '<span class="lbl">How long it ran</span><div class="runchoice">' + [["all", "All shift"], ["half", "Half shift"], ["custom", "Set hours"]].map(function (m) {
           return '<button type="button" data-mode="' + si + '" data-m="' + m[0] + '" class="' + (sl.mode === m[0] ? "on" : "") + '">' + m[1] + '</button>';
         }).join("") + '</div>';
-        if (sl.mode === "custom") html += field("Hours it ran", "s" + si + "-min", sl.minutes, "hours, like 5:30", 'inputmode="decimal"');
+        if (sl.mode === "custom") html += field("Hours it ran", "s" + si + "-min", sl.minutes, "hours, like 5:30", 'inputmode="numeric" data-hm="hm"');
       }
       if (moved) {
         html += timeline(sl, si);

@@ -256,7 +256,7 @@
   #dtp h3 { color: var(--white); font-size: 1rem; margin: 1.5rem 0 0.6rem; letter-spacing: 0.06em; }
   #dtp .btn.full { width: 100%; }
   select.in { background: #000; }
-  .dt-past { display: grid; grid-template-columns: 5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
+  .dt-past { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
   .dt-past .field { margin-bottom: 0; }
   .dt-past .in { height: 3rem; font-size: 1.1rem; }
   .dt-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid var(--fg-faint); font-size: 0.9rem; color: var(--white); }
@@ -384,10 +384,13 @@
   .s-proj b { color: var(--white); font-weight: 700; }
   .s-down { display: block; width: 100%; text-align: left; background: rgba(255, 95, 86, 0.12); border: 1px solid var(--red); color: var(--red); font-weight: 700; padding: 0.5rem 0.75rem; min-height: 3rem; margin-top: 0.75rem; cursor: pointer; font-size: 0.95rem; letter-spacing: 0.04em; }
   .s-machines { margin-top: 0.25rem; }
-  .s-acts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.6rem; margin: 1rem 0 0.5rem; }
-  .s-acts .btn { min-height: 3.25rem; }
-  .s-acts #s-more { font-size: 1rem; letter-spacing: 0.05em; }
-  .s-acts #s-new { font-size: 0.8rem; padding: 0.2rem 0.8rem; opacity: 0.9; }
+  /* SIMPLE view has exactly two buttons: LOG COIL and MORE OPTIONS. Everything else is in the MORE OPTIONS menu. */
+  .s-more, .ob-simple { display: none; }
+  .v-simple #dash .top-r .calc-link, .v-simple #dash .tools, .v-simple .dock .det-row, .v-simple .readback .rb-act, .v-simple #over-new { display: none !important; }
+  .v-simple .dock .s-more { display: block; width: 100%; min-height: 3.25rem; margin-top: 0.6rem; font-size: 1rem; letter-spacing: 0.05em; }
+  .v-simple .over-bar .ob-simple { display: block; color: var(--white); margin: 0; font-weight: 700; }
+  .v-simple #dock .readback:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .simple .s-n, .simple .s-status, .simple .s-proj, .simple .s-down, .simple .s-row { cursor: default; }
   .menu-list { display: grid; gap: 0.5rem; }
   .menu-list .btn { width: 100%; min-height: 3.1rem; text-align: left; padding: 0.4rem 0.9rem; font-size: 0.95rem; }
   .menu-list .menu-sep { height: 1px; background: var(--fg-faint); margin: 0.25rem 0; }
@@ -632,26 +635,23 @@
       <p class="ob-t" id="over-title"></p>
       <p class="ob-s" id="over-sub"></p>
       <button type="button" class="btn solid" id="over-new">START TODAY'S SHIFT</button>
+      <p class="ob-simple">Tap MORE OPTIONS, then NEW SHIFT.</p>
     </div>
     <div class="ml-bar" id="ml-bar-d" hidden role="status" aria-live="polite"><span class="ml-msg"></span><button type="button" class="btn small">OPEN</button></div>
 
     <section id="simple" class="simple" aria-label="Simple view">
       <p class="phase s-phase" id="s-phase"></p>
-      <button type="button" class="s-down" id="s-down" hidden></button>
+      <div class="s-down" id="s-down" role="status" hidden></div>
       <div class="s-race">
-        <button type="button" class="s-n" id="s-coils-btn" aria-label="Coils ran, tap for details"><span class="lbl">Coils ran ›</span><b class="glow" id="s-coils">0</b></button>
-        <button type="button" class="s-n" id="s-ran-btn" aria-label="Lbs ran, tap for details"><span class="lbl">Lbs ran ›</span><b class="glow" id="s-ran">0</b></button>
-        <button type="button" class="s-n pc" id="s-pc-btn" aria-label="Pace car, tap for details"><span class="lbl">Pace car ›</span><b class="glow" id="s-pc">0</b></button>
+        <div class="s-n" id="s-coils-btn"><span class="lbl">Coils ran</span><b class="glow" id="s-coils">0</b></div>
+        <div class="s-n" id="s-ran-btn"><span class="lbl">Lbs ran</span><b class="glow" id="s-ran">0</b></div>
+        <div class="s-n pc" id="s-pc-btn"><span class="lbl">Pace car</span><b class="glow" id="s-pc">0</b></div>
       </div>
       <div class="bar s-bar" aria-hidden="true"><div class="fill" id="s-fill"></div><div class="mark" id="s-mark"></div></div>
       <div class="legend s-legend"><span>Bar = lbs ran · <i class="s-key"></i> pace car</span><span id="s-target"></span></div>
-      <button type="button" class="s-status" id="s-status">-</button>
-      <button type="button" class="s-proj" id="s-proj">-</button>
+      <div class="s-status" id="s-status" role="status">-</div>
+      <div class="s-proj" id="s-proj">-</div>
       <div class="s-machines" id="s-machines"></div>
-      <div class="s-acts" id="s-acts">
-        <button type="button" class="btn" id="s-more" aria-haspopup="dialog">&#9776; MORE OPTIONS</button>
-        <button type="button" class="btn warn" id="s-new">NEW SHIFT</button>
-      </div>
       <div class="s-log" id="s-log">
         <div class="s-log-m" id="s-log-m" role="group" aria-label="Machine"></div>
         <label class="wt-lbl" for="s-log-in">COIL WEIGHT (LBS)<span class="s-log-for" id="s-log-for"></span></label>
@@ -734,6 +734,7 @@
           <input class="in" id="dock-in" type="text" inputmode="decimal" placeholder="Weight (lbs)" enterkeyhint="done" autocomplete="off" aria-label="Coil weight in lbs">
           <button type="button" class="btn solid" id="dock-log">LOG COIL</button>
         </div>
+        <button type="button" class="btn s-more" id="s-more" aria-haspopup="dialog">&#9776; MORE OPTIONS</button>
       </div>
     </div>
   </section>
@@ -787,6 +788,7 @@
 <script src="/data/config.js"></script>
 <script src="/data/submit.js"></script>
 <script src="/data/lookup.js"></script>
+<script src="/data/fields.js"></script>
 <script>
 /* =====================================================================
    CALC MODULE - every number on the dashboard comes from Calc.compute().
@@ -1478,21 +1480,21 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         setText(bnote, n && n.worked > 0 ? fmtDur(n.worked) + " worked · " + fmtDur(n.breakMs) + " of breaks" : "");
       };
       if (d.breakMode !== "list") {
-        var ti = input("number", "wz-break-total", d.breakTotalMin, { inputmode: "numeric", min: "0", step: "5" });
+        var ti = input("number", "wz-break-total", d.breakTotalMin, { inputmode: "numeric", min: "0", step: "5", "data-hm": "min" });
         ti.addEventListener("input", function () { d.breakTotalMin = num(ti.value); updB(); });
-        body.appendChild(field("Total break minutes", ti));
+        body.appendChild(field("Total break time", ti));
         body.appendChild(el("p", "sub", "Counted as one break in the middle of the shift. Use a list for exact times."));
       } else {
         d.breaks.forEach(function (b, i) {
           var r = el("div", "break-row");
-          var bs = input("time", "wz-bstart-" + i, b.start), bm = input("number", "wz-bmin-" + i, b.minutes, { inputmode: "numeric", min: "1", step: "5" });
+          var bs = input("time", "wz-bstart-" + i, b.start), bm = input("number", "wz-bmin-" + i, b.minutes, { inputmode: "numeric", min: "1", step: "5", "data-hm": "min" });
           bs.addEventListener("input", function () { b.start = bs.value; updB(); });
           bs.addEventListener("change", function () { b.start = bs.value; updB(); });
           bm.addEventListener("input", function () { b.minutes = num(bm.value); updB(); });
           var x = el("button", "btn warn", "X"); x.type = "button"; x.setAttribute("aria-label", "Remove break " + (i + 1));
           x.addEventListener("click", function () { d.breaks.splice(i, 1); renderWizard(); });
           r.appendChild(field("Break " + (i + 1) + " start", bs, ""));
-          r.appendChild(field("Minutes", bm, ""));
+          r.appendChild(field("How long", bm, ""));
           r.appendChild(x);
           body.appendChild(r);
         });
@@ -2127,7 +2129,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
           var tr = el("tr");
           tr.appendChild(el("td", null, String(n)));
           var tdT = el("td", null, fmtClock(Date.parse(c.loggedAt)));
-          var meta = [c.coilNo && "coil " + c.coilNo, c.heatNo && "heat " + c.heatNo, detailText(c), c.downtimeMin ? c.downtimeMin + "m down" + (c.downtimeReason ? " (" + c.downtimeReason + ")" : "") : "", c.notes].filter(Boolean).join(" · ");
+          var meta = [c.coilNo && "coil " + c.coilNo, detailText(c), c.downtimeMin ? c.downtimeMin + "m down" + (c.downtimeReason ? " (" + c.downtimeReason + ")" : "") : "", c.notes].filter(Boolean).join(" · ");
           if (meta) { tdT.appendChild(el("div", "meta", meta)); }
           tr.appendChild(tdT);
           tr.appendChild(el("td", "r white", fmtLb(c.weight)));
@@ -2182,6 +2184,24 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     adv.appendChild(ex);
   }
 
+  // ROUND / SHAPE for a coil editor: shape gets the optional typed reduction %, like the details screen
+  function shapePicker(prefix, shape, red) {
+    var w = el("div", "field det-full full"); w.style.marginBottom = "0";
+    w.appendChild(el("span", "lbl", "Draw type")); w.lastChild.style.display = "block"; w.lastChild.style.marginBottom = "0.4rem";
+    var seg = el("div", "det-seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Draw type"); w.appendChild(seg);
+    var cur = shape === "shape" ? "shape" : "round";
+    var ir = input("text", prefix + "red", red != null ? String(red) : "", { maxlength: "5", placeholder: "30", inputmode: "decimal", autocomplete: "off" });
+    var rw = field("Reduction % (optional)", ir); rw.style.marginTop = "0.6rem"; rw.style.marginBottom = "0"; rw.hidden = cur !== "shape"; w.appendChild(rw);
+    var btns = ["round", "shape"].map(function (v) {
+      var b = el("button", null, v.toUpperCase()); b.type = "button"; b.id = prefix + "shape-" + v; b.setAttribute("aria-pressed", String(cur === v));
+      b.addEventListener("click", function () { cur = v; btns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); rw.hidden = cur !== "shape"; });
+      seg.appendChild(b); return b;
+    });
+    return { el: w, get: function () {
+      var t = ir.value.trim(), r = cur === "shape" ? redNum(t) : null;
+      return { shape: cur === "shape" ? "shape" : "", red: r, bad: cur === "shape" && t !== "" && r == null };
+    } };
+  }
   function coilEditor(c) {
     var box = el("div", "edit-box"), g = el("div", "edit-grid");
     var f = function (label, key, type, attrs, full) {
@@ -2191,28 +2211,31 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     };
     var iw = f("Coil weight (lbs)", "weight", "text", { inputmode: "decimal", autocomplete: "off" });
     var icn = f("Coil #", "coilNo", "text", { maxlength: "40" });
-    var ih = f("Heat #", "heatNo", "text", { maxlength: "40" });
     var ip = f("Part #", "part", "text", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off" });
     var is = f("Finish size (in)", "size", "text", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off" });
     var ig = f("Grade", "grade", "text", { maxlength: "40", placeholder: "Grade", autocomplete: "off" });
     var iss = f("Start size (in)", "startSize", "text", { maxlength: "40", placeholder: ".750", inputmode: "decimal", autocomplete: "off" });
+    var ish = shapePicker("ce-", c.shape, c.red); g.appendChild(ish.el);
     var it = tagChips(c.tags, "ce-tag"); var itw = el("div", "field det-full"); itw.style.marginBottom = "0";
     itw.appendChild(el("span", "lbl", "Run conditions")); itw.appendChild(it.el); g.appendChild(itw);
-    var idm = f("Downtime min (note only)", "downtimeMin", "number", { inputmode: "numeric", min: "0" });
+    var idm = f("Downtime (note only)", "downtimeMin", "number", { inputmode: "numeric", min: "0", "data-hm": "min" });
     var idr = f("Downtime reason", "downtimeReason", "text", { maxlength: "200" });
     var ino = f("Notes", "notes", "text", { maxlength: "500" }, true);
     box.appendChild(g);
     var err = el("p", "err"); box.appendChild(err);
     var line = el("div", "adv-line");
     line.appendChild(smallBtn("SAVE", "", function () {
-      var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: normSize(is.value), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500),
+      var shp = ish.get();
+      if (shp.bad) { setText(err, "Reduction must be a % between 0 and 100, or blank."); return; }
+      var rest = { coilNo: str(icn.value, 40), size: normSize(is.value), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500),
         part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: trim(str(ig.value, 40)), tags: it.get(), startSize: normSize(iss.value) };
       checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
       var sz = { label: "Finish size", v: rest.size, old: c.size || "" }, ss = { label: "Start size", v: rest.startSize, old: c.startSize || "" };
       pickSizes([sz, ss], function () {
       rest.size = sz.v; rest.startSize = ss.v;
       c.weight = w;
-      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size; c.part = rest.part; c.grade = rest.grade; c.tags = rest.tags; c.startSize = rest.startSize;
+      c.coilNo = rest.coilNo; c.size = rest.size; c.part = rest.part; c.grade = rest.grade; c.tags = rest.tags; c.startSize = rest.startSize;
+      c.shape = shp.shape; c.red = shp.red;
       c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
       editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
       });
@@ -2394,15 +2417,15 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
     box.appendChild(el("h3", null, "Log past downtime"));
     var g = el("div", "dt-past");
-    var mi = input("number", "dt-min", "", { inputmode: "numeric", min: "1", step: "1", placeholder: "Min" });
+    var mi = input("number", "dt-min", "", { inputmode: "numeric", min: "1", step: "1", placeholder: "Min", "data-hm": "min" });
     var ti = input("time", "dt-from", "");
     var add = el("button", "btn small", "ADD"); add.type = "button"; add.id = "dt-add";
-    g.appendChild(field("Minutes", mi)); g.appendChild(field("Started at (blank = just ended)", ti)); g.appendChild(add);
+    g.appendChild(field("How long", mi)); g.appendChild(field("Started at (blank = just ended)", ti)); g.appendChild(add);
     box.appendChild(g);
     var err = el("p", "err"); err.id = "dt-err"; box.appendChild(err);
     add.addEventListener("click", function () {
       var mins = num(mi.value), n = Date.now(), a;
-      if (!(mins > 0)) { setText(err, "Enter the minutes it was down."); return; }
+      if (!(mins > 0)) { setText(err, "Enter how long it was down (hrs and mins)."); return; }
       if (mins > 24 * 60) { setText(err, "Downtime can be 24 hours (1,440 min) at most. Check the minutes."); return; }
       if (ti.value) {
         var c = Calc.parseClock(ti.value), dd = Calc.parseDate(state.shift.date), win = Calc.shiftWindow(state.shift);
@@ -2611,17 +2634,20 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         var rn = input("text", "rc-note-" + k, c.notes || "", { maxlength: "300", placeholder: "Note for this coil", autocomplete: "off" });
         var rt = tagChips(c.tags, "rc-tag-" + k + "-");
         ed.appendChild(field("Part #", rp, "det-full")); ed.appendChild(field("Finish size (in)", rs)); ed.appendChild(field("Grade", rg));
+        var rsh = shapePicker("rc-" + k + "-", c.shape, c.red); ed.appendChild(rsh.el);
         var rtw = el("div", "field det-full"); rtw.appendChild(el("span", "lbl", "Run conditions")); rtw.appendChild(rt.el); ed.appendChild(rtw);
         ed.appendChild(field("Note", rn, "det-full"));
         var er = el("p", "err"); er.id = "rc-err-" + k;
         var bs = el("div", "rc-btns");
         var sv = smallBtn("SAVE", "solid", function () {
+          var shp = rsh.get();
+          if (shp.bad) { setText(er, "Reduction must be a % between 0 and 100, or blank."); return; }
           checkCoilWeight(wi.value, wi, function (msg) { setText(er, msg); }, function (w) {
             var sz = { label: "Finish size", v: normSize(rs.value), old: c.size || "" };
             pickSizes([sz], function () {
               c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
               c.part = trim(str(rp.value, 60)).replace(/\s+/g, " "); c.size = sz.v; c.grade = trim(str(rg.value, 40));
-              c.tags = rt.get(); c.notes = trim(str(rn.value, 300));
+              c.tags = rt.get(); c.notes = trim(str(rn.value, 300)); c.shape = shp.shape; c.red = shp.red;
               rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
             });
           });
@@ -2698,15 +2724,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (proj !== "-") {
       pj.appendChild(document.createTextNode("Projected finish ")); pj.appendChild(el("b", null, proj));
       if (hit !== "-") pj.appendChild(document.createTextNode(" · " + (r.targetHit || r.phase === "after" || hitShort(r) ? hit : "hits target " + hit)));
-      pj.appendChild(document.createTextNode(" ›"));
-    } else pj.appendChild(document.createTextNode(($("p-note").textContent || "Projection starts after 10 minutes worked.") + " ›"));
+    } else pj.appendChild(document.createTextNode($("p-note").textContent || "Projection starts after 10 minutes worked."));
     // red strip: only while a machine is down right now
     var downs = state.machines.filter(function (m) { return downNow(m.id); });
     var sd = $("s-down");
     if (downs.length) {
       var names = state.machines.length > 1 && downs.length === state.machines.length && runningFor("all") ? ["ALL MACHINES"] : downs.map(function (m) { return m.name.toUpperCase(); });
       var d0 = downNow(downs[0].id);
-      setText(sd, names.join(" + ") + " DOWN " + fmtDur(now - Date.parse(d0.startAt)) + " · pace car paused ›");
+      setText(sd, names.join(" + ") + " DOWN " + fmtDur(now - Date.parse(d0.startAt)) + " · pace car paused");
       sd.hidden = false;
     } else if (!sd.hidden) sd.hidden = true;
     // one thin row per machine
@@ -2716,16 +2741,15 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       if (box.childNodes.length !== state.machines.length) {
         box.textContent = "";
         state.machines.forEach(function (m, i) {
-          var b = el("button", "s-row"); b.type = "button"; b.id = "s-m-" + i;
+          var b = el("div", "s-row"); b.id = "s-m-" + i;
           b.appendChild(el("span", "s-rn", "")); b.appendChild(el("span", "s-rv", "")); b.appendChild(el("span", "s-rd", ""));
-          b.addEventListener("click", function () { openSheet("machine", state.machines[i] && state.machines[i].id); });
           box.appendChild(b);
         });
       }
       r.machines.forEach(function (mr, i) {
         var b = $("s-m-" + i); if (!b) return;
         var m = machineById(mr.id), dn = downNow(mr.id);
-        setText(b.childNodes[0], (m ? m.name : "?") + (dn ? " · DOWN" : "") + " ›");
+        setText(b.childNodes[0], (m ? m.name : "?") + (dn ? " · DOWN" : ""));
         setText(b.childNodes[1], fmtInt(mr.lbs) + " / " + (mr.paceCar == null ? "-" : fmtInt(mr.paceCar)));
         var ms = raceReady(r) && mr.paceCar > 0 ? statusText(mr.delta, mr.deltaPct) : null;
         setText(b.childNodes[2], ms ? ms.t : "-"); setCls(b.childNodes[2], "s-rd" + (ms ? " " + ms.cls : ""));
@@ -2847,6 +2871,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       ["menu-calc", "CALCULATOR", simpleOnly(function () { $("calc-link").click(); })],
       ["menu-scan", "SCAN SHEET (TRYOUT)", simpleOnly(function () { $("scan-link").click(); })],
       "-",
+      ["menu-new", "NEW SHIFT", simpleOnly(askNewShift), "warn"],
+      "-",
       ["menu-adv", "ADVANCED (OPENS FULL VIEW)", full(function () {
         if (!advOpen) $("adv-toggle").click();
         try { $("adv-toggle").scrollIntoView({ block: "start" }); } catch (e) {}
@@ -2860,19 +2886,19 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var list = el("div", "menu-list");
     menuItems().forEach(function (it) {
       if (it === "-") { list.appendChild(el("div", "menu-sep")); return; }
-      var b = el("button", "btn", it[1]); b.type = "button"; b.id = it[0];
+      var b = el("button", "btn" + (it[3] ? " " + it[3] : ""), it[1]); b.type = "button"; b.id = it[0];
       b.addEventListener("click", it[2]);
       list.appendChild(b);
     });
     body.appendChild(list);
   }
   $("s-more").addEventListener("click", function () { openSheet("menu"); });
-  $("s-new").addEventListener("click", function () {
+  function askNewShift() {
     var r = Calc.compute(state, Date.now()), live = r.phase === "live" || r.phase === "before";
     var msg = "End this shift and start a new one?" + (live && r.end ? " It runs until " + fmtClockDay(r.end, Date.now()) + "." : "") +
       (mlHasData() ? " It is sent to the master log and kept under Past shifts." : "");
     askConfirm(msg, "End it, start new", "Keep this shift", function () { startNewShift(true); }, function () {}, function () {});
-  });
+  }
   $("sheet").addEventListener("click", function (e) { if (e.target === $("sheet")) requestCloseSheet(); });
   document.addEventListener("keydown", function (e) { if (sheetKind && !askOpen && !cfdOpen && !e.defaultPrevented && e.key === "Escape") requestCloseSheet(); });
 
@@ -2895,13 +2921,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }
   }
   $("dt-open").addEventListener("click", showDowntime);
-  $("s-down").addEventListener("click", function () {
-    var d = state.machines.map(function (m) { return downNow(m.id); }).filter(Boolean)[0];
-    if (d) dtTarget = d.machineId;
-    showDowntime();
-  });
-  $("s-pc-btn").addEventListener("click", function () { openSheet("pc"); });
-  $("s-coils-btn").addEventListener("click", function () { openSheet("ran"); });
   $("hist-open").addEventListener("click", openHist);
   $("hist-open-2").addEventListener("click", openHist);
   /* JOB LOOKUP: everyone's past runs and job tips from the master log (shared /data/lookup.js) */
@@ -2915,9 +2934,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     JobLookup.mount(host, { needCode: true, canTip: true, prefill: { size: d.size || "", grade: d.grade || "", start: d.start || "", shape: d.size || d.start || d.shape ? (d.shape === "shape" ? "shape" : "round") : "", red: d.shape === "shape" && d.red != null ? String(d.red) : "", machine: m ? m.name : "" } });
   }
   $("lookup-open").addEventListener("click", openLookup);
-  $("s-ran-btn").addEventListener("click", function () { openSheet("ran"); });
-  $("s-status").addEventListener("click", function () { openSheet("delta"); });
-  $("s-proj").addEventListener("click", function () { openSheet("proj"); });
 
   function negLb(x) { x = x || 0; return fmtInt(x) === "0" ? "0" : MINUS + fmtInt(x); }
   function pctOf(a, b) { return b > 0 ? Math.abs(a / b * 100).toFixed(1) + "%" : "-"; }

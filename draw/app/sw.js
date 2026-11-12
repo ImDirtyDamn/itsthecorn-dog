@@ -1,7 +1,7 @@
 /* Draw Rate Tracker phone app - service worker.
    Cache-first, versioned. The version is a hash of the app files, so any change
    to them makes a new cache and the old one is deleted on activate. */
-var CACHE = "draw-rate-app-draw-20261112-v4";
+var CACHE = "draw-rate-app-draw-20261112-v5";
 var ASSETS = [
   "./",
   "./index.html",
@@ -13,9 +13,10 @@ var ASSETS = [
   "./icons/apple-touch-icon.png",
   "/data/config.js",                 // master-log sender (shared with the calculator and /data/)
   "/data/submit.js",
-  "/data/lookup.js"                  // JOB LOOKUP (shared with /data/)
+  "/data/lookup.js",                 // JOB LOOKUP (shared with /data/)
+  "/data/fields.js"                  // hrs + mins time boxes, size picks (shared)
 ];
-var SHARED = ["/data/config.js", "/data/submit.js", "/data/lookup.js"];
+var SHARED = ["/data/config.js", "/data/submit.js", "/data/lookup.js", "/data/fields.js"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {

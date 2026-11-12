@@ -207,6 +207,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
 <script src="config.js"></script>
 <script src="analyze.js?v=2"></script>
 <script src="lookup.js?v=2"></script>
+<script src="fields.js?v=1"></script>
 <script>
 (function () {
   "use strict";
@@ -475,7 +476,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     editing = { j: j, d: {
       date: L.shift_date || "", start: L.shift_start || "", end: L.shift_end || "", operator: L.operator || "",
       net: L.net_hours, total: L.total_lbs, totalTouched: false,
-      coils: (Array.isArray(raw.coils) ? raw.coils : j.coils).map(function (c) { return { orig: c, weight: c.weight != null ? c.weight : "", machine: c.machine || "", part: c.part || "", finish: c.finish || "", note: c.note || "" }; }),
+      coils: (Array.isArray(raw.coils) ? raw.coils : j.coils).map(function (c) { return { orig: c, weight: c.weight != null ? c.weight : "", machine: c.machine || "", part: c.part || "", finish: c.finish || "", note: c.note || "",
+        shape: c.shape === "shape" ? "shape" : "round", red: c.shape === "shape" && c.reduction != null ? String(c.reduction) : "" }; }),
       downtime: (Array.isArray(raw.downtime) ? raw.downtime : j.downtime).map(function (d) { return { orig: d, machine: d.machine || "", minutes: d.minutes != null ? d.minutes : "", reason: d.reason || "" }; }),
       problems: probs, maintenance: L.maintenance || "", notes: L.day_notes || "", crew: crewSaved()
     } };
@@ -496,6 +498,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       h += '<div class="edrow"><div class="edhead"><span>COIL ' + (i + 1) + '</span></div><div class="row2">' +
         fld("Weight (lb)", "ed-cw-" + i, c.weight, 'type="text" inputmode="decimal" autocomplete="off"') + fld("Machine", "ed-cm-" + i, c.machine, 'type="text" maxlength="30" autocomplete="off"') + '</div>' +
         '<div class="row2">' + fld("Part #", "ed-cp-" + i, c.part, 'type="text" maxlength="60" autocomplete="off"') + fld("Finish size (in)", "ed-cf-" + i, c.finish, 'type="text" inputmode="decimal" maxlength="40" autocomplete="off"') + '</div>' +
+        '<div class="row2"><div class="field"><label class="lbl" for="ed-cs-' + i + '">Draw type</label><select class="in" id="ed-cs-' + i + '"><option value="round"' + (c.shape !== "shape" ? " selected" : "") + '>Round</option><option value="shape"' + (c.shape === "shape" ? " selected" : "") + '>Shape</option></select></div>' +
+        '<div id="ed-crw-' + i + '"' + (c.shape === "shape" ? "" : " hidden") + '>' + fld("Reduction % (optional)", "ed-cr-" + i, c.red, 'type="text" inputmode="decimal" maxlength="5" autocomplete="off"') + '</div></div>' +
         fld("Note", "ed-cn-" + i, c.note, 'type="text" maxlength="300" autocomplete="off"') +
         '<button type="button" class="warn rm" data-rmc="' + i + '">REMOVE THIS COIL</button></div>';
     });
@@ -503,13 +507,13 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     h += '<h3>Downtime (' + d.downtime.length + ')</h3>';
     d.downtime.forEach(function (x, i) {
       h += '<div class="edrow"><div class="row2">' + fld("Machine (blank = all)", "ed-dm-" + i, x.machine, 'type="text" maxlength="30" autocomplete="off"') +
-        fld("Minutes", "ed-dn-" + i, x.minutes, 'type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"') + '</div>' +
+        fld("Time down", "ed-dn-" + i, x.minutes, 'type="text" inputmode="numeric" pattern="[0-9]*" data-hm="min" autocomplete="off"') + '</div>' +
         fld("Reason", "ed-dr-" + i, x.reason, 'type="text" maxlength="300" autocomplete="off"') +
         '<button type="button" class="warn rm" data-rmd="' + i + '">REMOVE THIS DOWNTIME</button></div>';
     });
     h += '<button type="button" class="big" id="ed-addd">+ ADD DOWNTIME</button>';
     h += '<h3>Totals</h3><div class="row2">' + fld("Total lbs", "ed-total", d.total, 'type="text" inputmode="decimal" autocomplete="off"') +
-      fld("Net run hours", "ed-net", d.net, 'type="text" inputmode="decimal" autocomplete="off"') + '</div>' +
+      fld("Net run time", "ed-net", d.net, 'type="text" inputmode="numeric" data-hm="dec" autocomplete="off"') + '</div>' +
       '<p class="muted" style="margin-top:0">Total lbs follows the coil weights as you change them. Lb/hr and goal met are worked out again when you save.</p>';
     h += '<h3>Problems / downtime notes</h3><textarea class="in" id="ed-prob" maxlength="4000">' + esc(d.problems) + '</textarea>';
     h += '<h3>Notes about the day</h3><textarea class="in" id="ed-notes" maxlength="2000">' + esc(d.notes) + '</textarea>';
@@ -530,6 +534,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     d.coils.forEach(function (c, i) {
       bind("ed-cw-" + i, function (v) { c.weight = v; c.changedW = true; retotal(); }); bind("ed-cm-" + i, function (v) { c.machine = v; });
       bind("ed-cp-" + i, function (v) { c.part = v; }); bind("ed-cf-" + i, function (v) { c.finish = v; }); bind("ed-cn-" + i, function (v) { c.note = v; });
+      bind("ed-cr-" + i, function (v) { c.red = v; });
+      $("ed-cs-" + i).addEventListener("change", function () { c.shape = $("ed-cs-" + i).value; $("ed-crw-" + i).hidden = c.shape !== "shape"; });
     });
     d.downtime.forEach(function (x, i) { bind("ed-dm-" + i, function (v) { x.machine = v; }); bind("ed-dn-" + i, function (v) { x.minutes = v; }); bind("ed-dr-" + i, function (v) { x.reason = v; }); });
     Array.prototype.forEach.call(document.querySelectorAll("[data-rmc]"), function (b) { b.onclick = function () { d.coils.splice(+b.getAttribute("data-rmc"), 1); retotal(); renderEdit(); }; });
@@ -558,6 +564,10 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       if (w !== "" && (!c.orig || c.orig.coils_in === 1 || c.orig.avg_wgt === oldW)) { o.avg_wgt = +w; if (!c.orig) o.coils_in = 1; }
       if ((c.orig ? c.orig.machine || "" : "") !== c.machine.trim()) { o.machine = c.machine.trim(); delete o.draw; }
       o.part = c.part.trim(); o.finish = c.finish.trim(); o.note = c.note.trim();
+      var redT = String(c.red || "").trim(), oldShape = c.orig && c.orig.shape === "shape" ? "shape" : "round", oldRed = oldShape === "shape" && c.orig.reduction != null ? +c.orig.reduction : null;
+      if (c.shape === "shape" && redT !== "" && !(NUM_RE.test(redT) && +redT > 0 && +redT < 100)) return { err: "Coil " + (i + 1) + ": reduction must be a % between 0 and 100, or blank." };
+      o.shape = c.shape === "shape" ? "shape" : "round";
+      if (o.shape === "shape") { if (redT === "") delete o.reduction; else o.reduction = +redT; } else delete o.reduction;   // round: the server works it out from the sizes
       if (o.finish !== (c.orig ? c.orig.finish || "" : "") && sizeAmbig(o.finish) && c.keep !== o.finish) return { err: "Coil " + (i + 1) + ": finish size " + o.finish + " has no decimal point. Which did you mean?", pick: i };
       if (c.orig && c.orig.weight === null && o.weight === null) delete o.weight;
       Object.keys(o).forEach(function (k) { if (o[k] === null || o[k] === undefined) delete o[k]; });
@@ -567,6 +577,9 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
         [["machine", "machine"], ["part", "part #"], ["finish", "finish size"], ["note", "note"]].forEach(function (f) {
           if ((c.orig[f[0]] || "") !== (o[f[0]] || "")) ch.push("Coil " + (i + 1) + " " + f[1] + ": " + (c.orig[f[0]] || "blank") + " \u2192 " + (o[f[0]] || "blank"));
         });
+        if (oldShape !== o.shape) ch.push("Coil " + (i + 1) + " draw type: " + (oldShape === "shape" ? "Shape" : "Round") + " \u2192 " + (o.shape === "shape" ? "Shape" : "Round"));
+        var newRed = o.shape === "shape" && o.reduction != null ? o.reduction : null;
+        if (o.shape === "shape" && oldRed !== newRed) ch.push("Coil " + (i + 1) + " reduction: " + (oldRed != null ? oldRed + "%" : "blank") + " \u2192 " + (newRed != null ? newRed + "%" : "blank"));
       }
       coils.push(o);
     }
@@ -590,7 +603,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     if (removedD > 0) ch.push("Removed " + removedD + " downtime entr" + (removedD === 1 ? "y" : "ies"));
     var tot = String(d.total).replace(/,/g, "").trim(), net = String(d.net).trim();
     if (!NUM_RE.test(tot)) return { err: "Total lbs must be a number." };
-    if (net !== "" && (!NUM_RE.test(net) || +net > 24)) return { err: "Net run hours must be a number from 0 to 24." };
+    if (net !== "" && (!NUM_RE.test(net) || +net > 24)) return { err: "Net run time must be 24 hrs or less." };
     tot = Math.round(+tot * 10) / 10; net = net === "" ? null : +net;
     var t = Object.assign({}, raw.totals || {}), oldNet = L.net_hours;
     if (L.total_lbs !== tot) ch.push("Total lbs: " + n0(L.total_lbs) + " \u2192 " + n0(tot));
