@@ -126,7 +126,7 @@ ul.list{padding-left:22px;color:var(--white);line-height:1.45;font-size:17px;mar
 body.noscroll{overflow:hidden}
 .more{margin:12px 0}
 /* tabs + analyze */
-.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 0}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 0 0}
 .tabs[hidden]{display:none}
 .subtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0}
 .subtabs button{font-size:14px;padding:6px 2px;letter-spacing:.04em}
@@ -197,7 +197,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   <h1>MASTER LOG<small>every submitted production log</small></h1>
   <div class="hbtns"><button id="lockbtn" type="button" class="ghost" hidden>LOCK</button><a class="back" href="/draw/app/">&larr; TRACKER</a></div>
 </header>
-<nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button></nav>
+<nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button><button type="button" data-v="lookup">LOOKUP</button></nav>
 <main id="app"></main>
 <div class="overlay" id="detail" hidden role="dialog" aria-label="Log detail"><div class="ovtop"><b id="dtitle">LOG</b><button id="dclose" type="button">CLOSE</button></div><div id="dbody"></div></div>
 <div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm"><div class="box"><b id="ctitle">DELETE THIS LOG?</b><p id="cmsg"></p><ul class="diffl" id="clist" hidden></ul>
@@ -205,6 +205,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
 <script src="analyze.js?v=2"></script>
+<script src="lookup.js?v=1"></script>
 <script>
 (function () {
   "use strict";
@@ -257,6 +258,10 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     if (view === "analyze" && window.Analyze) {
       setTabs(); $("lockbtn").hidden = false;
       window.Analyze.show($("app"), { api: api, esc: esc, day: day, n0: n0, n1: n1, toast: toast });
+    } else if (view === "lookup" && window.JobLookup) {
+      setTabs(); $("lockbtn").hidden = false;
+      $("app").innerHTML = '<h3 style="margin-top:16px">JOB LOOKUP</h3><div id="jlhost"></div>';
+      window.JobLookup.mount($("jlhost"), { auth: function () { return { "X-Admin-Code": code() }; }, needCode: false, canTip: false });
     } else { view = "logs"; load(false); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
@@ -413,6 +418,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       var cells = [["Card #", c.work_order], ["Tot Avg Wgt", n0(c.tot_avg_wgt)], ["WO coils", c.wo_coils],
         ["Avg. Wgt.", n0(c.avg_wgt)], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
         ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
+      if (c.start_size || c.heat_no || c.reduction != null) cells.push(["Start size", c.start_size], ["Reduction", c.reduction != null ? c.reduction + "%" : ""], ["Heat #", c.heat_no]);
       if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
       if (c.part || c.tags || c.note) cells.push(["Part #", c.part, "wide"], ["Run conditions", c.tags ? String(c.tags).split(",").join(" + ") : "", "wide"], ["Note", c.note, "wide"]);
       // tracker coils never have the paper-card fields: show only what's filled in

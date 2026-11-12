@@ -543,6 +543,7 @@
   .det-btn { display: block; width: 100%; min-width: 0; min-height: 2.75rem; margin: 0 0 0.5rem; padding: 0.3rem 0.6rem; background: none; border: 1px dashed var(--fg-dim); border-radius: 3px;
              color: var(--fg-dim); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
              touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .det-ra { color: var(--fg); font-size: 0.9rem; margin: -0.3rem 0 0.8rem; min-height: 1em; }
   .det-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; margin: 0 0 0.5rem; }
   .det-row .det-btn { margin: 0; }
   .det-btn.notes { text-align: center; padding: 0.3rem 0.7rem; }
@@ -707,6 +708,7 @@
     <div class="actions">
       <button type="button" class="btn ml-send" id="btn-ml">SEND TO MASTER LOG</button>
       <button type="button" class="btn hist-btn" id="hist-open-2">PAST SHIFTS</button>
+      <button type="button" class="btn hist-btn" id="lookup-open" aria-haspopup="dialog">JOB LOOKUP</button>
       <button type="button" class="btn hist-btn" id="notes-open-2" aria-haspopup="dialog">NOTES ABOUT MY DAY</button>
       <button type="button" class="btn" id="btn-edit">EDIT SETUP</button>
       <button type="button" class="btn warn" id="btn-new">NEW SHIFT</button>
@@ -778,6 +780,7 @@
 </div>
 <script src="/data/config.js"></script>
 <script src="/data/submit.js"></script>
+<script src="/data/lookup.js"></script>
 <script>
 /* =====================================================================
    CALC MODULE - every number on the dashboard comes from Calc.compute().
@@ -1169,12 +1172,29 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
   function cleanDetail(d) {
     d = d && typeof d === "object" ? d : {};
-    var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: trim(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)) };
-    return o.part || o.size || o.grade || o.tags.length || o.note ? o : null;
+    var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: trim(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)),
+      start: normSize(str(d.start, 40)), heat: trim(str(d.heat, 40)) };
+    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.heat ? o : null;
+  }
+  // % area reduction, round wire: (1 - (finish / start)^2) x 100. Sizes in inches; "600" with no point reads as .600.
+  function sizeInch(v) {
+    var t = trim(String(v == null ? "" : v)).toLowerCase().replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/, "");
+    if (!t) return null;
+    var m = /^(\d+)\s*\/\s*(\d+)$/.exec(t);
+    if (m) return +m[2] > 0 && +m[1] / +m[2] < 3 ? +m[1] / +m[2] : null;
+    if (/^\d{2,4}$/.test(t)) return +t / 1000;
+    if (/^\d*\.\d+$|^\d+\.?$/.test(t)) { var n = +t; return n > 0 && n < 3 ? n : null; }
+    return null;
+  }
+  function reductionPct(fin, start) {
+    var a = sizeInch(fin), b = sizeInch(start);
+    return a > 0 && b > 0 && a < b ? Math.round((1 - Math.pow(a / b, 2)) * 1000) / 10 : null;
   }
   function detailText(d, withNote) {
     if (!d) return "";
-    var size = d.size ? d.size + (/^\.?\d/.test(d.size) && !/"$/.test(d.size) ? '"' : "") : "";
+    var q = function (v) { return v ? v + (/^\.?\d/.test(v) && !/"$/.test(v) ? '"' : "") : ""; };
+    var st = d.start || d.startSize || "", size = q(d.size) + (st ? " from " + q(st) : ""), ra = reductionPct(d.size, st);
+    if (ra != null) size += " (" + ra + "% RA)";
     return [d.part, size, d.grade, (d.tags || []).join(" + "), withNote ? d.notes || d.note : ""].filter(Boolean).join(" \u00b7 ");
   }
 
@@ -1221,7 +1241,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var dt = num(c.downtimeMin);
       return { id: str(c.id, 64) || uid("c"), machineId: c.machineId, loggedAt: c.loggedAt, weight: num(c.weight),
         coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500),
-        part: str(c.part, 60), grade: str(c.grade, 40), tags: cleanTags(c.tags),
+        part: str(c.part, 60), grade: str(c.grade, 40), tags: cleanTags(c.tags), startSize: str(c.startSize, 40),
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
     }) : [];
     var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
@@ -1808,6 +1828,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (d.part) rows.push([label + " part #", d.part]);
     if (d.size) rows.push([label + " finish size", d.size + (/^\.?\d/.test(d.size) ? " in" : "")]);
     if (d.grade) rows.push([label + " grade", d.grade]);
+    if (d.start) rows.push([label + " start size", d.start + (/^\.?\d/.test(d.start) ? " in" : "")]);
+    var rr = reductionPct(d.size, d.start); if (rr != null) rows.push([label + " reduction", rr + "%"]);
+    if (d.heat) rows.push([label + " heat # (next coil)", d.heat]);
     if (d.tags && d.tags.length) rows.push([label + " conditions", d.tags.join(" + ")]);
     if (d.note) rows.push([label + " note (next coil)", d.note]);
   }
@@ -1871,14 +1894,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // the one place a new coil is added (machine cards, phone dock)
   function addCoil(machineId, w, extra) {
     var d = extra ? {} : (state.shift.details || {})[machineId] || {};
-    var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
-      size: d.size || "", notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(),
+    var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: d.heat || "",
+      size: d.size || "", startSize: d.start || "", notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(),
       downtimeMin: null, downtimeReason: "" };
     if (extra) {   // a scanned card: its own card #, size and note, and the time the scan page worked out
       c.coilNo = str(extra.coilNo, 40); c.size = str(extra.size, 40); c.notes = str(extra.notes, 300);
       if (isIso(extra.loggedAt)) c.loggedAt = extra.loggedAt;
     }
-    if (d.note) { d.note = ""; if (!cleanDetail(d)) delete state.shift.details[machineId]; }   // the note is for one coil
+    if (d.note || d.heat) { d.note = ""; d.heat = ""; if (!cleanDetail(d)) delete state.shift.details[machineId]; }   // the note and heat # are for one coil
     state.coils.push(c);
     lastLogged[machineId] = c.id;
     save();
@@ -2122,6 +2145,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var ip = f("Part #", "part", "text", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off" });
     var is = f("Finish size (in)", "size", "text", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off" });
     var ig = f("Grade", "grade", "text", { maxlength: "40", placeholder: "Grade", autocomplete: "off" });
+    var iss = f("Start size (in)", "startSize", "text", { maxlength: "40", placeholder: ".750", inputmode: "decimal", autocomplete: "off" });
     var it = tagChips(c.tags, "ce-tag"); var itw = el("div", "field det-full"); itw.style.marginBottom = "0";
     itw.appendChild(el("span", "lbl", "Run conditions")); itw.appendChild(it.el); g.appendChild(itw);
     var idm = f("Downtime min (note only)", "downtimeMin", "number", { inputmode: "numeric", min: "0" });
@@ -2132,10 +2156,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var line = el("div", "adv-line");
     line.appendChild(smallBtn("SAVE", "", function () {
       var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: normSize(is.value), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500),
-        part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: trim(str(ig.value, 40)), tags: it.get() };
+        part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: trim(str(ig.value, 40)), tags: it.get(), startSize: normSize(iss.value) };
       checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
       c.weight = w;
-      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size; c.part = rest.part; c.grade = rest.grade; c.tags = rest.tags;
+      c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size; c.part = rest.part; c.grade = rest.grade; c.tags = rest.tags; c.startSize = rest.startSize;
       c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
       editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
       });
@@ -2664,7 +2688,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     } else if (state.machines.length < 2 && lm.childNodes.length) lm.textContent = "";
     state.machines.forEach(function (m, i) { var b = $("s-log-m-" + i); if (b) { setText(b, m.name); setCls(b, "btn" + (m.id === sSel ? " on" : "")); } });
     var sm = machineById(sSel); setText($("s-log-for"), state.machines.length > 1 && sm ? " · for " + sm.name : "");
-    if (sheetKind && sheetKind !== "panel" && sheetKind !== "menu" && !FORM_SHEETS[sheetKind]) renderSheet(r, now);
+    if (sheetKind && sheetKind !== "panel" && sheetKind !== "menu" && sheetKind !== "lookup" && !FORM_SHEETS[sheetKind]) renderSheet(r, now);
   }
   function sLog() {
     var inp = $("s-log-in"), m = machineById(sSel) || state.machines[0], msg = $("s-log-msg"); if (!m) return;
@@ -2722,6 +2746,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     rows.forEach(function (r) { r[0] = r[0].replace(/^ /, ""); });
     var sf = sizeFlag("Next coils", d, function (to) { d.size = to; save(); paintDet(); if (sheetKind === "details") renderDetails($("sheet-body"), mid); });
     if (sf) flags.push(sf);
+    if (d.start && sizeNoDot(d.start)) { var to2 = sizeFix(d.start); flags.push({ t: "Start size " + d.start + " has no decimal point. Did you mean " + to2 + " in?", fix: ["USE " + to2, function () { d.start = to2; save(); paintDet(); if (sheetKind === "details") renderDetails($("sheet-body"), mid); }] }); }
+    if (d.size && d.start && sizeInch(d.size) != null && sizeInch(d.start) != null && sizeInch(d.start) <= sizeInch(d.size)) flags.push({ t: "Start size " + d.start + " is not bigger than the finish size " + d.size + ". Check them." });
     return { title: "USE THIS FOR THE NEXT COILS?", rows: rows, flags: flags };
   }
   function openSheet(kind, arg) {
@@ -2731,6 +2757,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     armGuard();
     if (kind === "details") detSnap = JSON.stringify((state.shift.details || {})[(machineById(arg) || detMachine() || {}).id] || null);
     if (kind === "menu") { setText($("sheet-close"), "CLOSE"); renderMenu($("sheet-body")); try { $("sheet-box").scrollTop = 0; } catch (e) {} return; }
+    if (kind === "lookup") { setText($("sheet-close"), "CLOSE"); renderLookup($("sheet-body")); try { $("sheet-box").scrollTop = 0; } catch (e) {} return; }
     setText($("sheet-close"), FORM_SHEETS[kind] ? "DONE" : "CLOSE");
     if (FORM_SHEETS[kind]) { (kind === "details" ? renderDetails : renderDayNotes)($("sheet-body"), arg); try { $("sheet-box").scrollTop = 0; } catch (e) {} return; }
     if (kind !== "panel") tick();   // one tick renders the page and the sheet from the same numbers
@@ -2762,6 +2789,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       ["menu-dt", "DOWNTIME", function () { $("dt-open").click(); }],
       ["menu-rc", "RECENT COILS", function () { $("rc-open").click(); }],
       ["menu-hist", "PAST SHIFTS", function () { $("hist-open").click(); }],
+      ["menu-lookup", "JOB LOOKUP", function () { openLookup(); }],
       ["menu-calc", "CALCULATOR", simpleOnly(function () { $("calc-link").click(); })],
       ["menu-scan", "SCAN SHEET (TRYOUT)", simpleOnly(function () { $("scan-link").click(); })],
       "-",
@@ -2822,6 +2850,17 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   $("s-coils-btn").addEventListener("click", function () { openSheet("ran"); });
   $("hist-open").addEventListener("click", openHist);
   $("hist-open-2").addEventListener("click", openHist);
+  /* JOB LOOKUP: everyone's past runs and job tips from the master log (shared /data/lookup.js) */
+  function openLookup() { openSheet("lookup"); }
+  function renderLookup(body) {
+    setText($("sheet-title"), "JOB LOOKUP");
+    body.textContent = "";
+    if (!window.JobLookup) { body.appendChild(el("p", "sh-sub", "Job Lookup didn't load. Open the tracker once with signal.")); return; }
+    var m = detMachine(), d = m ? (state.shift.details || {})[m.id] || {} : {};
+    var host = el("div"); body.appendChild(host);
+    JobLookup.mount(host, { needCode: true, canTip: true, prefill: { size: d.size || "", grade: d.grade || "", start: d.start || "", machine: m ? m.name : "" } });
+  }
+  $("lookup-open").addEventListener("click", openLookup);
   $("s-ran-btn").addEventListener("click", function () { openSheet("ran"); });
   $("s-status").addEventListener("click", function () { openSheet("delta"); });
   $("s-proj").addEventListener("click", function () { openSheet("proj"); });
@@ -2994,22 +3033,30 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var form = el("div", "det-form"); form.style.marginTop = "0.75rem";
     var ip = input("text", "det-part", cur.part || "", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
     var is = input("text", "det-size", cur.size || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
-    var ig = input("text", "det-grade", cur.grade || "", { maxlength: "40", placeholder: "Grade", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "done" });
+    var ig = input("text", "det-grade", cur.grade || "", { maxlength: "40", placeholder: "Grade", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
+    var ist = input("text", "det-start", cur.start || "", { maxlength: "40", placeholder: ".750", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
+    var ih = input("text", "det-heat", cur.heat || "", { maxlength: "40", placeholder: "Heat #", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "done" });
+    var ra = el("p", "det-ra"); ra.id = "det-ra";
+    var paintRa = function () { var r = reductionPct(is.value, ist.value); setText(ra, r != null ? "Area reduction " + ist.value.trim() + " to " + is.value.trim() + ": " + r + "%" : (is.value.trim() && ist.value.trim() ? "Start size should be bigger than the finish size." : "")); };
     var it = tagChips(cur.tags, "det-tag-");
     var ino = el("textarea", "in"); ino.id = "det-note"; ino.rows = 2; ino.maxLength = 300; ino.placeholder = "Only goes on the next coil"; ino.value = cur.note || "";
     form.appendChild(field("Part #", ip));
     var r2 = el("div", "row2"); r2.appendChild(field("Finish size (in)", is)); r2.appendChild(field("Grade", ig)); form.appendChild(r2);
+    var r3 = el("div", "row2"); r3.appendChild(field("Start (rod) size (in)", ist)); r3.appendChild(field("Heat # (next coil)", ih)); form.appendChild(r3);
+    form.appendChild(ra); paintRa();
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Run conditions")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
     form.appendChild(field("Note", ino));
     body.appendChild(form);
     var put = function () {
-      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value });
+      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, heat: ih.value });
       if (!state.shift.details) state.shift.details = {};
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
       save(); paintDet();
     };
-    [ip, is, ig, ino].forEach(function (x) { x.addEventListener("input", put); });
+    [ip, is, ig, ino, ist, ih].forEach(function (x) { x.addEventListener("input", put); });
+    [is, ist].forEach(function (x) { x.addEventListener("input", paintRa); });
     is.addEventListener("blur", function () { var v = normSize(is.value); if (v !== is.value) { is.value = v; put(); } });
+    ist.addEventListener("blur", function () { var v = normSize(ist.value); if (v !== ist.value) { ist.value = v; put(); } });
     it.el.onchange2 = put;
     var clr = el("button", "btn warn sh-btn", "CLEAR ALL"); clr.type = "button"; clr.id = "det-clear";
     clr.addEventListener("click", function () { if (state.shift.details) delete state.shift.details[m.id]; save(); paintDet(); renderDetails(body, m.id); });
@@ -3321,7 +3368,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var coils = st.coils.slice().sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }).slice(0, ML_COIL_MAX).map(function (c) {
       var m = (byId[c.machineId] || {}).m;
       return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? machineDraw(m) : null,
-        finish: str(c.size || "", 40), grade: str(c.grade || "", 40), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300) };
+        finish: str(c.size || "", 40), grade: str(c.grade || "", 40), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300),
+        start_size: str(c.startSize || "", 40), heat_no: str(c.heatNo || "", 40), reduction: reductionPct(c.size, c.startSize) };
     });
     var downtime = [], problems = [];
     st.downtime.slice().sort(function (a, b) { return Date.parse(a.startAt) - Date.parse(b.startAt); }).forEach(function (d) {
