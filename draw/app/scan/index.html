@@ -119,7 +119,7 @@ details>summary{min-height:48px;display:flex;align-items:center;cursor:pointer;c
 .sheet{background:var(--bg);border:1px solid var(--fg);border-bottom:0;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;padding:14px 14px calc(18px + env(safe-area-inset-bottom))}
 .sheet .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
 .sheet .top b{color:var(--white);font-size:17px}
-.sheet .big{font-size:34px;color:var(--fg);margin:4px 0 8px;text-shadow:0 0 10px rgba(57,255,106,.5)}
+.sheet .big:not(button){font-size:34px;color:var(--fg);margin:4px 0 8px;text-shadow:0 0 10px rgba(57,255,106,.5)}
 ol.math{padding-left:26px;margin:8px 0}
 ol.math li{margin:0 0 12px;line-height:1.4;color:var(--white);font-size:17px;overflow-wrap:anywhere}
 ol.math li.bad{color:var(--red);font-weight:bold}

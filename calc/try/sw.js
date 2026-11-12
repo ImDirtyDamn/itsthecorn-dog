@@ -1,5 +1,5 @@
 // Offline cache for the Production Log tryout (scope: /calc/try/ only).
-var CACHE = "draw-calc-try-v12";
+var CACHE = "draw-calc-try-v13";
 var FILES = ["./", "./index.html", "/data/config.js", "/data/submit.js", "/data/fields.js", "/data/scan.js"];   // the tracker registers this too, so it works offline even if never opened
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
