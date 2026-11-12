@@ -803,7 +803,9 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
 
   function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 1800); }
   function inp(id, val, ph, attrs) {
-    return '<input id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) + '" autocomplete="off" ' + (attrs || 'inputmode="decimal"') + '>';
+    attrs = attrs || 'inputmode="decimal"';
+    if (/inputmode="numeric"/.test(attrs) && !/pattern=/.test(attrs)) attrs += ' pattern="[0-9]*"';   // whole counts: number keypad on iPhone too
+    return '<input id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) + '" autocomplete="off" ' + attrs + '>';
   }
   function field(label, id, val, ph, attrs, hint) {
     return '<div class="f"><label for="' + id + '">' + label + '</label>' + inp(id, val, ph, attrs) + (hint ? '<span class="hint">' + hint + '</span>' : "") + '</div>';
@@ -899,7 +901,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   var Q = { avg: "", tot: "", coils: "", ran: "", lbs: "", hrs: "", min: "", scan: null };
   function qfield(label, id, val, ph, mode, sub) {
     return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in" type="text" id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) +
-      '" autocomplete="off" inputmode="' + (mode || "decimal") + '" enterkeyhint="done">' + (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
+      '" autocomplete="off" inputmode="' + (mode || "decimal") + '"' + (mode === "numeric" ? ' pattern="[0-9]*"' : "") + ' enterkeyhint="done">' + (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
   }
   /* One smart line: "12000 / 3", "12,000 lb 3 coils", "3 coils 12000" (total and coil count)
      or "4400 4250 3800" / "4400, 4250, 3800" / "4400+4250" (a list of coil weights). */
@@ -1176,8 +1178,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       html += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + (S.rows.length > 1 ? '<button class="xbtn" type="button" data-delrow="' + i + '" aria-label="Remove card ' + (i + 1) + '">&times;</button>' : "") + '</div>' +
         field("Card #", "r" + i + "-card", r.card, "card number", 'inputmode="numeric"') +
         (r.actualWeights && r.actualWeights.length ? '<p class="muted">' + (r.fromScan ? "From the sheet: " : "From the tracker: ") + r.actualWeights.length + ' weighed ' + (r.actualWeights.length === 1 ? "coil" : "coils") + '. ' + esc(r.note || "") + '</p>' :
-        r.avgWgt !== undefined && r.avgWgt !== "" ? field("Avg. Wgt. (lb, from the sheet)", "r" + i + "-avgWgt", r.avgWgt, "avg weight", 'inputmode="numeric"') :
-        field("Work order Tot Avg Wgt (lb)", "r" + i + "-woTotal", r.woTotal, "Tot Avg Wgt", 'inputmode="numeric"') +
+        r.avgWgt !== undefined && r.avgWgt !== "" ? field("Avg. Wgt. (lb, from the sheet)", "r" + i + "-avgWgt", r.avgWgt, "avg weight", 'inputmode="decimal"') :
+        field("Work order Tot Avg Wgt (lb)", "r" + i + "-woTotal", r.woTotal, "Tot Avg Wgt", 'inputmode="decimal"') +
         field("Coils on the work order", "r" + i + "-woCoils", r.woCoils, "work order coils", 'inputmode="numeric"')) +
         '<div class="grid2">' + field("Coils IN", "r" + i + "-coilsDrawn", r.coilsDrawn, "coils in") +
         field("Coils OUT", "r" + i + "-coilsOut", r.coilsOut, "coils out") + '</div>' +
@@ -1353,7 +1355,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     html += '<h2>Breaks</h2>';
     S.breaks.forEach(function (b, i) {
       html += '<div class="break-row">' + tfield("Break " + (i + 1) + " start", "b" + i + "-start", b.start) +
-        '<div class="field"><label class="lbl" for="b' + i + '-min">Minutes</label><input class="in" type="number" id="b' + i + '-min" value="' + esc(b.minutes) + '" placeholder="min" inputmode="numeric" min="1" step="5"></div>' +
+        '<div class="field"><label class="lbl" for="b' + i + '-min">Minutes</label><input class="in" type="number" id="b' + i + '-min" value="' + esc(b.minutes) + '" placeholder="min" inputmode="numeric" pattern="[0-9]*" min="1" step="5"></div>' +
         '<button type="button" class="btn warn" data-delbrk="' + i + '" aria-label="Remove break ' + (i + 1) + '">X</button></div>';
     });
     html += '<button class="big" id="add-brk" type="button">+ ADD BREAK</button>';

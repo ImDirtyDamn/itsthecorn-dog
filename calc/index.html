@@ -148,8 +148,8 @@ body.noscroll{overflow:hidden}
 <div class="panel quick" id="quick">
   <h2>QUICK: AVG COIL WEIGHT</h2>
   <div class="grid2">
-    <div class="f"><label for="q-tot">Card total lb</label><input id="q-tot" inputmode="numeric" autocomplete="off" placeholder="card total lb"></div>
-    <div class="f"><label for="q-coils">Coils on card</label><input id="q-coils" inputmode="numeric" autocomplete="off" placeholder="coils on card"></div>
+    <div class="f"><label for="q-tot">Card total lb</label><input id="q-tot" inputmode="decimal" autocomplete="off" placeholder="card total lb"></div>
+    <div class="f"><label for="q-coils">Coils on card</label><input id="q-coils" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="coils on card"></div>
   </div>
   <div class="f"><label for="q-ran">Coils I ran (optional)</label>
     <div class="stepper"><button id="q-minus" type="button" aria-label="One less coil">&minus;</button><input id="q-ran" inputmode="decimal" autocomplete="off" placeholder="coils ran"><button id="q-plus" type="button" aria-label="One more coil">+</button></div>

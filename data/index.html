@@ -94,6 +94,7 @@ details.filters>summary span{color:var(--fg-dim);font-weight:normal;font-size:13
 .muted{color:var(--fg-dim)}
 .msg{padding:10px 12px;border:1px solid var(--amber);color:var(--amber);margin:10px 0}
 .msg.bad{border-color:var(--red);color:var(--red)}
+.msg .pick{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}.msg .pick .big{margin:0;color:var(--fg)}
 .lock{margin-top:40px}
 .lock p{color:var(--fg-dim);line-height:1.45}
 .overlay{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:20;padding:0 14px calc(30px + env(safe-area-inset-bottom))}
@@ -205,7 +206,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
 <script src="analyze.js?v=2"></script>
-<script src="lookup.js?v=1"></script>
+<script src="lookup.js?v=2"></script>
 <script>
 (function () {
   "use strict";
@@ -418,7 +419,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       var cells = [["Card #", c.work_order], ["Tot Avg Wgt", n0(c.tot_avg_wgt)], ["WO coils", c.wo_coils],
         ["Avg. Wgt.", n0(c.avg_wgt)], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
         ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
-      if (c.start_size || c.heat_no || c.reduction != null) cells.push(["Start size", c.start_size], ["Reduction", c.reduction != null ? c.reduction + "%" : ""], ["Heat #", c.heat_no]);
+      if (c.start_size || c.reduction != null || c.shape === "shape") cells.push(["Start size", c.start_size], ["Reduction", c.reduction != null ? c.reduction + "%" : ""], ["Draw type", c.shape === "shape" ? "Shape" : "Round"]);
       if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
       if (c.part || c.tags || c.note) cells.push(["Part #", c.part, "wide"], ["Run conditions", c.tags ? String(c.tags).split(",").join(" + ") : "", "wide"], ["Note", c.note, "wide"]);
       // tracker coils never have the paper-card fields: show only what's filled in
@@ -494,7 +495,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     d.coils.forEach(function (c, i) {
       h += '<div class="edrow"><div class="edhead"><span>COIL ' + (i + 1) + '</span></div><div class="row2">' +
         fld("Weight (lb)", "ed-cw-" + i, c.weight, 'type="text" inputmode="decimal" autocomplete="off"') + fld("Machine", "ed-cm-" + i, c.machine, 'type="text" maxlength="30" autocomplete="off"') + '</div>' +
-        '<div class="row2">' + fld("Part #", "ed-cp-" + i, c.part, 'type="text" maxlength="60" autocomplete="off"') + fld("Finish size", "ed-cf-" + i, c.finish, 'type="text" maxlength="40" autocomplete="off"') + '</div>' +
+        '<div class="row2">' + fld("Part #", "ed-cp-" + i, c.part, 'type="text" maxlength="60" autocomplete="off"') + fld("Finish size (in)", "ed-cf-" + i, c.finish, 'type="text" inputmode="decimal" maxlength="40" autocomplete="off"') + '</div>' +
         fld("Note", "ed-cn-" + i, c.note, 'type="text" maxlength="300" autocomplete="off"') +
         '<button type="button" class="warn rm" data-rmc="' + i + '">REMOVE THIS COIL</button></div>';
     });
@@ -502,7 +503,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     h += '<h3>Downtime (' + d.downtime.length + ')</h3>';
     d.downtime.forEach(function (x, i) {
       h += '<div class="edrow"><div class="row2">' + fld("Machine (blank = all)", "ed-dm-" + i, x.machine, 'type="text" maxlength="30" autocomplete="off"') +
-        fld("Minutes", "ed-dn-" + i, x.minutes, 'type="text" inputmode="decimal" autocomplete="off"') + '</div>' +
+        fld("Minutes", "ed-dn-" + i, x.minutes, 'type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"') + '</div>' +
         fld("Reason", "ed-dr-" + i, x.reason, 'type="text" maxlength="300" autocomplete="off"') +
         '<button type="button" class="warn rm" data-rmd="' + i + '">REMOVE THIS DOWNTIME</button></div>';
     });
@@ -557,6 +558,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       if (w !== "" && (!c.orig || c.orig.coils_in === 1 || c.orig.avg_wgt === oldW)) { o.avg_wgt = +w; if (!c.orig) o.coils_in = 1; }
       if ((c.orig ? c.orig.machine || "" : "") !== c.machine.trim()) { o.machine = c.machine.trim(); delete o.draw; }
       o.part = c.part.trim(); o.finish = c.finish.trim(); o.note = c.note.trim();
+      if (o.finish !== (c.orig ? c.orig.finish || "" : "") && sizeAmbig(o.finish) && c.keep !== o.finish) return { err: "Coil " + (i + 1) + ": finish size " + o.finish + " has no decimal point. Which did you mean?", pick: i };
       if (c.orig && c.orig.weight === null && o.weight === null) delete o.weight;
       Object.keys(o).forEach(function (k) { if (o[k] === null || o[k] === undefined) delete o[k]; });
       if (!c.orig) ch.push("Added coil " + (i + 1) + ": " + n1(o.weight) + " lb" + (o.machine ? " on " + o.machine : ""));
@@ -616,8 +618,28 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       edited: { by: "supervisor", at: new Date().toISOString(), from: L.id, changes: ch.slice(0, 60) } });
     return { body: body, changes: ch };
   }
+  // Sizes are inches. A whole number of 10 or more with no point ("600", "1250") isn't guessed: pick what was meant.
+  function sizeBare(v) { return String(v == null ? "" : v).trim().replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, ""); }
+  function sizeAmbig(v) { var t = sizeBare(v); return /^\d+$/.test(t) && +t >= 10; }
+  function sizeChoices(v) {
+    var t = sizeBare(v), n = +t, out = [];
+    out.push(t.length >= 3 ? (n / 1000).toFixed(3).replace(/^0\./, ".") : "." + t);
+    if (n >= 100) out.push((n / 100).toFixed(2));
+    return out;
+  }
   function reviewEdit() {
     var r = buildEdit();
+    if (r.err && r.pick != null) {
+      var c = editing.d.coils[r.pick], v = c.finish.trim();
+      $("ed-err").innerHTML = '<div class="msg bad" role="alert">' + esc(r.err) + '<div class="pick">' +
+        sizeChoices(v).map(function (x) { return '<button type="button" class="big" data-pk="' + esc(x) + '">' + esc(x) + ' in</button>'; }).join("") +
+        '<button type="button" class="big" data-pk="">Keep ' + esc(v) + '</button></div></div>';
+      Array.prototype.forEach.call($("ed-err").querySelectorAll("[data-pk]"), function (b) {
+        b.onclick = function () { var x = b.getAttribute("data-pk"); if (x) { c.finish = x; var f = $("ed-cf-" + r.pick); if (f) f.value = x; } else c.keep = v; reviewEdit(); };
+      });
+      $("ed-err").scrollIntoView({ block: "center" });
+      return;
+    }
     if (r.err) { edErr(r.err); return; }
     edErr("");
     if (!r.changes.length) { edErr("Nothing changed yet."); return; }

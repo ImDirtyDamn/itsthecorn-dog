@@ -544,6 +544,12 @@
              color: var(--fg-dim); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
              touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .det-ra { color: var(--fg); font-size: 0.9rem; margin: -0.3rem 0 0.8rem; min-height: 1em; }
+  .det-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .det-seg button { min-height: 3rem; background: #000; color: var(--fg); border: 2px solid var(--fg-dim); font: inherit; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
+  .det-seg button[aria-pressed="true"] { background: var(--fg); color: #000; border-color: var(--fg); }
+  .field[hidden] { display: none !important; }
+  .cfd-need { color: var(--amber); margin: 0.5rem 0 0; }
+  #cfd-yes:disabled { opacity: 0.4; }
   .det-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; margin: 0 0 0.5rem; }
   .det-row .det-btn { margin: 0; }
   .det-btn.notes { text-align: center; padding: 0.3rem 0.7rem; }
@@ -1165,36 +1171,54 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return out;
   }
   // finish size as typed, tidied: 0.600 / .600" / .600 in  ->  .600
+  // sizes are saved as typed (".600", "0.6", "1.250"); only spaces and a trailing inch mark come off
   function normSize(v) {
-    var t = trim(v).replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, "");
-    if (/^0?\.\d+$/.test(t)) t = t.replace(/^0/, "");
-    return t.slice(0, 40);
+    return trim(v).replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, "").slice(0, 40);
   }
   function cleanDetail(d) {
     d = d && typeof d === "object" ? d : {};
     var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: trim(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)),
-      start: normSize(str(d.start, 40)), heat: trim(str(d.heat, 40)) };
-    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.heat ? o : null;
+      start: normSize(str(d.start, 40)) };
+    if (d.shape === "shape") { o.shape = "shape"; var r = redNum(d.red); if (r != null) o.red = r; }
+    if (o.size && d.sizeKeep === o.size) o.sizeKeep = o.size;     // "Keep 600": the operator said so; don't ask again
+    if (o.start && d.startKeep === o.start) o.startKeep = o.start;
+    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.shape ? o : null;
   }
-  // % area reduction, round wire: (1 - (finish / start)^2) x 100. Sizes in inches; "600" with no point reads as .600.
+  function redNum(v) { var t = String(v == null ? "" : v).trim(); if (!t) return null; var n = Number(t); return isFinite(n) && n > 0 && n < 100 ? Math.round(n * 10) / 10 : null; }
+  // % area reduction, round draws: (1 - (finish / start)^2) x 100. Sizes are inches: ".600", "0.6", "1.250"; a whole
+  // number 1 to 9 is inches. A whole number of 10 or more with no point ("600", "1250") isn't guessed (see sizeAmbig).
+  function sizeBare(v) { return trim(String(v == null ? "" : v)).toLowerCase().replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/, ""); }
   function sizeInch(v) {
-    var t = trim(String(v == null ? "" : v)).toLowerCase().replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/, "");
+    var t = sizeBare(v);
     if (!t) return null;
     var m = /^(\d+)\s*\/\s*(\d+)$/.exec(t);
-    if (m) return +m[2] > 0 && +m[1] / +m[2] < 3 ? +m[1] / +m[2] : null;
-    if (/^\d{2,4}$/.test(t)) return +t / 1000;
-    if (/^\d*\.\d+$|^\d+\.?$/.test(t)) { var n = +t; return n > 0 && n < 3 ? n : null; }
+    if (m) return +m[2] > 0 && +m[1] / +m[2] < 30 ? +m[1] / +m[2] : null;
+    if (/^\d+$/.test(t)) return +t >= 1 && +t <= 9 ? +t : null;
+    if (/^\d*\.\d+$|^\d+\.$/.test(t)) { var n = +t; return n > 0 && n < 30 ? n : null; }
     return null;
+  }
+  function sizeAmbig(v) { var t = sizeBare(v); return /^\d+$/.test(t) && +t >= 10; }
+  function sizeChoices(v) {
+    var t = sizeBare(v), n = +t, out = [];
+    out.push(t.length >= 3 ? (n / 1000).toFixed(3).replace(/^0\./, ".") : "." + t);
+    if (n >= 100) out.push((n / 100).toFixed(2));
+    return out;
   }
   function reductionPct(fin, start) {
     var a = sizeInch(fin), b = sizeInch(start);
     return a > 0 && b > 0 && a < b ? Math.round((1 - Math.pow(a / b, 2)) * 1000) / 10 : null;
   }
+  // details or a coil: round = worked out from the sizes; shape = only the % the operator typed (or nothing)
+  function reductionFor(d) {
+    if (!d) return null;
+    return d.shape === "shape" ? redNum(d.red) : reductionPct(d.size, d.start != null ? d.start : d.startSize);
+  }
   function detailText(d, withNote) {
     if (!d) return "";
     var q = function (v) { return v ? v + (/^\.?\d/.test(v) && !/"$/.test(v) ? '"' : "") : ""; };
-    var st = d.start || d.startSize || "", size = q(d.size) + (st ? " from " + q(st) : ""), ra = reductionPct(d.size, st);
+    var st = d.start || d.startSize || "", size = q(d.size) + (st ? " from " + q(st) : ""), ra = reductionFor({ size: d.size, start: st, shape: d.shape, red: d.red });
     if (ra != null) size += " (" + ra + "% RA)";
+    if (d.shape === "shape") size = ("SHAPE " + size).trim();
     return [d.part, size, d.grade, (d.tags || []).join(" + "), withNote ? d.notes || d.note : ""].filter(Boolean).join(" \u00b7 ");
   }
 
@@ -1242,6 +1266,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       return { id: str(c.id, 64) || uid("c"), machineId: c.machineId, loggedAt: c.loggedAt, weight: num(c.weight),
         coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500),
         part: str(c.part, 60), grade: str(c.grade, 40), tags: cleanTags(c.tags), startSize: str(c.startSize, 40),
+        shape: c.shape === "shape" ? "shape" : "", red: c.shape === "shape" ? redNum(c.red) : null,
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
     }) : [];
     var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
@@ -1403,6 +1428,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     i.type = type; if (id) i.id = id;
     if (value != null) i.value = value;
     if (attrs) for (var k in attrs) if (attrs.hasOwnProperty(k)) i.setAttribute(k, attrs[k]);
+    if (attrs && attrs.inputmode === "numeric" && !attrs.pattern) i.setAttribute("pattern", "[0-9]*");   // whole counts: number keypad on iPhone too
     return i;
   }
 
@@ -1634,8 +1660,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var rf = rateFlag(m.draw ? "Draw " + m.draw : lab, m.needRate); if (rf) flags.push({ t: rf });
       if (m.id && det[m.id]) {
         detRows(rows, m.draw ? "Draw " + m.draw : lab, det[m.id]);
-        var sf = sizeFlag(m.draw ? "Draw " + m.draw : lab, det[m.id], function (to) { det[m.id].size = to; save(); paintDet(); });
-        if (sf) flags.push(sf);
+        sizeFlags(m.draw ? "Draw " + m.draw : lab, det[m.id], function () { save(); paintDet(); }).forEach(function (f) { flags.push(f); });
       }
     });
     if (d.operator) rows.push(["Operator", d.operator]);
@@ -1797,15 +1822,19 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     (spec.flags || []).forEach(function (f, i) {
       var b = el("div", "cfd-flag"); b.appendChild(el("div", null, f.t));
       if (f.fix) { var x = el("button", "btn", f.fix[0]); x.type = "button"; x.id = "cfd-fix-" + i; x.addEventListener("click", function () { f.fix[1](); paintCfd(); }); b.appendChild(x); }
+      (f.fixes || []).forEach(function (fx, j) { var y = el("button", "btn", fx[0]); y.type = "button"; y.id = "cfd-fix-" + i + "-" + j; y.addEventListener("click", function () { fx[1](); paintCfd(); }); b.appendChild(y); });
       fl.appendChild(b);
     });
+    var need = (spec.flags || []).some(function (f) { return f.need; });
+    $("cfd-yes").disabled = need;
+    if (need) fl.appendChild(el("p", "cfd-need", "Pick one of the sizes above to go on."));
     if (!(spec.flags || []).length) fl.appendChild(el("p", "cfd-ok", "Nothing looks off. Check it and tap Confirm."));
   }
   function closeCfd(ok) {
     var c = cfdOpen; cfdOpen = null; $("cfd").hidden = true;
     if (c) { if (ok) { if (c.yes) c.yes(); } else if (c.no) c.no(); }
   }
-  $("cfd-yes").addEventListener("click", function () { closeCfd(true); });
+  $("cfd-yes").addEventListener("click", function () { if (!$("cfd-yes").disabled) closeCfd(true); });
   $("cfd-no").addEventListener("click", function () { closeCfd(false); });
   document.addEventListener("keydown", function (e) { if (cfdOpen && e.key === "Escape") { e.preventDefault(); closeCfd(false); } });
   // flags shared by setup and part/size/conditions
@@ -1816,21 +1845,42 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (rate > RATE_HIGH) return name + ": " + fmtInt(rate) + " lb/hr is very high for a draw machine (usual is " + fmtInt(RATE_LOW) + " to " + fmtInt(RATE_HIGH) + " lb/hr). Check it.";
     return "";
   }
-  function sizeNoDot(v) { return /^\d{2,4}$/.test(String(v || "").replace(/\s*(?:"|in\.?)$/i, "")); }
-  function sizeFix(v) { return "." + String(v).replace(/\s*(?:"|in\.?)$/i, ""); }
-  function sizeFlag(name, d, apply) {
-    if (!d || !d.size || !sizeNoDot(d.size)) return null;
-    var to = sizeFix(d.size);
-    return { t: name + ": finish size " + d.size + " has no decimal point. Did you mean " + to + " in?", fix: ["USE " + to, function () { apply(to); }] };
+  // a size typed with no point (600, 1250): one tap to say what it is; nothing is saved until one is picked
+  function ambFlag(text, v, use, keep) {
+    return { t: text + " " + v + " has no decimal point. Which did you mean?", need: true,
+      fixes: sizeChoices(v).map(function (x) { return [x + " in", function () { use(x); }]; }).concat([["Keep " + v, keep]]) };
+  }
+  // flags for the finish and start size in a details set (setup and details confirm)
+  function sizeFlags(name, d, after) {
+    var out = [];
+    if (!d) return out;
+    if (d.size && sizeAmbig(d.size) && d.sizeKeep !== d.size) out.push(ambFlag(name + ": finish size", d.size, function (x) { d.size = x; after(); }, function () { d.sizeKeep = d.size; after(); }));
+    if (d.start && sizeAmbig(d.start) && d.startKeep !== d.start) out.push(ambFlag(name + ": start size", d.start, function (x) { d.start = x; after(); }, function () { d.startKeep = d.start; after(); }));
+    if (d.shape !== "shape" && d.size && d.start && sizeInch(d.size) != null && sizeInch(d.start) != null && sizeInch(d.start) <= sizeInch(d.size))
+      out.push({ t: name + ": start size " + d.start + " is not bigger than the finish size " + d.size + ". Check them." });
+    return out;
+  }
+  // coil editors: ask about any changed size with no point before saving; then done()
+  function pickSizes(items, done) {
+    var kept = {};
+    var open = function () { return items.filter(function (it, i) { return it.v && it.v !== it.old && sizeAmbig(it.v) && !kept[i]; }); };
+    if (!open().length) { done(); return; }
+    dataConfirm(function () {
+      var flags = [];
+      items.forEach(function (it, i) {
+        if (it.v && it.v !== it.old && sizeAmbig(it.v) && !kept[i]) flags.push(ambFlag(it.label, it.v, function (x) { it.v = x; }, function () { kept[i] = 1; }));
+      });
+      return { title: "WHICH SIZE?", rows: items.filter(function (it) { return it.v; }).map(function (it) { return [it.label, it.v + (sizeInch(it.v) != null ? " in" : "")]; }), flags: flags };
+    }, function () { done(); }, function () {});
   }
   function detRows(rows, label, d) {
     if (!d) return;
     if (d.part) rows.push([label + " part #", d.part]);
-    if (d.size) rows.push([label + " finish size", d.size + (/^\.?\d/.test(d.size) ? " in" : "")]);
+    if (d.size) rows.push([label + " finish size", d.size + (sizeInch(d.size) != null ? " in" : "")]);
     if (d.grade) rows.push([label + " grade", d.grade]);
-    if (d.start) rows.push([label + " start size", d.start + (/^\.?\d/.test(d.start) ? " in" : "")]);
-    var rr = reductionPct(d.size, d.start); if (rr != null) rows.push([label + " reduction", rr + "%"]);
-    if (d.heat) rows.push([label + " heat # (next coil)", d.heat]);
+    rows.push([label + " draw type", d.shape === "shape" ? "Shape" : "Round"]);
+    if (d.start) rows.push([label + " start size", d.start + (sizeInch(d.start) != null ? " in" : "")]);
+    var rr = reductionFor(d); if (rr != null) rows.push([label + " reduction", rr + "%" + (d.shape === "shape" ? " (typed)" : "")]);
     if (d.tags && d.tags.length) rows.push([label + " conditions", d.tags.join(" + ")]);
     if (d.note) rows.push([label + " note (next coil)", d.note]);
   }
@@ -1894,14 +1944,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // the one place a new coil is added (machine cards, phone dock)
   function addCoil(machineId, w, extra) {
     var d = extra ? {} : (state.shift.details || {})[machineId] || {};
-    var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: d.heat || "",
-      size: d.size || "", startSize: d.start || "", notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(),
+    var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "",
+      size: d.size || "", startSize: d.start || "", shape: d.shape === "shape" ? "shape" : "", red: d.shape === "shape" && d.red != null ? d.red : null, notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(),
       downtimeMin: null, downtimeReason: "" };
     if (extra) {   // a scanned card: its own card #, size and note, and the time the scan page worked out
       c.coilNo = str(extra.coilNo, 40); c.size = str(extra.size, 40); c.notes = str(extra.notes, 300);
       if (isIso(extra.loggedAt)) c.loggedAt = extra.loggedAt;
     }
-    if (d.note || d.heat) { d.note = ""; d.heat = ""; if (!cleanDetail(d)) delete state.shift.details[machineId]; }   // the note and heat # are for one coil
+    if (d.note) { d.note = ""; if (!cleanDetail(d)) delete state.shift.details[machineId]; }   // the note is for one coil
     state.coils.push(c);
     lastLogged[machineId] = c.id;
     save();
@@ -2158,10 +2208,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var rest = { coilNo: str(icn.value, 40), heatNo: str(ih.value, 40), size: normSize(is.value), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500),
         part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: trim(str(ig.value, 40)), tags: it.get(), startSize: normSize(iss.value) };
       checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
+      var sz = { label: "Finish size", v: rest.size, old: c.size || "" }, ss = { label: "Start size", v: rest.startSize, old: c.startSize || "" };
+      pickSizes([sz, ss], function () {
+      rest.size = sz.v; rest.startSize = ss.v;
       c.weight = w;
       c.coilNo = rest.coilNo; c.heatNo = rest.heatNo; c.size = rest.size; c.part = rest.part; c.grade = rest.grade; c.tags = rest.tags; c.startSize = rest.startSize;
       c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
       editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
+      });
       });
     }));
     line.appendChild(smallBtn("DELETE COIL", "warn", function () {
@@ -2563,10 +2617,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         var bs = el("div", "rc-btns");
         var sv = smallBtn("SAVE", "solid", function () {
           checkCoilWeight(wi.value, wi, function (msg) { setText(er, msg); }, function (w) {
-            c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
-            c.part = trim(str(rp.value, 60)).replace(/\s+/g, " "); c.size = normSize(rs.value); c.grade = trim(str(rg.value, 40));
-            c.tags = rt.get(); c.notes = trim(str(rn.value, 300));
-            rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
+            var sz = { label: "Finish size", v: normSize(rs.value), old: c.size || "" };
+            pickSizes([sz], function () {
+              c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
+              c.part = trim(str(rp.value, 60)).replace(/\s+/g, " "); c.size = sz.v; c.grade = trim(str(rg.value, 40));
+              c.tags = rt.get(); c.notes = trim(str(rn.value, 300));
+              rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
+            });
           });
         }); sv.id = "rc-save-" + k;
         var cx = smallBtn("CANCEL", "", function () { rcEdit = null; renderRecent(); });
@@ -2744,10 +2801,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (state.machines.length > 1) rows.push(["Machine", m.name || ""]);
     detRows(rows, "", d);
     rows.forEach(function (r) { r[0] = r[0].replace(/^ /, ""); });
-    var sf = sizeFlag("Next coils", d, function (to) { d.size = to; save(); paintDet(); if (sheetKind === "details") renderDetails($("sheet-body"), mid); });
-    if (sf) flags.push(sf);
-    if (d.start && sizeNoDot(d.start)) { var to2 = sizeFix(d.start); flags.push({ t: "Start size " + d.start + " has no decimal point. Did you mean " + to2 + " in?", fix: ["USE " + to2, function () { d.start = to2; save(); paintDet(); if (sheetKind === "details") renderDetails($("sheet-body"), mid); }] }); }
-    if (d.size && d.start && sizeInch(d.size) != null && sizeInch(d.start) != null && sizeInch(d.start) <= sizeInch(d.size)) flags.push({ t: "Start size " + d.start + " is not bigger than the finish size " + d.size + ". Check them." });
+    sizeFlags("Next coils", d, function () { save(); paintDet(); if (sheetKind === "details") renderDetails($("sheet-body"), mid); }).forEach(function (f) { flags.push(f); });
     return { title: "USE THIS FOR THE NEXT COILS?", rows: rows, flags: flags };
   }
   function openSheet(kind, arg) {
@@ -2858,7 +2912,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (!window.JobLookup) { body.appendChild(el("p", "sh-sub", "Job Lookup didn't load. Open the tracker once with signal.")); return; }
     var m = detMachine(), d = m ? (state.shift.details || {})[m.id] || {} : {};
     var host = el("div"); body.appendChild(host);
-    JobLookup.mount(host, { needCode: true, canTip: true, prefill: { size: d.size || "", grade: d.grade || "", start: d.start || "", machine: m ? m.name : "" } });
+    JobLookup.mount(host, { needCode: true, canTip: true, prefill: { size: d.size || "", grade: d.grade || "", start: d.start || "", shape: d.size || d.start || d.shape ? (d.shape === "shape" ? "shape" : "round") : "", red: d.shape === "shape" && d.red != null ? String(d.red) : "", machine: m ? m.name : "" } });
   }
   $("lookup-open").addEventListener("click", openLookup);
   $("s-ran-btn").addEventListener("click", function () { openSheet("ran"); });
@@ -3035,26 +3089,39 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var is = input("text", "det-size", cur.size || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var ig = input("text", "det-grade", cur.grade || "", { maxlength: "40", placeholder: "Grade", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
     var ist = input("text", "det-start", cur.start || "", { maxlength: "40", placeholder: ".750", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
-    var ih = input("text", "det-heat", cur.heat || "", { maxlength: "40", placeholder: "Heat #", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "done" });
+    var shape = cur.shape === "shape" ? "shape" : "round";
+    var ird = input("text", "det-red", cur.red != null ? String(cur.red) : "", { maxlength: "5", placeholder: "30", inputmode: "decimal", autocomplete: "off", enterkeyhint: "done" });
+    var seg = el("div", "det-seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Draw type");
+    var segBtns = ["round", "shape"].map(function (v) {
+      var b = el("button", null, v.toUpperCase()); b.type = "button"; b.id = "det-shape-" + v; b.setAttribute("aria-pressed", String(shape === v));
+      b.addEventListener("click", function () { shape = v; segBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); redW.hidden = shape !== "shape"; paintRa(); put(); });
+      seg.appendChild(b); return b;
+    });
     var ra = el("p", "det-ra"); ra.id = "det-ra";
-    var paintRa = function () { var r = reductionPct(is.value, ist.value); setText(ra, r != null ? "Area reduction " + ist.value.trim() + " to " + is.value.trim() + ": " + r + "%" : (is.value.trim() && ist.value.trim() ? "Start size should be bigger than the finish size." : "")); };
+    var paintRa = function () {
+      if (shape === "shape") { var t = redNum(ird.value); setText(ra, t != null ? "Shape draw: reduction " + t + "% (typed)." : "Shape draw: reduction isn't worked out from sizes. Type it if you know it."); return; }
+      var r = reductionPct(is.value, ist.value);
+      setText(ra, r != null ? "Area reduction " + ist.value.trim() + " to " + is.value.trim() + ": " + r + "%" : (sizeInch(is.value) != null && sizeInch(ist.value) != null ? "Start size should be bigger than the finish size." : ""));
+    };
     var it = tagChips(cur.tags, "det-tag-");
     var ino = el("textarea", "in"); ino.id = "det-note"; ino.rows = 2; ino.maxLength = 300; ino.placeholder = "Only goes on the next coil"; ino.value = cur.note || "";
     form.appendChild(field("Part #", ip));
     var r2 = el("div", "row2"); r2.appendChild(field("Finish size (in)", is)); r2.appendChild(field("Grade", ig)); form.appendChild(r2);
-    var r3 = el("div", "row2"); r3.appendChild(field("Start (rod) size (in)", ist)); r3.appendChild(field("Heat # (next coil)", ih)); form.appendChild(r3);
+    var sw = el("div", "field"); sw.appendChild(el("span", "lbl", "Draw type")); sw.lastChild.style.display = "block"; sw.lastChild.style.marginBottom = "0.4rem"; sw.appendChild(seg); form.appendChild(sw);
+    var r3 = el("div", "row2"); r3.appendChild(field("Start (rod) size (in)", ist)); var redW = field("Reduction % (optional)", ird); redW.hidden = shape !== "shape"; r3.appendChild(redW); form.appendChild(r3);
     form.appendChild(ra); paintRa();
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Run conditions")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
     form.appendChild(field("Note", ino));
     body.appendChild(form);
     var put = function () {
-      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, heat: ih.value });
+      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, shape: shape, red: ird.value,
+        sizeKeep: cur.sizeKeep, startKeep: cur.startKeep });
       if (!state.shift.details) state.shift.details = {};
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
       save(); paintDet();
     };
-    [ip, is, ig, ino, ist, ih].forEach(function (x) { x.addEventListener("input", put); });
-    [is, ist].forEach(function (x) { x.addEventListener("input", paintRa); });
+    [ip, is, ig, ino, ist, ird].forEach(function (x) { x.addEventListener("input", put); });
+    [is, ist, ird].forEach(function (x) { x.addEventListener("input", paintRa); });
     is.addEventListener("blur", function () { var v = normSize(is.value); if (v !== is.value) { is.value = v; put(); } });
     ist.addEventListener("blur", function () { var v = normSize(ist.value); if (v !== ist.value) { ist.value = v; put(); } });
     it.el.onchange2 = put;
@@ -3369,7 +3436,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var m = (byId[c.machineId] || {}).m;
       return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? machineDraw(m) : null,
         finish: str(c.size || "", 40), grade: str(c.grade || "", 40), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300),
-        start_size: str(c.startSize || "", 40), heat_no: str(c.heatNo || "", 40), reduction: reductionPct(c.size, c.startSize) };
+        start_size: str(c.startSize || "", 40), shape: c.shape === "shape" ? "shape" : "round", reduction: reductionFor(c) };
     });
     var downtime = [], problems = [];
     st.downtime.slice().sort(function (a, b) { return Date.parse(a.startAt) - Date.parse(b.startAt); }).forEach(function (d) {
