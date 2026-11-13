@@ -2013,11 +2013,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       setCls($("d-delta"), "delta white");
       setText($("d-delta-note"), r.phase === "before" ? "Starts when the shift starts." : "");
     } else {
-      setText($("d-delta-lbl"), r.delta >= 0 ? "Ahead" : "Behind");
-      setText($("d-delta-lbs"), fmtInt(Math.abs(r.delta)) + " lbs " + (r.delta >= 0 ? "ahead" : "behind"));
-      setText($("d-delta-pct"), goalDone(r.deltaPct) + "% of goal done");
-      setCls($("d-delta"), "delta glow " + col);
-      setText($("d-delta-note"), "vs the pace car (where you should be by now)");
+      var dst = statusText(r.delta, r.paceCar, r.lbsRan, r.target);
+      setText($("d-delta-lbl"), dst.near ? "On pace" : r.delta >= 0 ? "Ahead" : "Behind");
+      setText($("d-delta-lbs"), dst.a);
+      setText($("d-delta-pct"), dst.b || "");
+      setCls($("d-delta"), "delta glow " + dst.cls);
+      setText($("d-delta-note"), "Ahead or behind the pace car (where you should be by now). Goal done = lbs made ÷ the day goal.");
     }
 
     // projection
@@ -2065,7 +2066,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var c = cards[mr.id]; if (!c) return;
       setText(c.ran, fmtInt(mr.lbs));
       setText(c.pc, mr.paceCar == null ? "-" : fmtInt(mr.paceCar));
-      setText(c.dl, mr.deltaPct == null || r.phase === "before" ? "-" : goalDone(mr.deltaPct) + "%");
+      var mg = goalDone(mr.lbs, mr.target);
+      setText(c.dl, mg == null || r.phase === "before" ? "-" : mg + "%");
       setCls(c.dl, mr.deltaPct == null || r.phase === "before" ? "" : colorFor(mr.deltaPct));
       var lc = null, list = coilsOf(mr.id);
       if (list.length) lc = list[list.length - 1];
@@ -2683,12 +2685,24 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function sRow(dl, label, value, cls, rowCls) {
     var d = el("div", rowCls || null); d.appendChild(el("dt", null, label)); d.appendChild(el("dd", cls || null, value)); dl.appendChild(d); return d;
   }
-  // "27,700 lbs behind · 14% of goal done": no minus sign; the percent is lbs made ÷ the goal so far (the pace car)
-  function goalDone(pct) { return pct == null || !isFinite(pct) ? null : Math.max(0, Math.round(100 + pct)); }
-  function statusText(delta, pct) {
-    if (delta == null || pct == null) return null;
-    var ahead = delta >= 0;
-    return { t: fmtInt(Math.abs(delta)) + " lbs " + (ahead ? "ahead" : "behind") + " · " + goalDone(pct) + "% of goal done", cls: ahead ? "green" : "red" };
+  // Status line, e.g. "27,700 lbs behind · 14% of goal done" or "94 lbs ahead · on pace · 78.6% of goal done".
+  // Ahead / behind is vs the pace car (where you should be by now). The percent is lbs made ÷ the DAY goal, so it
+  // only says 100% when the day goal is really made. Close to the pace car (ON_PACE_LB or 1% of it) says "on pace".
+  var ON_PACE_LB = 300, ON_PACE_FRAC = 0.01;
+  function onPace(delta, pc) { return delta != null && Math.abs(delta) <= Math.max(ON_PACE_LB, (pc || 0) * ON_PACE_FRAC); }
+  function goalDone(made, goal) {
+    if (!(goal > 0) || made == null || !isFinite(made)) return null;
+    var p = Math.max(0, made / goal * 100);
+    p = Math.round(p * 10) / 10;
+    if (made < goal && p >= 100) p = 99.9;   // never "100%" until the day goal is made
+    return String(p % 1 ? p.toFixed(1) : p.toFixed(0));
+  }
+  function statusText(delta, pc, made, goal) {
+    if (delta == null) return null;
+    var ahead = delta >= 0, near = onPace(delta, pc), g = goalDone(made, goal);
+    var a = fmtInt(Math.abs(delta)) + " lbs " + (ahead ? "ahead" : "behind") + (near ? " · on pace" : "");
+    var b = g == null ? null : g + "% of goal done";
+    return { a: a, b: b, t: b ? a + " · " + b : a, near: near, cls: near ? "green" : paceColor(delta) };
   }
   function raceReady(r) { return !(r.paceCar == null || r.phase === "before" || r.phase === "invalid" || r.paceCar <= 0); }
   function downNow(id) { return runningFor(id) || runningFor("all"); }
@@ -2717,11 +2731,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     $("s-fill").style.width = $("d-fill").style.width;
     $("s-mark").style.left = $("d-mark").style.left;
     setText($("s-target"), T ? "TARGET " + fmtInt(T) + " lbs" : "");
-    var st = raceReady(r) ? statusText(r.delta, r.deltaPct) : null;
-    if (st) st.cls = paceColor(r.delta);
-    var ss = $("s-status"), sp = st ? st.t.split(" · ") : null;
-    if (sp && sp.length === 2) {   // big line: lbs ahead/behind; smaller line under it: % of goal done
-      if (ss.textContent !== sp[0] + sp[1]) { ss.textContent = ""; ss.appendChild(document.createTextNode(sp[0])); ss.appendChild(el("span", "s-pct", sp[1])); }
+    var st = raceReady(r) ? statusText(r.delta, r.paceCar, r.lbsRan, r.target) : null;
+    var ss = $("s-status");
+    if (st && st.b) {   // big line: lbs ahead/behind (· on pace); smaller line under it: % of the day goal done
+      if (ss.textContent !== st.a + st.b) { ss.textContent = ""; ss.appendChild(document.createTextNode(st.a)); ss.appendChild(el("span", "s-pct", st.b)); }
     } else setText(ss, st ? st.t : (r.phase === "before" ? "Starts when the shift starts" : r.phase === "invalid" ? "Setup incomplete · tap MORE OPTIONS, then EDIT SETUP" : "-"));
     setCls($("s-status"), "s-status" + (st ? " " + st.cls : ""));
     var pj = $("s-proj"); pj.textContent = "";
@@ -2756,7 +2769,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         var m = machineById(mr.id), dn = downNow(mr.id);
         setText(b.childNodes[0], (m ? m.name : "?") + (dn ? " · DOWN" : ""));
         setText(b.childNodes[1], fmtInt(mr.lbs) + " / " + (mr.paceCar == null ? "-" : fmtInt(mr.paceCar)));
-        var ms = raceReady(r) && mr.paceCar > 0 ? statusText(mr.delta, mr.deltaPct) : null;
+        var ms = raceReady(r) && mr.paceCar > 0 ? statusText(mr.delta, mr.paceCar, mr.lbs, mr.target) : null;
         setText(b.childNodes[2], ms ? ms.t : "-"); setCls(b.childNodes[2], "s-rd" + (ms ? " " + ms.cls : ""));
         setCls(b, "s-row" + (dn ? " down" : ""));
       });
@@ -2992,8 +3005,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       body.appendChild(rb);
     } else if (sheetKind === "delta") {
       title = "AHEAD / BEHIND · THE MATH";
-      var st = ready ? statusText(r.delta, r.deltaPct) : null;
-      if (st) st.cls = paceColor(r.delta);
+      var st = ready ? statusText(r.delta, r.paceCar, r.lbsRan, r.target) : null;
       var b2 = el("div", "sh-big " + (st ? st.cls : ""), st ? st.t : "-"); b2.id = "sh-delta-big"; if (st) b2.style.color = st.cls === "green" ? "var(--fg)" : st.cls === "amber" ? "var(--amber)" : "var(--red)"; body.appendChild(b2);
       var dl2 = el("dl", "sh-rows");
       sRow(dl2, "Lbs ran", fmtInt(r.lbsRan) + " lbs");
@@ -3005,8 +3017,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         p2.appendChild(document.createTextNode((r.delta >= 0 ? "Ahead" : "Behind") + ": gap between lbs ran and the pace car = "));
         p2.appendChild(el("b", null, fmtInt(Math.abs(r.delta)) + " lbs " + (r.delta >= 0 ? "ahead" : "behind")));
         p2.appendChild(el("br"));
-        p2.appendChild(document.createTextNode("Goal done: lbs ran ÷ pace car = "));
-        p2.appendChild(el("b", null, fmtInt(r.lbsRan) + " ÷ " + fmtInt(r.paceCar) + " = " + goalDone(r.deltaPct) + "%"));
+        if (st.near) { p2.appendChild(document.createTextNode("Within " + fmtInt(Math.max(ON_PACE_LB, r.paceCar * ON_PACE_FRAC)) + " lbs of the pace car counts as on pace.")); p2.appendChild(el("br")); }
+        p2.appendChild(document.createTextNode("Goal done: lbs ran ÷ day goal = "));
+        p2.appendChild(el("b", null, r.target > 0 ? fmtInt(r.lbsRan) + " ÷ " + fmtInt(r.target) + " = " + goalDone(r.lbsRan, r.target) + "%" : "-"));
         body.appendChild(p2);
       } else body.appendChild(el("p", "sh-sub", r.phase === "before" ? "Starts when the shift starts." : "No pace car yet."));
     } else if (sheetKind === "proj") {
@@ -3033,8 +3046,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       title = m.name.toUpperCase() + " · " + fmtInt(m.needRate) + " LBS/HR";
       var dn = downNow(m.id);
       if (dn) { var w = el("p", "sh-sub", "DOWN NOW · " + fmtDur(now - Date.parse(dn.startAt)) + " · pace car paused"); w.style.color = "var(--red)"; w.style.fontWeight = "700"; body.appendChild(w); }
-      var ms = ready && mr.paceCar > 0 ? statusText(mr.delta, mr.deltaPct) : null;
-      var b4 = el("div", "sh-big", ms ? ms.t : "-"); b4.id = "sh-m-big"; if (ms) b4.style.color = ms.cls === "green" ? "var(--fg)" : "var(--red)"; body.appendChild(b4);
+      var ms = ready && mr.paceCar > 0 ? statusText(mr.delta, mr.paceCar, mr.lbs, mr.target) : null;
+      var b4 = el("div", "sh-big", ms ? ms.t : "-"); b4.id = "sh-m-big"; if (ms) b4.style.color = ms.cls === "green" ? "var(--fg)" : ms.cls === "amber" ? "var(--amber)" : "var(--red)"; body.appendChild(b4);
       var list = coilsOf(m.id), lc = list.length ? list[list.length - 1] : null;
       var dl4 = el("dl", "sh-rows");
       sRow(dl4, "Lbs ran · " + list.length + " coil" + (list.length === 1 ? "" : "s"), fmtInt(mr.lbs) + " lbs").id = "sh-m-ran";

@@ -194,6 +194,8 @@ var ProdCalc = (function () {
     while (s.length > 3) { out = "," + s.slice(-3) + out; s = s.slice(0, -3); }
     return (neg ? "-" : "") + s + out;
   }
+  // whole % of goal from tenths of a percent; never rounds up to 100 when the goal was not met (99.6% says 99%)
+  function pctOf(p10) { var v = Math.round(p10 / 10); return p10 < 1000 && v >= 100 ? 99 : v; }
   function fmtTenths(t) {
     var sign = t < 0 ? "-" : "", a = Math.abs(t);
     return sign + fmtInt(Math.floor(a / 10)) + "." + String(a % 10);
@@ -595,14 +597,14 @@ var ProdCalc = (function () {
       res.status = "met";
       steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(diff10) + " lbs/hr OVER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal). GOAL MET.");
       steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(overShort) + " lbs over.");
-      res.headline = "GOAL MET · " + fmtTenths(diff10) + " lbs/hr over · " + Math.round(pct10 / 10) + "% of goal";
+      res.headline = "GOAL MET · " + fmtTenths(diff10) + " lbs/hr over · " + pctOf(pct10) + "% of goal";
     } else {
       res.status = "notmet";
       steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(-diff10) + " lbs/hr UNDER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal).");
       steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(-overShort) + " lbs short (about " +
         fmtInt(minutes) + " " + plural(minutes, "minute", "minutes") + " of running at goal speed).");
       steps.push("GOAL NOT MET: you must list the problems and downtime reasons on the sheet.");
-      res.headline = "GOAL NOT MET · " + fmtTenths(-diff10) + " lbs/hr under · " + Math.round(pct10 / 10) + "% of goal";
+      res.headline = "GOAL NOT MET · " + fmtTenths(-diff10) + " lbs/hr under · " + pctOf(pct10) + "% of goal";
       if (!problems.length) warnings.push("Goal not met: add your downtime and problems so they go on the sheet.");
     }
     return res;
@@ -630,8 +632,8 @@ var ProdCalc = (function () {
     L.push("Goal: Lbs/Hour: " + res.goalText);
     L.push("Average lbs/hr: " + res.rateText);
     L.push("");
-    if (res.status === "notmet") L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lbs/hr under, " + Math.round(res.pct10 / 10) + "% of goal). You must fill in the problems and downtime below.");
-    else if (res.status === "met") L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lbs/hr over, " + Math.round(res.pct10 / 10) + "% of goal).");
+    if (res.status === "notmet") L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lbs/hr under, " + pctOf(res.pct10) + "% of goal). You must fill in the problems and downtime below.");
+    else if (res.status === "met") L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lbs/hr over, " + pctOf(res.pct10) + "% of goal).");
     L.push("List all problems and reasons for downtime:");
     res.problems.forEach(function (p) { L.push("  - " + p); });
     if (!res.problems.length) L.push("  (none entered)");
@@ -762,7 +764,7 @@ var ProdCalc = (function () {
   }
   return { compute: compute, computeRow: computeRow, reportLines: reportLines, sheetCells: sheetCells, quick: quick,
     fromTracker: fromTracker, goalPlan: goalPlan, parseHm: parseHm, clock: clock, findRun: findRun, findMachine: findMachine, mkey: mkey, num: num,
-    fmtInt: fmtInt, fmtTenths: fmtTenths, fmtNum: fmtNum, fmtHm: fmtHm };
+    fmtInt: fmtInt, pctOf: pctOf, fmtTenths: fmtTenths, fmtNum: fmtNum, fmtHm: fmtHm };
 })();
 if (typeof module !== "undefined") module.exports = ProdCalc;
 </script>
@@ -1566,7 +1568,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     html += row("n-rate", "Average lbs/hr", r.rate10 !== null ? r.rateText : "\u2013", true);
     if (r.status !== "incomplete") {
       html += '<button type="button" id="n-status" class="banner ' + r.status + '">' + (r.status === "met" ? "GOAL MET" : "GOAL NOT MET") +
-        '<small>' + (r.status === "met" ? P.fmtTenths(r.diff10) + " lbs/hr over · " + Math.round(r.pct10 / 10) + "% of goal" : P.fmtTenths(-r.diff10) + " lbs/hr under · " + Math.round(r.pct10 / 10) + "% of goal. List problems and downtime on the sheet.") + '</small></button>';
+        '<small>' + (r.status === "met" ? P.fmtTenths(r.diff10) + " lbs/hr over · " + P.pctOf(r.pct10) + "% of goal" : P.fmtTenths(-r.diff10) + " lbs/hr under · " + P.pctOf(r.pct10) + "% of goal. List problems and downtime on the sheet.") + '</small></button>';
     }
     var tot = r.machineTotals || [];
     if (tot.length > 1 && r.goal10 !== null) tot.forEach(function (m, i) {

@@ -55,6 +55,7 @@
     '.scan-legend i{display:inline-block;width:18px;height:14px;border:2px solid var(--red)}.scan-legend i.c{border-color:var(--amber)}' +
     'body.scan-open .navbar{display:none!important}' +
     '.scan-avg{display:flex;align-items:center;min-height:48px;opacity:.9}.scan-avg .muted{font-size:13px}' +
+    '.scan-fix{display:block;width:100%;min-height:44px;margin-top:6px;font-size:15px}' +
     '.scan-warn{border:2px solid var(--amber);padding:12px;margin:10px 0;color:var(--white)}.scan-warn b{display:block;color:var(--amber);font-size:17px;margin-bottom:6px}.scan-warn span{display:block;font-size:14px}' +
     '.scan-note{border:1px solid var(--fg-dim);padding:10px;margin:10px 0;color:var(--white);font-size:14px}' +
     '.scan-actions{position:sticky;bottom:0;background:var(--bg);padding:8px 0 calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--fg-faint);margin-top:8px;z-index:5}';
@@ -184,7 +185,7 @@
   // Draw 1-9 only: a machine name the sheet had that isn't a draw number is shown as a note, never offered as a pick
   function machbox(p, label, val, allLabel) {
     var m = mark(p, DRAWS.indexOf(val) < 0 ? val : ""), id = "sc-" + p.replace(/\./g, "-"), opts = DRAWS.slice();
-    if (val && opts.indexOf(val) < 0) { if (!m.note) m = { cls: " scan-unclear", note: '<span class="scan-hint bad">The sheet said \u201c' + esc(val) + '\u201d. Pick its draw number.</span>' }; val = ""; }
+    if (val && opts.indexOf(val) < 0) { if (!m.note) m = { cls: " scan-unclear", note: '<span class="scan-hint bad">Couldn\u2019t tell which draw. Pick its draw number.</span>' }; val = ""; }
     return '<div class="f"><label for="' + id + '">' + label + '</label><select id="' + id + '" data-p="' + p + '" class="' + m.cls.trim() + '"><option value="">' + esc(allLabel || "\u2013") + '</option>' +
       opts.map(function (n) { return '<option' + (n === val ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>' + m.note + '</div>';
   }
@@ -250,9 +251,121 @@
   function xbtn(kind, i, what) { return '<button class="xbtn" type="button" data-scdel="' + kind + '-' + i + '" aria-label="Remove ' + what + '">&times;</button>'; }
   function v(x) { return x === null || x === undefined ? "" : x; }
 
+  /* ---------- tidy what the reader returned (job cards and P-310 rows) ----------
+     Machine names written on cards (process lines) become their Draw number; only "Draw N" is ever shown.
+     Same card # twice in one photo = one card. Finish is the DRAW TO size, never the start size (a fraction like
+     31/64) or the tolerance (+/- .0015). "CHO" in a grade is the CHQ suffix. Compound stays blank unless it is a
+     real compound. On the job card flow nothing else from the card (names, notes) is kept. */
+  var DRAW_NAMES = [["west vaughn", 2], ["east vaughn", 9], ["vaughn", 3], ["cheng", 1], ["robinson", 4], ["macbee", 5],
+    ["showa", 6], ["v-22", 7], ["v 22", 7], ["v22", 7], ["shaver", 8]];
+  function drawOf(t) {
+    t = String(t == null ? "" : t).toLowerCase().replace(/\s+/g, " ").trim();
+    if (!t) return "";
+    var m = /^(?:draw|d|#)?\s*#?\s*([1-9])$/.exec(t) || /\b(?:draw|d)\s*#?\s*([1-9])\b(?![.\d])/.exec(t);
+    if (m) return "Draw " + m[1];
+    for (var i = 0; i < DRAW_NAMES.length; i++) if (t.indexOf(DRAW_NAMES[i][0]) >= 0) return "Draw " + DRAW_NAMES[i][1];
+    return "";
+  }
+  function cardKey(v) { return String(v == null ? "" : v).toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+  function plausibleEach(w, n) { var r = coilRange(); return w > 0 && n > 0 && w / n >= r.min && w / n <= r.max; }
+  // a weight that is one digit off (an extra 0, a dropped 0, one extra digit) and would fit the coil range
+  function digitFixes(w, n) {
+    if (!(w > 0) || !(n > 0) || plausibleEach(w, n) || w % 1) return [];
+    var out = [];
+    if (w % 10 === 0 && plausibleEach(w / 10, n)) out.push(w / 10);
+    if (plausibleEach(w * 10, n)) out.push(w * 10);
+    if (out.length) return out;
+    var t = String(w);
+    for (var i = 0; i < t.length; i++) { var v = +(t.slice(0, i) + t.slice(i + 1)); if (plausibleEach(v, n) && out.indexOf(v) < 0) out.push(v); }
+    return out.length && out.length <= 2 ? out : [];
+  }
+  function fmtChecks(list) {   // the reader's own math notes: 825680 -> 825,680 lbs
+    return (list || []).map(function (x) {
+      return String(x).replace(/\b\d{4,}(?:\.\d+)?\b(?!\s*(?:lbs|coils|min))/g, function (n) { return fmtW(+n) + " lbs"; });
+    });
+  }
+  function tidy(c) {
+    var s = c.data.scan, f = c.data.flags = c.data.flags || {}, only = c.opts.coilsOnly, notes = [];
+    c.extra = [];
+    var fixMach = function (o, k, p) {
+      if (!o || !o[k] || DRAWS.indexOf(o[k]) >= 0) return;
+      var d = drawOf(o[k]); if (d) { o[k] = d; if (p) delete f[p]; }
+    };
+    (s.machines || []).forEach(function (m, i) { (m.segments || []).forEach(function (sg, j) { fixMach(sg, "machine", "machines." + i + ".segments." + j + ".machine"); }); });
+    (s.downtime || []).forEach(function (x, i) { fixMach(x, "machine", "downtime." + i + ".machine"); });
+    (s.coils || []).forEach(function (r, i) {
+      var p = "coils." + i + ".";
+      fixMach(r, "machine", p + "machine");
+      var cp = String(r.compound == null ? "" : r.compound).trim();
+      if (cp && !(window.Fields && Fields.compoundKnown && Fields.compoundKnown(cp))) {
+        var looksMach = drawOf(cp) || /draw|aor|\d*\.\d|"/i.test(cp);
+        if (looksMach && !r.machine && drawOf(cp)) r.machine = drawOf(cp);
+        if (only || looksMach) { r.compound = ""; delete f[p + "compound"]; }
+      }
+      if (r.grade) r.grade = String(r.grade).replace(/(\d\s*)CH[O0]\b/i, "$1CHQ").replace(/\bCH[O0]$/i, "CHQ");
+      var fs = String(r.finish == null ? "" : r.finish).trim(), fn = num(fs);
+      if (fs && /\d\s*\/\s*\d/.test(fs)) {
+        c.extra.push({ p: p + "finish", soft: true, msg: fs + " is the start size. Type the DRAW TO size" }); r.finish = "";
+      } else if (fn !== null && fn > 0 && fn < 0.02) {
+        c.extra.push({ p: p + "finish", soft: true, msg: fs + " is the tolerance, not the size. Type the DRAW TO size" }); r.finish = "";
+      }
+    });
+    // same card # twice = one card
+    var seen = {}, keep = [];
+    (s.coils || []).forEach(function (r, i) {
+      var k = cardKey(r.card);
+      if (!k || seen[k] === undefined) { if (k) seen[k] = keep.length; keep.push({ r: r, from: [i], dups: [r] }); return; }
+      keep[seen[k]].dups.push(r); keep[seen[k]].from.push(i);
+    });
+    if (keep.length < (s.coils || []).length) {
+      var nf = {};
+      Object.keys(f).forEach(function (key) { if (!/^coils\./.test(key)) nf[key] = f[key]; });
+      s.coils = keep.map(function (g, ni) {
+        var r = g.r;
+        g.from.forEach(function (oi) { Object.keys(f).forEach(function (key) { var m = new RegExp("^coils\\." + oi + "(\\..*)$").exec(key); if (m && !nf["coils." + ni + m[1]]) nf["coils." + ni + m[1]] = f[key]; }); });
+        if (g.dups.length < 2) return r;
+        g.dups.slice(1).forEach(function (d) { ["finish", "grade", "compound", "package", "machine", "coils_text"].forEach(function (k) { if (!r[k] && d[k]) r[k] = d[k]; }); if (r.coils_in == null && d.coils_in != null) { r.coils_in = d.coils_in; r.coils_out = d.coils_out; } });
+        var n = rowInfo(r).cin || 1, ws = [], picks = [];
+        g.dups.forEach(function (d) {
+          [num(d.weight), num(d.avg_wgt)].forEach(function (w) {
+            if (!(w > 0)) return;
+            if (ws.indexOf(w) < 0) ws.push(w);
+            var c1 = plausibleEach(w, n) ? [w] : digitFixes(w, n);
+            c1.forEach(function (v) { picks.push(v); });
+          });
+        });
+        var count = {}; picks.forEach(function (v) { count[v] = (count[v] || 0) + 1; });
+        var best = picks.slice().sort(function (a, b) { return count[b] - count[a]; })[0];
+        var uniq = picks.filter(function (v, i2) { return picks.indexOf(v) === i2; });
+        if (best !== undefined) { r.weight = best; r.avg_wgt = null; }
+        delete nf["coils." + ni + ".weight"];
+        if (uniq.length > 1 && count[best] < 2) c.extra.push({ p: "coils." + ni + ".weight", msg: "Read two ways (" + ws.map(fmtW).join(" and ") + " lbs). Check Tot Avg Wgt on the card and tap the right one", fix: uniq.slice(0, 3), at: best,
+          warn: "Card " + (r.card || (ni + 1)) + "\u2019s weight was read two ways. Tap the right one below." });
+        var ms = g.dups.map(function (d) { return d.machine; }).filter(function (m, i3, a) { return m && a.indexOf(m) === i3; });
+        if (ms.length > 1) c.extra.push({ p: "coils." + ni + ".machine", soft: true, msg: "Read as " + ms.join(" and ") + ". Pick the right one" });
+        notes.push("Card " + (r.card || (ni + 1)) + " was read " + g.dups.length + " times, so it is shown once.");
+        return r;
+      });
+      c.data.flags = f = nf;
+      s.totals = s.totals || {}; s.totals.total_weight = "";   // its total was the doubled cards
+    }
+    if (only) {
+      // the job card flow keeps nothing but the numbers: no names, notes or the reader's P-310 math notes
+      s.name = ""; s.problems = ""; s.maintenance = ""; s.notes = "";
+      // rows that are whole cards (more than one coil each) already carry the card totals: a "total" next to them is
+      // only the reader adding cards up (it was 825,680 for one 41,528 lbs card read twice), so the sum of the cards wins.
+      // Rows that are single coils keep a printed total to check them against.
+      if ((s.coils || []).some(function (r) { return (num(r.weight) > 0 || num(r.avg_wgt) > 0) && (rowInfo(r).cin || 1) > 1; })) { s.totals = s.totals || {}; s.totals.total_weight = ""; }
+      c.data.checks = [];
+    } else c.data.checks = fmtChecks(c.data.checks);
+    return notes;
+  }
+
   // take the card total out of the coil rows (it is never a coil) and run the checks
   function prep(c) {
     var s = c.data.scan, notes = [];
+    if (!c.tidied) { c.tidied = true; c.tidyNotes = tidy(c); }
+    notes = notes.concat(c.tidyNotes || []);
     if (!c.movedAvg) {
       c.movedAvg = true;
       (s.coils || []).forEach(function (r, i) {
@@ -285,6 +398,22 @@
     }
     if (notes.length) c.totalNote = notes.join(" ");
     var cm = cardMath(s);
+    // a weight one digit off: offer the fix next to the box
+    cm.issues.forEach(function (x) {
+      var m = /^coils\.(\d+)\.weight$/.exec(x.p); if (!m || x.fix) return;
+      var x2 = rowInfo(s.coils[+m[1]]); var fx = digitFixes(x2.w, x2.cin || 1);
+      if (fx.length) x.fix = fx;
+    });
+    var have = {}; cm.issues.forEach(function (x) { have[x.p] = 1; });
+    (c.extra || []).forEach(function (x) {
+      if (have[x.p] && !x.fix) return;
+      if (x.resolved) return;
+      var r0 = s.coils[+x.p.split(".")[1]] || {};
+      if (/\.weight$/.test(x.p) && x.at !== undefined && num(r0.weight) !== x.at) return;   // the operator changed it
+      if (/\.finish$/.test(x.p) && String(r0.finish == null ? "" : r0.finish).trim()) return;
+      cm.issues = cm.issues.filter(function (y) { return y.p !== x.p; }); cm.issues.push(x);
+    });
+    if (!cm.warn) { var hard = cm.issues.filter(function (x) { return !x.soft; }); if (hard.length) cm.warn = hard[0].warn || "That looks off: " + hard[0].msg + ". Check the numbers below."; }
     c.issues = cm.issues; c.warn = cm.warn;
   }
 
@@ -385,7 +514,15 @@
     (c.issues || []).forEach(function (x) {
       var el = host.querySelector('[data-p="' + x.p + '"]'); if (!el) return;
       el.classList.add("scan-check");
-      if (!el.parentNode.querySelector(".scan-hint")) { var sp = document.createElement("span"); sp.className = "scan-hint"; sp.textContent = x.msg + ". Check it."; el.parentNode.appendChild(sp); }
+      var old = el.parentNode.querySelector(".scan-hint"); if (old && x.fix) old.parentNode.removeChild(old);
+      if (!el.parentNode.querySelector(".scan-hint")) {
+        var sp = document.createElement("span"); sp.className = "scan-hint"; sp.textContent = x.msg + (/[.]$/.test(x.msg) ? "" : ".") + (x.fix || /Type |Pick |tap /.test(x.msg) ? "" : " Check it."); el.parentNode.appendChild(sp);
+        (x.fix || []).forEach(function (v) {
+          var fb = document.createElement("button"); fb.type = "button"; fb.className = "scan-fix"; fb.textContent = "USE " + fmtW(v) + " LBS";
+          fb.onclick = function () { x.resolved = true; el.value = String(v); el.dispatchEvent(new Event("input", { bubbles: true })); el.classList.remove("scan-check", "scan-unclear"); el.parentNode.querySelectorAll(".scan-hint,.scan-fix").forEach(function (n) { n.parentNode.removeChild(n); }); };
+          el.parentNode.appendChild(fb);
+        });
+      }
     });
     host.querySelectorAll("[data-scdel]").forEach(function (b) {
       b.onclick = function () {

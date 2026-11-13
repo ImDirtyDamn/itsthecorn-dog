@@ -1,6 +1,6 @@
 // Offline cache for the Production Report Calculator (scope: /calc/).
 // v10: /calc/ is now the one-screen-at-a-time calculator (it was at /calc/try/, which now redirects here).
-var CACHE = "draw-calc-v11";
+var CACHE = "draw-calc-v12";
 var FILES = ["./", "./index.html", "/data/config.js", "/data/submit.js", "/data/fields.js", "/data/scan.js"];   // the tracker registers this too, so it works offline even if never opened
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
