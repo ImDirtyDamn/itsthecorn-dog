@@ -45,9 +45,9 @@
   function gk(g) { return String(g || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
   function day(s) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ""); if (!m) return s || "";
-    var d = new Date(+m[1], +m[2] - 1, +m[3]); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + (+m[2]) + "/" + (+m[3]) + "/" + m[1].slice(2);
+    var d = new Date(+m[1], +m[2] - 1, +m[3]); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate() + ", " + m[1];
   }
-  function when(ms) { var d = new Date(ms); return d.toLocaleString([], { weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }); }
+  function when(ms) { var d = new Date(ms); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate() + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
   function lb(n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
   function qText(q) { return [q.size && "size " + q.size, q.grade && "grade " + q.grade, q.start && "from " + q.start, q.shape && shapeName(q.shape).toLowerCase(), q.red && q.red + "% \u00b1" + RED_NEAR, (q.red_min || q.red_max) && (q.red_min || "0") + " to " + (q.red_max || "100") + "%"].filter(Boolean).join(", "); }
 

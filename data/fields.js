@@ -7,7 +7,11 @@
       "15 30" min -> 0 hrs 45 mins). Inputs are found by themselves when they appear in the page.
       Call input._hmSync() after setting the original's value from code.
    2) SIZES. Anything typed with a decimal point is kept as typed. A whole number of 10 or more with no point
-      ("600", "1250") isn't guessed: Fields.sizePick shows ".600 in / 6.00 in / Keep 600" and waits for a tap. */
+      ("600", "1250") isn't guessed: Fields.sizePick shows ".600 in / 6.00 in / Keep 600" and waits for a tap.
+   3) COMPOUND. A text input marked data-compound gets a dropdown in front of it: 4392, 3814, TN5, 1360, Drawsol,
+      Salvia, Other. The input stays the stored value (a plain string) and keeps its listeners; it only shows
+      when Other is picked, for typing the compound. A saved known value picks it; anything else picks Other.
+   4) DATES. Fields.niceDate("2026-11-13") -> "Fri Nov 13, 2026"; niceDate(v, true) -> "Fri Nov 13". Display only. */
 (function () {
   "use strict";
   if (window.Fields) return;
@@ -15,6 +19,7 @@
     ".hm-c input{flex:1 1 auto;min-width:0;width:100%}.hm-u{flex:0 0 auto;font-size:14px;letter-spacing:.04em;color:var(--fg-dim,#7fbf8f);text-transform:none;margin:0}" +
     ".hm-err{grid-column:1/-1;color:var(--red,#ff5c5c);font-size:14px;margin:2px 0 0}.hm-err:empty{display:none}" +
     ".sz-pick{border:2px solid var(--amber,#ffb000);color:var(--amber,#ffb000);padding:8px 10px;margin:6px 0 4px;font-size:15px;line-height:1.35}" +
+    ".cp-other{margin-top:8px}" +
     ".sz-pick button{display:block;width:100%;min-height:48px;margin-top:6px;background:#000;color:var(--fg,#39ff6a);border:2px solid var(--fg,#39ff6a);font:inherit;font-weight:700;cursor:pointer}";
   function addCss() { if (document.getElementById("fields-css")) return; var s = document.createElement("style"); s.id = "fields-css"; s.textContent = css; (document.head || document.documentElement).appendChild(s); }
 
@@ -94,10 +99,66 @@
       if (g && g.display === "grid" && g.gridTemplateColumns.split(" ").length > 1) { n.style.gridColumn = "1 / -1"; break; }
     }
   }
+  /* ---- compound ---- */
+  var COMPOUNDS = ["4392", "3814", "TN5", "1360", "Drawsol", "Salvia"], OTHER = "__other";
+  function compoundKnown(v) {
+    var t = String(v == null ? "" : v).trim().toLowerCase();
+    for (var i = 0; i < COMPOUNDS.length; i++) if (COMPOUNDS[i].toLowerCase() === t) return COMPOUNDS[i];
+    return null;
+  }
+  function compound(orig) {
+    if (orig._cp || !orig.id) return;
+    orig._cp = true;
+    addCss();
+    var sel = document.createElement("select");
+    sel.id = orig.id + "-pick";
+    sel.className = orig.className.replace(/\bscan-(unclear|check)\b/g, "").trim() || "in";
+    var opts = [["", "Pick a compound"]].concat(COMPOUNDS.map(function (c) { return [c, c]; }), [[OTHER, "Other"]]);
+    opts.forEach(function (o) { var e = document.createElement("option"); e.value = o[0]; e.textContent = o[1]; sel.appendChild(e); });
+    var lab = document.querySelector('label[for="' + orig.id + '"]');
+    if (lab) lab.setAttribute("for", sel.id);
+    orig.classList.add("cp-other");
+    orig.setAttribute("placeholder", "type the compound");
+    orig.setAttribute("aria-label", ((lab ? lab.textContent : "Compound") || "Compound").trim() + ", other");
+    var show = function (b) { orig.style.display = b ? "" : "none"; };
+    var sync = function () {
+      var v = String(orig.value || "").trim(), k = compoundKnown(v);
+      if (!v && sel.value !== OTHER) { sel.value = ""; show(false); }
+      else if (k) { sel.value = k; show(false); }
+      else if (v) { sel.value = OTHER; show(true); }
+    };
+    var put = function (v) {
+      if (orig.value === v) return;
+      orig.value = v;
+      orig.dispatchEvent(new Event("input", { bubbles: true }));
+      orig.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    sel.addEventListener("change", function () {
+      if (sel.value === OTHER) {
+        show(true);
+        if (compoundKnown(orig.value)) put("");
+        try { orig.focus(); } catch (e) {}
+      } else { show(false); put(sel.value); }
+    });
+    orig.parentNode.insertBefore(sel, orig);
+    orig._cpSync = sync;
+    sync();
+  }
+  function niceDate(v, short) {
+    var t = String(v == null ? "" : v).trim(), m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t), d;
+    if (m) d = new Date(+m[1], +m[2] - 1, +m[3]);
+    else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(t))) d = new Date(m[3].length === 2 ? 2000 + +m[3] : +m[3], +m[1] - 1, +m[2]);
+    else return t;
+    if (isNaN(d.getTime())) return t;
+    var DN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return DN[d.getDay()] + " " + MN[d.getMonth()] + " " + d.getDate() + (short ? "" : ", " + d.getFullYear());
+  }
   function scan(root) {
     if (!root || !root.querySelectorAll) return;
     if (root.matches && root.matches("input[data-hm]")) enhance(root);
     Array.prototype.forEach.call(root.querySelectorAll("input[data-hm]"), enhance);
+    if (root.matches && root.matches("input[data-compound]")) compound(root);
+    Array.prototype.forEach.call(root.querySelectorAll("input[data-compound]"), compound);
   }
   function watch() {
     scan(document.body);
@@ -143,5 +204,6 @@
     for (var i = 0; i < els.length; i++) { var e = els[i], v = e.value.trim(); if (v && sizeAmbig(v) && e._sizeKeep !== v) return e; }
     return null;
   }
-  window.Fields = { hmSplit: hmSplit, hmJoin: hmJoin, enhance: enhance, scan: scan, sizeAmbig: sizeAmbig, sizeChoices: sizeChoices, sizePick: sizePick, sizeNeedsPick: sizeNeedsPick };
+  window.Fields = { hmSplit: hmSplit, hmJoin: hmJoin, enhance: enhance, scan: scan, sizeAmbig: sizeAmbig, sizeChoices: sizeChoices, sizePick: sizePick, sizeNeedsPick: sizeNeedsPick,
+    compound: compound, compoundKnown: compoundKnown, COMPOUNDS: COMPOUNDS, niceDate: niceDate };
 })();

@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <!--
   PRODUCTION REPORT CALCULATOR  (Daily Draw Operator Production Report, P-310)
-  Self-contained, no outside files. Saves to localStorage key "drawCalcV1". Reads the tracker (drawRateV5) only when you tap FILL FROM TODAY'S TRACKER, and never changes it.
-  The math lives in the "calc-core" script below and is a line-for-line port of
-  production_calc.py; a parity test runs both on the same cases and checks every number and sentence match.
+  One thing per screen. Served at /calc/ (the old /calc/try/ address redirects here). Self-contained, no outside files.
+  Saves the shift in progress to localStorage key "drawCalcTryV1" (nothing is remembered once you start a new shift).
+  Reads the tracker (drawRateV5) only when you tap FILL FROM TODAY'S TRACKER, and never changes it.
+  SCAN MY SHEET: photo of the paper sheet -> /data/scan.js reads it -> review -> REPLACE or ADD (applyScan below).
+  The math lives in the "calc-core" script below: a line-for-line port of production_calc.py (parity tested).
 -->
 <html lang="en">
 <head>
@@ -38,90 +40,93 @@
 <title>Production Report Calculator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23030a03'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%2339ff6a' font-family='monospace'%3E%3D%3C/text%3E%3C/svg%3E">
 <style>
-:root{--bg:#030a03;--panel:#061206;--fg:#39ff6a;--fg-dim:#1f9a3e;--fg-faint:rgba(57,255,106,.16);--amber:#ffc23d;--red:#ff5f56;--white:#eaffea;
+:root{--bg:#030a03;--panel:#061206;--fg:#39ff6a;--fg-dim:#1f9a3e;--fg-faint:rgba(57,255,106,.16);--amber:#ffc23d;--red:#ff5f56;--white:#eaffea;--ph:#5f7a63;
 --font:"Courier New",Courier,"Noto Sans Mono","DejaVu Sans Mono","Droid Sans Mono",monospace}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;-webkit-text-size-adjust:100%}
-body{padding:0 12px calc(24px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;overflow-x:hidden}
-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 0 10px;border-bottom:1px solid var(--fg-faint)}
-h1{font-size:18px;margin:0;letter-spacing:.06em;color:var(--white);text-shadow:0 0 8px rgba(57,255,106,.4)}
+body{padding:0 12px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;overflow-x:hidden}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0 10px;border-bottom:1px solid var(--fg-faint)}
+h1{font-size:17px;margin:0;letter-spacing:.06em;color:var(--white);text-shadow:0 0 8px rgba(57,255,106,.4)}
 h1 small{display:block;font-size:12px;color:var(--fg-dim);letter-spacing:.04em;font-weight:normal}
-a.back{color:var(--fg);text-decoration:none;border:1px solid var(--fg-dim);padding:12px 12px;min-height:48px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap}
-h2{font-size:14px;letter-spacing:.12em;color:var(--fg-dim);margin:22px 0 8px;text-transform:uppercase}
+a.back{color:var(--fg);text-decoration:none;border:1px solid var(--fg-dim);padding:0 12px;min-height:48px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap}
+h2{font-size:15px;letter-spacing:.1em;color:var(--white);margin:18px 0 6px;text-transform:uppercase}
 .panel{background:var(--panel);border:1px solid var(--fg-faint);padding:12px;margin:10px 0}
-label{display:block;font-size:13px;color:var(--fg-dim);margin:0 0 4px;letter-spacing:.04em}
-.hint{display:block;font-size:12px;color:var(--amber);margin-top:2px}
-input{width:100%;min-height:48px;font:inherit;font-size:18px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px 10px;border-radius:0}
-input:focus{outline:2px solid var(--fg);border-color:var(--fg)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+label,.lbl{display:block;font-size:13px;color:var(--fg-dim);margin:0 0 4px;letter-spacing:.04em}
+input,select,textarea{width:100%;min-height:48px;font:inherit;font-size:18px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px 10px;border-radius:0}
+textarea{font-size:16px;min-height:90px}
+input::placeholder,textarea::placeholder{color:var(--ph);opacity:1;font-size:16px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--fg);border-color:var(--fg)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .f{min-width:0;margin-bottom:10px}
-button{font:inherit;font-size:16px;min-height:48px;min-width:48px;cursor:pointer;background:#000;color:var(--fg);border:1px solid var(--fg);padding:10px 14px;letter-spacing:.06em}
+button{font:inherit;font-size:16px;min-height:48px;min-width:48px;cursor:pointer;background:#000;color:var(--fg);border:1px solid var(--fg);padding:10px 12px;letter-spacing:.05em}
 button:active{background:var(--fg);color:#000}
 button.big{width:100%;font-size:18px;font-weight:bold}
-button.solid{background:var(--fg);color:#000}
+button.solid{background:var(--fg);color:#000;font-weight:bold}
 button.warn{border-color:var(--red);color:var(--red)}
-.cardhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.cardhead b{color:var(--white);font-size:16px;letter-spacing:.06em}
-.out{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-top:1px dashed var(--fg-faint);padding:8px 0 2px;flex-wrap:wrap}
-.out span{color:var(--fg-dim);font-size:13px}
-.out b{color:var(--white);font-size:22px}
-.out em{font-style:normal;color:var(--fg-dim);font-size:12px;width:100%}
-.stepper{display:grid;grid-template-columns:48px 1fr 48px;gap:6px}
-.stepper input{text-align:center;font-size:22px}
-.check{display:flex;align-items:center;gap:10px;min-height:48px;color:var(--fg);font-size:15px;margin:0}
-.check input{width:28px;min-height:28px;height:28px;accent-color:var(--fg)}
-details{margin-top:6px}
-summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:var(--fg-dim);font-size:16px;letter-spacing:.06em}
-.warnbox{color:var(--amber);font-size:14px;margin:6px 0 0}
-.form .line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid var(--fg-faint);padding:10px 0;flex-wrap:wrap}
-.form .line span{color:var(--fg-dim);font-size:14px;flex:1 1 150px}
-.form .line b{color:var(--white);font-size:26px;text-align:right}
-.form .line.rate b{font-size:34px;color:var(--fg);text-shadow:0 0 10px rgba(57,255,106,.5)}
-.form .line.rate{cursor:pointer}
-.banner{margin:12px 0 0;padding:12px;border:2px solid var(--fg);font-weight:bold;font-size:18px;color:var(--fg)}
+button.amber{border-color:var(--amber);color:var(--amber)}
+button.ghost{border-color:var(--fg-dim);color:var(--fg-dim)}
+button.on{background:var(--fg);color:#000;font-weight:bold}
+.home{display:grid;gap:16px;margin-top:22px}
+.home button{min-height:120px;font-size:22px;font-weight:bold;text-align:left;padding:16px;line-height:1.25}
+.home button small{display:block;font-size:14px;font-weight:normal;margin-top:6px;color:var(--fg-dim);letter-spacing:.02em}
+.home button:active small{color:#000}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:12px 0 4px}
+.steps button{padding:4px 2px;font-size:13px;letter-spacing:0;border-color:var(--fg-faint);color:var(--fg-dim);line-height:1.15}
+.steps button.cur{border-color:var(--fg);color:var(--white);font-weight:bold;box-shadow:inset 0 -4px 0 var(--fg)}
+.steps button.done{color:var(--fg)}
+.navbar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--fg-faint);padding:10px 12px calc(10px + env(safe-area-inset-bottom));z-index:10}
+.navbar .in{max-width:616px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px}
+.navbar button{min-height:56px;font-size:18px;font-weight:bold}
+.card{border:1px solid var(--fg-faint);background:var(--panel);padding:12px;margin:10px 0}
+.cardhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.cardhead b{color:var(--white);letter-spacing:.06em}
+.xbtn{border-color:var(--red);color:var(--red);padding:0;width:48px;font-size:20px}
+.cuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.cuts button{padding:6px 2px;font-size:15px;letter-spacing:0}
+.chips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.chips button{padding:0;font-size:18px;letter-spacing:0}
+.chips button.wide{grid-column:span 5;font-size:16px}
+.live{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-top:1px dashed var(--fg-faint);padding:8px 0 0;flex-wrap:wrap}
+.live span{color:var(--fg-dim);font-size:13px}
+.live b{color:var(--white);font-size:20px}
+.muted{color:var(--fg-dim);font-size:14px;line-height:1.4}
+.hint{display:block;font-size:12px;color:var(--amber);margin-top:3px}
+details>summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:var(--fg-dim);letter-spacing:.05em}
+.num{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--fg-faint);background:var(--panel);padding:12px;margin:8px 0;min-height:72px;letter-spacing:0}
+.num span{color:var(--fg-dim);font-size:14px;line-height:1.3}
+.num span i{display:block;font-style:normal;font-size:12px;color:var(--ph)}
+.num b{color:var(--white);font-size:28px;white-space:nowrap}
+.num.key b{font-size:34px;color:var(--fg);text-shadow:0 0 10px rgba(57,255,106,.5)}
+.num:active{background:var(--fg-faint);color:var(--fg)}
+.banner{display:block;width:100%;text-align:left;margin:12px 0;padding:14px 12px;border:2px solid var(--fg);font-weight:bold;font-size:20px;color:var(--fg);background:#000;letter-spacing:.03em}
 .banner small{display:block;font-weight:normal;font-size:14px;margin-top:4px;color:var(--white)}
 .banner.notmet{border-color:var(--red);color:var(--red)}
 .banner.incomplete{border-color:var(--amber);color:var(--amber)}
-.sheetrow{border:1px solid var(--fg-faint);padding:8px;margin:8px 0;font-size:14px}
-.sheetrow .t{color:var(--white);font-weight:bold;margin-bottom:4px;overflow-wrap:anywhere}
-.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
-.cells div{min-width:0;overflow-wrap:anywhere}
-.cells i{display:block;font-style:normal;color:var(--fg-dim);font-size:12px}
-.cells b{color:var(--white);font-size:17px}
+.warnbox{color:var(--amber);font-size:15px;line-height:1.4;padding-left:20px;margin:6px 0}
+.slot{border:1px solid var(--fg-dim);padding:12px;margin:12px 0;background:var(--panel)}
+.slot>b{display:block;color:var(--white);letter-spacing:.06em;margin-bottom:8px}
+.seg{border-top:1px dashed var(--fg-faint);padding-top:10px;margin-top:10px}
+.runchoice{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.runchoice button{padding:4px 2px;font-size:15px;letter-spacing:0}
+.tl{display:flex;min-height:52px;border:1px solid var(--fg-dim);margin:6px 0 2px;background:#000}
+.tl button{min-width:0;flex:1 1 0;white-space:normal;line-height:1.1;border:0;border-right:2px solid var(--bg);padding:0 4px;font-size:14px;letter-spacing:0;overflow:hidden;background:var(--fg-faint);color:var(--white)}
+.tl button.alt{background:rgba(255,194,61,.22)}
+.tl button.gap{background:transparent;color:var(--ph)}
+.tlx{display:flex;justify-content:space-between;color:var(--fg-dim);font-size:12px;margin-bottom:8px}
+.movebox{border:1px dashed var(--amber);padding:10px;margin:10px 0}
+.count{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.count button{min-height:72px;font-size:22px;font-weight:bold}
+.drow{border:1px dashed var(--fg-faint);padding:10px;margin:0 0 10px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.overlay[hidden]{display:none}
+.sheet{background:var(--bg);border:1px solid var(--fg);border-bottom:0;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;padding:14px 14px calc(18px + env(safe-area-inset-bottom))}
+.sheet .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.sheet .top b{color:var(--white);font-size:17px}
+.sheet .big:not(button){font-size:34px;color:var(--fg);margin:4px 0 8px;text-shadow:0 0 10px rgba(57,255,106,.5)}
 ol.math{padding-left:26px;margin:8px 0}
-ol.math li{margin:0 0 10px;line-height:1.35;color:var(--white);overflow-wrap:anywhere}
+ol.math li{margin:0 0 12px;line-height:1.4;color:var(--white);font-size:17px;overflow-wrap:anywhere}
 ol.math li.bad{color:var(--red);font-weight:bold}
 ol.math li.good{color:var(--fg);font-weight:bold}
-textarea{width:100%;min-height:160px;font:inherit;font-size:16px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-.row>*{flex:1 1 140px}
-.muted{color:var(--fg-dim);font-size:13px;line-height:1.4}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw}
-select{width:100%;min-height:48px;font:inherit;font-size:18px;background:#000;color:var(--white);border:1px solid var(--fg-dim);padding:8px 6px;border-radius:0}
-select:focus{outline:2px solid var(--fg)}
-.quick{border:2px solid var(--fg)}
-.quick h2{margin:0 0 10px;color:var(--fg)}
-.qbig{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;border-top:1px dashed var(--fg-faint);padding:8px 0}
-.qbig span{color:var(--fg-dim);font-size:14px}
-.qbig b{color:var(--white);font-size:30px;text-shadow:0 0 10px rgba(57,255,106,.45)}
-.qmath{color:var(--white);line-height:1.45;font-size:15px;margin:6px 0 10px;overflow-wrap:anywhere}
-.mrow{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 48px;gap:8px;align-items:end;margin-bottom:4px}
-.brow{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:8px;align-items:end}
-.drow{border:1px dashed var(--fg-faint);padding:10px;margin:0 0 10px}
-.runbox{border:1px solid var(--fg-faint);padding:10px;margin:0 0 10px}
-.rname{display:block;color:var(--white);margin-bottom:8px;letter-spacing:.04em}
-.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-.seg button{padding:6px 2px;font-size:16px;letter-spacing:0;line-height:1.15}
-.seg button.on{background:var(--fg);color:#000;font-weight:bold}
-.pmh{display:block;color:var(--fg-dim);font-size:13px;letter-spacing:.08em;margin:12px 0 4px}
-.pmrow{color:var(--white);font-size:15px;line-height:1.4;padding:6px 0;border-bottom:1px dashed var(--fg-faint);overflow-wrap:anywhere}
-.pmrow.ok{color:var(--fg)}
-.pmrow.short{color:var(--amber)}
-.panel.must{border:2px solid var(--red)}
-#prob-must{color:var(--red);font-weight:bold;margin:0 0 8px}
-#problist{padding-left:22px;margin:6px 0 10px;color:var(--white);line-height:1.4}
-#maint{min-height:90px;font-size:16px}
 .sheetview{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:20;padding:0 14px calc(30px + env(safe-area-inset-bottom))}
 .sheetview[hidden]{display:none}
 .svtop{position:sticky;top:0;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--fg-faint)}
@@ -132,130 +137,50 @@ select:focus{outline:2px solid var(--fg)}
 .svline.big b{font-size:32px;color:var(--fg)}
 .sheetview h3{color:var(--fg-dim);font-size:14px;letter-spacing:.1em;margin:18px 0 4px}
 .sheetview h3.bad{color:var(--red)}
+.svrow{border:1px solid var(--fg-faint);padding:8px;margin:8px 0}
+.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cells div{min-width:0;overflow-wrap:anywhere}
+.cells i{display:block;font-style:normal;color:var(--fg-dim);font-size:12px}
+.cells b{color:var(--white);font-size:18px}
 .svlist{font-size:20px;color:var(--white);padding-left:24px;line-height:1.45}
 .svp{font-size:20px;color:var(--white)}
-.warnli{color:var(--amber)}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#000;padding:12px 16px;font-weight:bold;display:none;max-width:90vw;z-index:40}
 body.noscroll{overflow:hidden}
-#fill{border-color:var(--amber);color:var(--amber)}
+.trybadge{color:var(--amber);font-size:12px;letter-spacing:.08em}
+/* clock-time inputs: copied from the tracker's setup screen (.in, .lbl, .field, .row2, .break-row, .sub) */
+.field{margin-bottom:1.25rem;min-width:0}
+.field>label{display:block;margin-bottom:.4rem}
+label.lbl,.field .lbl{color:var(--amber);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase}
+input.in{width:100%;min-width:0;height:3.25rem;min-height:0;padding:0 .85rem;background:#000;color:var(--white);border:2px solid var(--fg-dim);border-radius:3px;
+font-family:var(--font);font-size:1.25rem;font-variant-numeric:tabular-nums;color-scheme:dark;-webkit-appearance:none;appearance:none}
+input.in:focus{outline:none;border-color:var(--fg);box-shadow:0 0 10px rgba(57,255,106,.35)}
+input.in::placeholder{color:rgba(57,255,106,.35);font-size:1.25rem}
+
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
+.break-row{display:grid;grid-template-columns:minmax(0,1fr) 6rem 3.25rem;gap:.5rem;margin-bottom:.6rem;align-items:end}
+.break-row .field{margin-bottom:0}
+.break-row .btn{min-height:3.25rem;height:3.25rem;padding:0;border:2px solid var(--red);border-radius:3px;color:var(--red);font-weight:700;letter-spacing:.08em}
+.field .sub,p.sub{color:var(--fg-dim);font-size:.85rem;margin:.4rem 0 0}
+input.flash{outline:3px solid var(--amber)}
+.help{color:var(--fg-dim);margin:0 0 1.5rem}
+.calc-note{margin:.5rem 0 0;color:var(--amber);min-height:1.4em}
+.calc-note:empty{min-height:0;margin:0}
+html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 </style>
+<script src="/data/config.js"></script><script src="/data/submit.js"></script><script src="/data/fields.js"></script><script src="/data/scan.js"></script>
 </head>
 <body>
 <header>
-  <h1>PRODUCTION REPORT CALC<small>fills out the P-310 sheet for you</small></h1>
+  <h1>PRODUCTION LOG<small>P-310 helper</small></h1>
   <a class="back" href="/draw/app/">&larr; TRACKER</a>
 </header>
-
-<div class="panel quick" id="quick">
-  <h2>QUICK: AVG COIL WEIGHT</h2>
-  <div class="grid2">
-    <div class="f"><label for="q-tot">Card total lbs</label><input id="q-tot" inputmode="decimal" autocomplete="off" placeholder="card total lbs"></div>
-    <div class="f"><label for="q-coils">Coils on card</label><input id="q-coils" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="coils on card"></div>
-  </div>
-  <div class="f"><label for="q-ran">Coils I ran (optional)</label>
-    <div class="stepper"><button id="q-minus" type="button" aria-label="One less coil">&minus;</button><input id="q-ran" inputmode="decimal" autocomplete="off" placeholder="coils ran"><button id="q-plus" type="button" aria-label="One more coil">+</button></div>
-    <span class="hint">Only if you did not run the whole card</span>
-  </div>
-  <div class="qbig"><span>Avg coil weight</span><b id="q-avg">&ndash;</b></div>
-  <div class="qbig" id="q-weight-row" hidden><span id="q-wlabel">Weight ran</span><b id="q-weight">&ndash;</b></div>
-  <div class="qbig" id="q-left-coils-row" hidden><span>Coils left on card</span><b id="q-left-coils">&ndash;</b></div>
-  <div class="qbig" id="q-left-weight-row" hidden><span>Weight left on card</span><b id="q-left-weight">&ndash;</b></div>
-  <p class="qmath" id="q-math"></p>
-  <button class="big" id="q-add" type="button">+ ADD TO MY SHIFT REPORT</button>
-</div>
-
-<div id="fill-wrap" hidden>
-  <button class="big" id="fill" type="button">FILL FROM TODAY'S TRACKER</button>
-  <div class="panel" id="fill-preview" hidden>
-    <b style="color:var(--white)">This is what the tracker has for today:</b>
-    <ul id="fill-list" class="muted" style="font-size:15px"></ul>
-    <p class="muted">Card # comes in blank: add it from each work order. The tracker itself is not changed.</p>
-    <div class="row"><button id="fill-replace" type="button" class="solid">REPLACE MY REPORT</button><button id="fill-merge" type="button">ADD TO MY REPORT</button></div>
-    <button id="fill-cancel" type="button" class="warn" style="width:100%;margin-top:10px">CANCEL</button>
-  </div>
-</div>
-
-<h2>1. Top of the sheet <span style="text-transform:none;letter-spacing:0">(optional)</span></h2>
-<div class="panel">
-  <div class="f"><label for="h-name">Name</label><input id="h-name" autocomplete="off"></div>
-  <div class="grid2">
-    <div class="f"><label for="h-date">Date</label><input id="h-date" autocomplete="off"></div>
-    <div class="f"><label for="h-shift">Shift</label><input id="h-shift" placeholder="8a-6p" autocomplete="off"></div>
-  </div>
-</div>
-
-<h2>2. One box per work order (card)</h2>
-<p class="muted">Copy the numbers off each work order. The calculator works out Avg. Wgt. and Weight for you.</p>
-<div id="cards"></div>
-<button class="big" id="add" type="button">+ ADD CARD</button>
-
-<h2>3. Your shift: breaks and downtime</h2>
-<div class="panel">
-  <div class="grid2">
-    <div class="f"><label for="shiftHours">Shift length</label><input id="shiftHours" inputmode="numeric" data-hm="dec" autocomplete="off"><span class="hint">Remembered</span></div>
-    <div class="f"><label for="shiftStart">Shift starts at</label><input id="shiftStart" type="time" autocomplete="off"><span class="hint">Only needed for times</span></div>
-  </div>
-  <b style="color:var(--white)">Breaks</b>
-  <div id="breaks"></div>
-  <button id="add-break" type="button" style="width:100%">+ ADD BREAK</button>
-  <b style="color:var(--white);display:block;margin-top:16px">Downtime</b>
-  <p class="muted">Pick the machine if only that one was down. Leave it blank (or All machines) if everything stopped.</p>
-  <div id="downtime"></div>
-  <button id="add-down" type="button" style="width:100%">+ ADD DOWNTIME</button>
-  <div class="out" style="margin-top:12px"><span>HOURS PER SHIFT</span><b id="hours-out">&ndash;</b><em id="hours-out-why"></em></div>
-</div>
-
-<h2>4. Hours each machine ran</h2>
-<p class="muted">Each machine's goal only counts for the time it ran. Downtime picked for a machine comes off that machine.</p>
-<div class="panel" id="runhours"></div>
-
-<h2 id="sheet-h">5. Copy this onto the sheet</h2>
-<div class="panel form" id="result">
-  <div id="sheetrows"></div>
-  <div class="line"><span>Total Weight Produced</span><b id="r-total">0</b></div>
-  <div class="line"><span>Hours per shift <small id="r-hm"></small></span><b id="r-hours"></b></div>
-  <div class="line"><span>Goal: Lbs/Hour</span><b id="r-goal"></b></div>
-  <div class="line rate" id="rate-line" title="Tap to see the math"><span>Average Lbs/per Hour<br><small>(Total Weight &divide; hours) &middot; tap for math</small></span><b id="r-rate">&ndash;</b></div>
-  <div id="permachine"></div>
-  <div class="banner incomplete" id="banner">Fill in a card to start</div>
-  <div class="warnbox" id="warnings"></div>
-  <button class="big solid" id="sheetbtn" type="button" style="margin-top:12px">COPY TO SHEET VIEW (BIG TEXT)</button>
-</div>
-
-<div class="panel" id="probpanel">
-  <p id="prob-must" hidden>GOAL NOT MET: these must go on the sheet.</p>
-  <b style="color:var(--white)">Problems and reasons for downtime</b>
-  <ul id="problist"></ul>
-  <button id="copy-prob" type="button" style="width:100%">COPY PROBLEM LIST</button>
-  <div class="f" style="margin-top:12px"><label for="maint">Maintenance issues to follow up on</label><textarea id="maint" placeholder="Like: leaking hose on the West Vaughn"></textarea></div>
-</div>
-
-<button class="big" id="mathbtn" aria-expanded="false" type="button">SHOW THE MATH</button>
-<div class="panel" id="mathpanel" hidden>
-  <p class="muted">Every step, with your numbers. Anyone can check it with a phone calculator.</p>
-  <ol class="math" id="steps"></ol>
-</div>
-
-<h2>6. Summary to copy or text</h2>
-<div class="panel">
-  <textarea id="summary" readonly></textarea>
-  <div class="row" style="margin-top:10px"><button id="copy" type="button">COPY SUMMARY</button></div>
-</div>
-
-<h2>Machines and goals (saved on this phone)</h2>
-<div class="panel">
-  <div id="machines"></div>
-  <button id="add-machine" type="button" style="width:100%">+ ADD MACHINE</button>
-</div>
-
-<div class="row" style="margin-top:22px"><button class="big warn" id="clear" type="button">CLEAR / NEW SHIFT</button></div>
-<p class="muted" style="margin-top:16px">Saved on this phone automatically. Works without signal once it has loaded.</p>
-<datalist id="reasons"></datalist>
+<main id="app"></main>
+<div class="navbar" id="navbar" hidden><div class="in"><button id="nav-back" type="button" class="ghost">&larr; BACK</button><button id="nav-next" type="button" class="solid">NEXT &rarr;</button></div></div>
+<div class="overlay" id="drill" hidden role="dialog" aria-label="How we got it"><div class="sheet"><div class="top"><b id="drill-title"></b><button id="drill-close" type="button">CLOSE</button></div><div class="big" id="drill-big"></div><p class="muted" id="drill-sub">How we got it, step by step:</p><ol class="math" id="drill-steps"></ol></div></div>
+<div class="sheetview" id="sheetview" hidden role="dialog" aria-label="Copy to sheet"><div class="svtop"><b>COPY ONTO THE P-310</b><button id="sv-close" type="button">CLOSE</button></div><div id="sv-body"></div></div>
+<datalist id="reasons"><option value="die change"><option value="coil problem"><option value="wire break"><option value="waiting on coils"><option value="maintenance"><option value="meeting"><option value="power"></datalist>
 <div class="toast" id="toast"></div>
-
-<div class="sheetview" id="sheetview" hidden role="dialog" aria-label="Copy to sheet">
-  <div class="svtop"><b>COPY ONTO THE P-310</b><button id="sv-close" type="button">CLOSE</button></div>
-  <div id="sv-body"></div>
-</div>
+<div class="overlay" id="send" hidden role="dialog" aria-modal="true" aria-labelledby="send-title"><div class="sheet"><div class="top"><b id="send-title">SEND TO TRACKER</b></div><div id="send-body"></div></div></div>
 <script id="calc-core">
 
 /* ===== CALC CORE: line-for-line port of production_calc.py. Keep the two in sync. ===== */
@@ -318,6 +243,11 @@ var ProdCalc = (function () {
       else steps.push("Card " + label + ": " + fmtInt(avg) + " lbs \u00d7 " + fmtNum(drawn) + " " +
         plural(drawn, "coil", "coils") + " drawn = " + fmtInt(weight) + " lbs");
     }
+    // weight known from weighed coils (tracker fill, or a card total) but no avg yet: avg = weight / coils drawn
+    if (avg === null && weight !== null && weight > 0 && drawn !== null && drawn > 0) {
+      avg = rhu(weight / drawn); avgSource = "weight";
+      steps.push("Card " + label + ": avg " + fmtInt(weight) + " lbs \u00f7 " + fmtNum(drawn) + " " + plural(drawn, "coil", "coils") + " = " + fmtInt(avg) + " lbs per coil");
+    }
     var coilsText;
     if (drawn !== null && drawn > 0) coilsText = fmtNum(drawn) + (cut ? "=" + fmtNum(coilsOut) : "");
     else if (weighed.length) coilsText = fmtInt(weighed.length);
@@ -376,7 +306,7 @@ var ProdCalc = (function () {
        shift goal lbs = sum(machine goal lb/hr x machine run hours)
        goal lb/hr for the sheet = shift goal lbs / net shift hours.
      One machine running the whole net shift reduces to that machine's own goal. */
-  function goalPlan(run, netMin, steps, warnings) {
+  function goalPlan(run, netMin, steps, warnings, allNote) {
     if (!run.length) return [null, "", null];
     if (run.some(function (m) { return m.goal === null; })) return [null, "", null];
     var gsum = sum(run.map(function (m) { return m.goal * m.runMin; }));
@@ -387,9 +317,9 @@ var ProdCalc = (function () {
       steps.push("Goal: " + run[0].name + " goal is " + fmtInt(run[0].goal) + " lbs/hr.");
       return [goal10, text, gsum];
     }
-    run.forEach(function (m) { steps.push(m.name + " ran " + fmtHrs(m.runMin) + " \u00d7 " + fmtInt(m.goal) + " = " + fmtInt(m.goalLbs) + " lbs."); });
+    run.forEach(function (m) { steps.push((m.label || m.name) + " ran " + fmtHrs(m.runMin) + " \u00d7 " + fmtInt(m.goal) + " = " + fmtInt(m.goalLbs) + " lbs."); });
     var line = "Your goal for the shift: " + fmtInt(rhu(gsum / 60)) + " lbs. Spread over " + fmtHrs(netMin) + " = " + fmtTenths(goal10) + " lbs/hr.";
-    if (run.length > 1) line += " (If " + (run.length === 2 ? "both" : "all " + run.length) + " ran all shift it would be " +
+    if (run.length > 1 && allNote !== false) line += " (If " + (run.length === 2 ? "both" : "all " + run.length) + " ran all shift it would be " +
       fmtInt(sum(run.map(function (m) { return m.goal; }))) + " lbs/hr.)";
     steps.push(line);
     return [goal10, text, gsum];
@@ -432,7 +362,33 @@ var ProdCalc = (function () {
     else steps.push("Total Weight Produced: " + counted.map(fmtInt).join(" + ") + " = " + fmtInt(total) + " lbs");
 
     var run = [], seen = {};
-    rowsIn.forEach(function (row, i) {
+    /* Machine slots: at most 2 slots; each slot is a list of segments, one per
+       machine it ran (an operator who moves from Draw 2 to Draw 3 gets two segments). */
+    var slots = Array.isArray(shift.slots) && shift.slots.length ? shift.slots.slice(0, 2) : null;
+    var byKey = {}, slotKeys = [];
+    if (slots) {
+      slots.forEach(function (sl) {
+        ((sl || {}).segments || []).forEach(function (sg) {
+          var nm = String((sg || {}).machine || "").trim(), k = mkey(nm);
+          if (k === "" || Object.prototype.hasOwnProperty.call(byKey, k)) return;
+          var m = findMachine(machines, nm), g = m ? num(m.goal) : null;
+          byKey[k] = { key: k, name: nm, goal: g !== null && g > 0 ? rhu(g) : null, lbs: 0, runMin: 0, goalLbs: 0, rate10: null };
+          slotKeys.push(k);
+          if (byKey[k].goal === null) warnings.push(nm + " has no need rate yet. Type it on the Machines screen.");
+        });
+      });
+      rowsIn.forEach(function (row, i) {
+        var r = rows[i], k = mkey(row.machine);
+        if (k === "" && slotKeys.length === 1) k = slotKeys[0];
+        if (k === "") { if (r.weight !== null) warnings.push("Card " + r.label + ": pick the machine."); return; }
+        if (!Object.prototype.hasOwnProperty.call(byKey, k)) {
+          if (r.weight !== null) warnings.push("Card " + r.label + ": " + String(row.machine).trim() + " is not on the Machines screen.");
+          return;
+        }
+        if (r.weight !== null) byKey[k].lbs += r.weight;
+      });
+    }
+    if (!slots) rowsIn.forEach(function (row, i) {
       var r = rows[i], k = mkey(row.machine);
       if (k === "") { if (r.weight !== null) warnings.push("Card " + r.label + ": pick the machine."); return; }
       if (!Object.prototype.hasOwnProperty.call(seen, k)) {
@@ -536,7 +492,58 @@ var ProdCalc = (function () {
     steps.push("Average Lbs/Hour: " + fmtInt(total) + " lbs \u00f7 " + fmtNum(hours) + " " + plural(hours, "hour", "hours") +
       " = " + fmtTenths(rate10) + " lbs per hour");
 
+    var anyMoved = false, slotBad = false;
+    if (slots) {
+      var plainOf = function (k) { return sum(dts.filter(function (x) { return x.iv === null && x.key === k; }).map(function (x) { return x.mins; })); };
+      slots.forEach(function (sl, si) {
+        sl = sl || {};
+        var segs = (sl.segments || []).filter(function (sg) { return mkey((sg || {}).machine) !== ""; });
+        if (!segs.length) { warnings.push("Machine " + (si + 1) + ": pick which Draw it was."); slotBad = true; return; }
+        var timedSeg = segs.length > 1 || clock(segs[0].from) !== null || clock(segs[0].to) !== null;
+        if (!timedSeg) {
+          var k0 = mkey(segs[0].machine), mode = ["all", "half", "custom"].indexOf(sl.mode) >= 0 ? sl.mode : "all";
+          var cm = mode === "custom" ? parseHm(sl.minutes) : null;
+          run.push({ key: k0, name: byKey[k0].name, goal: byKey[k0].goal, mode: mode, customMin: cm, slot: si,
+            lbs: byKey[k0].lbs, baseMin: null, downMin: 0, runMin: null, goalLbs: null, rate10: null });
+          return;
+        }
+        if (segs.length > 1) anyMoved = true;
+        if (startC === null) { warnings.push("Type when the shift starts (on the Time screen) so the machine times work."); slotBad = true; return; }
+        var wins = [];
+        for (var j = 0; j < segs.length; j++) {
+          var f = clock(segs[j].from), t = clock(segs[j].to), nm = byKey[mkey(segs[j].machine)].name;
+          var a = f === null ? (j === 0 ? 0 : null) : mod(f - startC, 1440);
+          var b = t === null ? (j === segs.length - 1 ? shiftMin : null) : mod(t - startC, 1440);
+          if (a === null || b === null) { warnings.push(nm + ": type the switch time."); slotBad = true; return; }
+          if (a > shiftMin) a -= 1440;
+          if (b <= a) b += 1440;
+          a = Math.max(a, 0); b = Math.min(b, shiftMin);
+          if (b <= a) { warnings.push(nm + ": check the times (" + fmtClock(mod(startC + a, 1440)) + " start is not before the end)."); slotBad = true; return; }
+          wins.push([a, b]);
+        }
+        var plainAll = plainOf("");
+        segs.forEach(function (sg, j) {
+          var k = mkey(sg.machine), a = wins[j][0], b = wins[j][1], len = b - a;
+          var mineLen = sum(segs.map(function (x, q) { return mkey(x.machine) === k ? wins[q][1] - wins[q][0] : 0; }));
+          var brk = sum(brkIv.map(function (r) { return Math.max(0, Math.min(b, r[1]) - Math.max(a, r[0])); })) + rhu(brkPlain * len / shiftMin);
+          var ivs = dts.filter(function (x) { return x.iv !== null && (x.key === "" || x.key === k); }).map(function (x) { return x.iv; });
+          var dm = sum(mergeIv(ivs).map(function (iv) {
+            var lo = Math.max(iv[0], a), hi = Math.min(iv[1], b);
+            return hi > lo ? workedMin([lo, hi], shiftMin, brkIv) : 0;
+          })) + rhu(plainAll * len / shiftMin) + rhu(plainOf(k) * len / mineLen);
+          var base = len - brk, rm = Math.max(0, base - dm), when = fmtClock(mod(startC + a, 1440)) + " to " + fmtClock(mod(startC + b, 1440));
+          run.push({ key: k, name: byKey[k].name, label: byKey[k].name + " (" + when + ")", goal: byKey[k].goal, mode: "clock", slot: si,
+            lbs: 0, baseMin: base, downMin: dm, runMin: rm, goalLbs: null, rate10: null });
+          steps.push(byKey[k].name + " ran " + when + ": " + fmtHm(len) + " − " + fmtInt(brk) + " min breaks − " +
+            fmtInt(dm) + " min downtime = " + fmtHm(rm));
+        });
+      });
+      if (!slotBad && !run.length) { warnings.push("Pick the machine on the Machines screen."); slotBad = true; }
+      res.machinesRun = run;
+      if (slotBad) { res.headline = "Check the machines"; return res; }
+    }
     run.forEach(function (m) {
+      if (m.mode === "clock") { if (m.goal !== null) m.goalLbs = rhu(m.goal * m.runMin / 60); return; }
       var base, label;
       if (m.mode === "half") { base = rhu(avail / 2); label = "half shift"; }
       else if (m.mode === "custom" && m.customMin !== null && m.customMin > 0) { base = rhu(m.customMin); label = "set to"; }
@@ -551,15 +558,26 @@ var ProdCalc = (function () {
       if (dm > 0 || m.mode !== "all" || run.length > 1)
         steps.push(m.name + " run time: " + label + " " + fmtHm(base) + " \u2212 " + fmtInt(dm) + " min downtime = " + fmtHm(m.runMin));
     });
-    if (run.length > 1) res.allShiftGoal = run.every(function (m) { return m.goal !== null; }) ? sum(run.map(function (m) { return m.goal; })) : null;
+    if (run.length > 1 && !anyMoved) res.allShiftGoal = run.every(function (m) { return m.goal !== null; }) ? sum(run.map(function (m) { return m.goal; })) : null;
 
-    var gp = goalPlan(run, netMin, steps, warnings), goal10 = gp[0], goalText = gp[1], gsum = gp[2];
+    var gp = goalPlan(run, netMin, steps, warnings, !anyMoved), goal10 = gp[0], goalText = gp[1], gsum = gp[2];
     if (goal10 === null) {
       if (!run.length) warnings.push("Pick the machine on each card so the goal is known.");
       res.headline = "Set the machine goal"; return res;
     }
     res.goal10 = goal10; res.goal = goal10 / 10; res.goalText = goalText;
-    if (run.length > 1) run.forEach(function (m) {
+    var tally = run;
+    if (slots) {
+      tally = slotKeys.map(function (k) {
+        var t = byKey[k], mine = run.filter(function (m) { return m.key === k; });
+        t.runMin = sum(mine.map(function (m) { return m.runMin; }));
+        t.goalLbs = sum(mine.map(function (m) { return m.goalLbs; }));
+        t.rate10 = t.runMin > 0 ? rhu(t.lbs * 600 / t.runMin) : null;
+        return t;
+      }).filter(function (t) { return run.some(function (m) { return m.key === t.key; }); });
+      res.machineTotals = tally;
+    }
+    if (tally.length > 1) tally.forEach(function (m) {
       if (m.rate10 === null) { steps.push(m.name + " made " + fmtInt(m.lbs) + " lbs (no run time left)."); return; }
       var gap = m.lbs - m.goalLbs;
       steps.push(m.name + " made " + fmtInt(m.lbs) + " lbs in " + fmtHrs(m.runMin) + " = " + fmtTenths(m.rate10) + " lbs/hr (its goal " +
@@ -575,14 +593,14 @@ var ProdCalc = (function () {
       res.status = "met";
       steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(diff10) + " lbs/hr OVER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal). GOAL MET.");
       steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(overShort) + " lbs over.");
-      res.headline = "GOAL MET +" + fmtTenths(diff10) + " lbs/hr";
+      res.headline = "GOAL MET · " + fmtTenths(diff10) + " lbs/hr over · " + Math.round(pct10 / 10) + "% of goal";
     } else {
       res.status = "notmet";
       steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(-diff10) + " lbs/hr UNDER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal).");
       steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(-overShort) + " lbs short (about " +
         fmtInt(minutes) + " " + plural(minutes, "minute", "minutes") + " of running at goal speed).");
       steps.push("GOAL NOT MET: you must list the problems and downtime reasons on the sheet.");
-      res.headline = "GOAL NOT MET -" + fmtTenths(-diff10) + " lbs/hr";
+      res.headline = "GOAL NOT MET · " + fmtTenths(-diff10) + " lbs/hr under · " + Math.round(pct10 / 10) + "% of goal";
       if (!problems.length) warnings.push("Goal not met: add your downtime and problems so they go on the sheet.");
     }
     return res;
@@ -608,10 +626,10 @@ var ProdCalc = (function () {
     L.push("Total Weight Produced: " + fmtInt(res.total));
     L.push("Hours per shift: " + (res.hours !== null ? res.hoursText + "  (" + res.hmText + ")" : ""));
     L.push("Goal: Lbs/Hour: " + res.goalText);
-    L.push("Average Lbs/per Hour: " + res.rateText);
+    L.push("Average lbs/hr: " + res.rateText);
     L.push("");
-    if (res.status === "notmet") L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lbs/hr under). You must fill in the problems and downtime below.");
-    else if (res.status === "met") L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lbs/hr over).");
+    if (res.status === "notmet") L.push(">>> GOAL NOT MET (" + fmtTenths(-res.diff10) + " lbs/hr under, " + Math.round(res.pct10 / 10) + "% of goal). You must fill in the problems and downtime below.");
+    else if (res.status === "met") L.push(">>> GOAL MET (" + fmtTenths(res.diff10) + " lbs/hr over, " + Math.round(res.pct10 / 10) + "% of goal).");
     L.push("List all problems and reasons for downtime:");
     res.problems.forEach(function (p) { L.push("  - " + p); });
     if (!res.problems.length) L.push("  (none entered)");
@@ -636,11 +654,13 @@ var ProdCalc = (function () {
       res.note = "Coils ran (" + fmtNum(ranRaw) + ") is more than the " + fmtNum(c) + " on the card. Check the numbers.";
       return res;
     }
-    var weight = rhu(avg * ranRaw);
+    var weight = ranRaw === c ? rhu(t) : rhu(t * ranRaw / c);   // from the card total, so the rounding never adds or drops a pound
     res.weight = weight;
     res.leftCoils = rhu(c - ranRaw);
     res.leftWeight = rhu(t - weight);
-    res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lbs.");
+    if (weight === rhu(avg * ranRaw)) res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " = " + fmtInt(weight) + " lbs.");
+    else res.lines.push("You ran " + fmtNum(ranRaw) + " " + plural(ranRaw, "coil", "coils") + ": " + fmtInt(rhu(t)) + " \u00d7 " + fmtNum(ranRaw) + " \u00f7 " + fmtNum(c) + " = " + fmtInt(weight) +
+      " lbs (worked from the card total so the rounding stays exact; " + fmtInt(avg) + " \u00d7 " + fmtNum(ranRaw) + " would be " + fmtInt(rhu(avg * ranRaw)) + ").");
     if (res.leftCoils > 0) {
       res.lines.push(fmtNum(res.leftCoils) + " " + plural(res.leftCoils, "coil", "coils") + " left on the card (" + fmtInt(res.leftWeight) + " lbs).");
     }
@@ -655,7 +675,9 @@ var ProdCalc = (function () {
   function isoMs(s) { var v = Date.parse(String(s)); return isFinite(v) ? v : null; }
   function ymdToSheet(s) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
-    return m ? parseInt(m[2], 10) + "/" + parseInt(m[3], 10) + "/" + m[1].slice(2) : "";
+    if (!m) return "";
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);   // same date style as the rest of the app: "Fri Nov 13, 2026"
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate() + ", " + m[1];
   }
   function uniq(items) {
     var out = [];
@@ -726,7 +748,7 @@ var ProdCalc = (function () {
       } else mins = num(d.minutes);
       if (mins === null || mins <= 0) return;
       var mid = String(d.machineId || "");
-      var mn = mid === "all" ? "All machines" : (has(mid) ? names[mid] : "");
+      var mn = mid === "all" ? "" : (has(mid) ? names[mid] : "");   // "" = every draw (whole shift)
       out.downtime.push({ minutes: rhu(mins), reason: reason, machine: mn, start: st, end: en });
     });
     if (out.shiftHours !== null) out.summary.push("Shift: " + fmtNum(out.shiftHours) + " hr (" + sh.start + " to " + sh.end + ")");
@@ -744,568 +766,892 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
 </script>
 <script>
 (function () {
-  var KEY = "drawCalcV1", TRACKER_KEY = "drawRateV5";
-  var P = ProdCalc;
+  "use strict";
+  var P = ProdCalc, KEY = "drawCalcTryV1", TRACKER_KEY = "drawRateV5";
+  var DRAWS = ["Draw 1", "Draw 2", "Draw 3", "Draw 4", "Draw 5", "Draw 6", "Draw 7", "Draw 8", "Draw 9"];
+  var STEPS = ["Coils", "Time", "Machines", "Results"];
   var $ = function (id) { return document.getElementById(id); };
-  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
-  function today() { var d = new Date(); return (d.getMonth() + 1) + "/" + d.getDate() + "/" + String(d.getFullYear()).slice(2); }
-  function blankRow() { return { card: "", finish: "", grade: "", compound: "", package: "", machine: "", woCoils: "", woTotal: "",
-    avgWgt: "", coilsDrawn: "", coilsOut: "", halfCut: false, weighed: "", note: "" }; }
-  var SEED = [{ name: "West Vaughn", goal: 2050 }, { name: "Showa", goal: 849 }];
-  function defaults() { return { shiftHours: 10, breaks: [], machines: SEED.map(function (m) { return { name: m.name, goal: m.goal }; }) }; }
-  function fresh(st) {
-    return { name: "", date: today(), shift: "", shiftHours: String(st.shiftHours || 10), start: st.shiftStart || "",
-      breaks: (st.breaks || []).map(function (m) { return m && typeof m === "object" ? { minutes: String(m.minutes), start: m.start || "" } : { minutes: String(m), start: "" }; }),
-      downtime: [], runs: [], rows: [blankRow()], maintenance: "" };
-  }
-  var state;
-  try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) { state = null; }
-  if (!state || !state.shift) state = { schema: "draw-calc/v2", settings: defaults() };
-  // migrate v1 (hours + one goal) to v2 (shift length, breaks, downtime, machine list)
-  if (state.schema !== "draw-calc/v2") {
-    var old = state.settings || {}, g = Number(old.goal) || 2800, st = defaults();
-    st.machines = [];
-    (state.shift && state.shift.rows || []).forEach(function (r) {
-      if (r.machine && !P.findMachine(st.machines, r.machine)) st.machines.push({ name: String(r.machine).trim(), goal: g });
-    });
-    SEED.forEach(function (m) { if (!P.findMachine(st.machines, m.name)) st.machines.push({ name: m.name, goal: m.goal }); });
-    st.shiftHours = Number(old.hours) || 10;
-    var sh = state.shift || fresh(st);
-    sh.shiftHours = sh.shiftHours || String(sh.hours || st.shiftHours);
-    delete sh.hours; delete sh.goal;
-    state = { schema: "draw-calc/v2", settings: st, shift: sh };
-  }
-  var S = state.settings;
-  if (!S.machines) S.machines = [];
-  if (!state.shift) state.shift = fresh(S);
-  var sh0 = state.shift;
-  ["breaks", "downtime", "rows", "runs"].forEach(function (k) { if (!Array.isArray(sh0[k])) sh0[k] = []; });
-  if (!sh0.rows.length) sh0.rows.push(blankRow());
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  var app = $("app");
 
-  function splitWeighed(s) {
-    if (Array.isArray(s)) return s;
-    return String(s || "").split(/[\s;+\/]+/).filter(function (x) { return x !== ""; });
+  function esc(s) { return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function blankRow() { return { card: "", woCoils: "", woTotal: "", coilsDrawn: "", coilsOut: "", cut: 1, machine: "", finish: "", grade: "", compound: "", package: "" }; }
+  function blankSlot() { return { mode: "all", minutes: "", segments: [{ machine: "", from: "", to: "" }] }; }
+  function fresh() {
+    return { screen: "home", step: 0, name: "", date: "", shift: "", rows: [blankRow()], shiftHours: "", start: "", end: "", breaks: [], downtime: [],
+      slotCount: 0, slots: [blankSlot(), blankSlot()], goals: {}, maintenance: "", q: { tot: "", coils: "", ran: "" } };
+  }
+  var S;
+  try { S = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { S = null; }
+  if (!S || typeof S !== "object" || !Array.isArray(S.rows)) S = fresh();
+  else { var F = fresh(); Object.keys(F).forEach(function (k) { if (S[k] === undefined) S[k] = F[k]; }); }
+  /* Shift length comes from SHIFT START and SHIFT END, like the tracker: end earlier than start = ends next morning;
+     same start and end = not set. */
+  function shiftSpan() {
+    var a = P.clock(S.start), b = P.clock(S.end);
+    if (a === null || b === null || a === b) return null;
+    return { min: b > a ? b - a : b + 1440 - a, overnight: b < a };
+  }
+  function deriveHours() { var w = shiftSpan(); S.shiftHours = w ? String(w.min / 60) : ""; }
+  function endFrom(start, hours) {
+    var a = P.clock(start), h = P.num(hours);
+    if (a === null || h === null || !(h > 0) || h >= 24) return "";
+    var e = ((a + Math.round(h * 60)) % 1440 + 1440) % 1440;
+    return (e < 600 ? "0" : "") + Math.floor(e / 60) + ":" + (e % 60 < 10 ? "0" : "") + (e % 60);
+  }
+  function spanNote() {
+    var w = shiftSpan(); if (!w) return "";
+    var h = Math.floor(w.min / 60), m = w.min % 60;
+    return (h ? h + "h " + (m < 10 ? "0" : "") + m + "m" : m + "m") + " shift" + (w.overnight ? " \u00b7 ends next morning" : "");
+  }
+  // saved shifts from before start/end: keep their length by filling in the end time
+  if (!S.end && S.start && S.shiftHours) S.end = endFrom(S.start, S.shiftHours);
+  deriveHours();
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 1800); }
+  function inp(id, val, ph, attrs) {
+    attrs = attrs || 'inputmode="decimal"';
+    if (/inputmode="numeric"/.test(attrs) && !/pattern=/.test(attrs)) attrs += ' pattern="[0-9]*"';   // whole counts: number keypad on iPhone too
+    return '<input id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) + '" autocomplete="off" ' + attrs + '>';
+  }
+  function field(label, id, val, ph, attrs, hint) {
+    return '<div class="f"><label for="' + id + '">' + label + '</label>' + inp(id, val, ph, attrs) + (hint ? '<span class="hint">' + hint + '</span>' : "") + '</div>';
+  }
+
+  /* Clock-time inputs: same markup, format and look as the tracker's new-day setup
+     (native <input type="time" class="in">, amber uppercase .lbl label, value stored as 24h HH:MM,
+     shown in the phone's own 12/24h format). */
+  function tfield(label, id, val, attrs, sub) {
+    return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in" type="time" id="' + id + '" value="' + esc(val) + '"' + (attrs ? " " + attrs : "") + '>' +
+      (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
+  }
+
+  /* ---------- shift object for the calc core ---------- */
+  function slotsInUse() { return S.slots.slice(0, S.slotCount); }
+  function usedNames() {
+    var out = [];
+    slotsInUse().forEach(function (sl) { sl.segments.forEach(function (sg) { if (sg.machine && out.indexOf(sg.machine) < 0) out.push(sg.machine); }); });
+    return out;
   }
   function coreShift() {
-    var s = state.shift;
-    return { name: s.name, date: s.date, shift: s.shift, shiftHours: s.shiftHours, start: s.start || "", breaks: s.breaks, downtime: s.downtime,
-      machines: S.machines, maintenance: s.maintenance,
-      runs: s.runs.map(function (r) { return { machine: r.machine, mode: r.mode, minutes: P.parseHm(r.custom) }; }),
-      rows: s.rows.map(function (r) { var o = {}; for (var k in r) o[k] = r[k]; o.actualWeights = splitWeighed(r.weighed); return o; }) };
+    var names = usedNames().slice();
+    S.rows.forEach(function (r) { if (r.machine && names.indexOf(r.machine) < 0) names.push(r.machine); });
+    return { name: S.name, date: S.date, shift: S.shift, shiftHours: S.shiftHours, start: S.start, breaks: S.breaks, downtime: S.downtime,
+      machines: names.map(function (n) { return { name: n, goal: S.goals[n] === undefined ? "" : S.goals[n] }; }),
+      slots: slotsInUse(), maintenance: S.maintenance,
+      rows: S.rows.map(function (r) {
+        var o = {}; Object.keys(r).forEach(function (k) { o[k] = r[k]; });
+        return o;
+      }) };
   }
-  function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 1800); }
-  function copyText(text, ta) {
-    function fallback() { if (ta) { ta.focus(); ta.select(); } try { document.execCommand("copy"); toast("Copied"); } catch (e) { toast("Select the text and copy it"); } }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast("Copied"); }, fallback);
-    else fallback();
-  }
-  function field(obj, key, label, hint, mode, id, onChange) {
-    var wrap = el("div", "f");
-    var lab = el("label", "", label); lab.htmlFor = id;
-    var inp = el("input"); inp.id = id; inp.autocomplete = "off";
-    if (mode === "hm-min") { inp.inputMode = "numeric"; inp.setAttribute("data-hm", "min"); }   // hrs + mins boxes (/data/fields.js), stored as minutes
-    else if (mode && mode !== "text") inp.inputMode = mode;
-    if (inp.inputMode === "numeric") inp.setAttribute("pattern", "[0-9]*");
-    inp.value = obj[key] === undefined || obj[key] === null ? "" : obj[key];
-    inp.addEventListener("input", function () { obj[key] = inp.value; if (onChange) onChange(inp.value); update(); });
-    wrap.appendChild(lab); wrap.appendChild(inp);
-    if (hint) wrap.appendChild(el("span", "hint", hint));
-    return wrap;
+  function calc() {
+    var sh = coreShift(), res = P.compute(sh);
+    res.warnings = res.warnings.map(function (w) { return w === "Enter the shift length (hours)." ? "Type the shift start and shift end." : w; });
+    if (res.headline === "Enter the shift length") res.headline = "Enter shift start and end";
+    return { sh: sh, res: res };
   }
 
-  /* ---------- quick avg coil weight (not saved) ---------- */
-  var Q = { tot: "", coils: "", ran: "" };
-  function quickUpdate() {
-    var r = P.quick(Q.tot, Q.coils, Q.ran);
-    var hasAvg = r.ok && r.avg !== null;
-    var hasRan = r.ok && !r.over && r.weight !== null;
-    $("q-avg").textContent = hasAvg ? P.fmtInt(r.avg) + " lbs" : "\u2013";
-    $("q-weight-row").hidden = !hasRan;
-    $("q-left-coils-row").hidden = !(hasRan && r.leftCoils > 0);
-    $("q-left-weight-row").hidden = !(hasRan && r.leftCoils > 0);
-    if (hasRan) {
-      $("q-wlabel").textContent = "Weight ran";
-      $("q-weight").textContent = P.fmtInt(r.weight) + " lbs";
-      $("q-left-coils").textContent = P.fmtNum(r.leftCoils);
-      $("q-left-weight").textContent = P.fmtInt(r.leftWeight) + " lbs";
-    }
-    if (r.over) $("q-math").textContent = r.note;
-    else if (r.ok) $("q-math").textContent = r.lines.join(" ");
-    else $("q-math").textContent = (Q.tot.trim() || Q.coils.trim() || Q.ran.trim()) ? r.error : "";
-    $("q-add").disabled = !hasRan;
+  /* ---------- drill-in: tap a number to see how we got it ---------- */
+  function cat(s) {
+    if (/^Card |^Total Weight/.test(s)) return "total";
+    if (/^Breaks|^Downtime|^Hours per shift/.test(s)) return "hours";
+    if (/^Average Lbs/.test(s)) return "rate";
+    if (/^You ran|^Whole shift|^GOAL NOT MET/.test(s)) return "status";
+    if (/ made [\d,]+ lbs?/.test(s)) return "machine";
+    return "goal";
   }
-  function bindQuick() {
-    [["q-tot", "tot"], ["q-coils", "coils"], ["q-ran", "ran"]].forEach(function (p) {
-      var i = $(p[0]); i.value = Q[p[1]];
-      i.addEventListener("input", function () { Q[p[1]] = i.value; quickUpdate(); });
-    });
-    function bump(d) {
-      var n = P.num(Q.ran); if (n === null) n = 0;
-      n = Math.max(0, n + d);
-      Q.ran = n ? String(n) : "";
-      $("q-ran").value = Q.ran; quickUpdate();
-    }
-    $("q-minus").addEventListener("click", function () { bump(-1); });
-    $("q-plus").addEventListener("click", function () { bump(1); });
-    $("q-add").addEventListener("click", function () {
-      var r = P.quick(Q.tot, Q.coils, Q.ran); if (!r.ok || r.weight === null) return;
-      var rows = state.shift.rows, last = rows[rows.length - 1];
-      var row = blankRow(); row.woTotal = Q.tot; row.woCoils = Q.coils; row.coilsDrawn = String(r.ran);
-      row.machine = (last && last.machine) || (S.machines.length === 1 ? S.machines[0].name : "");
-      var empty = last && !last.card && !last.woTotal && !last.woCoils && !last.avgWgt && !last.coilsDrawn && !last.weighed;
-      if (empty) { row.machine = last.machine || row.machine; rows[rows.length - 1] = row; } else rows.push(row);
-      renderCards(); update(); toast("Added to your shift report");
-      var idx = rows.indexOf(row), c = $("c" + idx + "-card"); if (c) { c.scrollIntoView({ block: "center" }); c.focus(); }
-    });
-    quickUpdate();
+  function drill(title, big, steps, sub) {
+    $("drill-title").textContent = title; $("drill-big").textContent = big || "";
+    $("drill-sub").textContent = sub || "How we got it, step by step:";
+    $("drill-steps").innerHTML = steps.length ? steps.map(function (s) {
+      var c = /GOAL NOT MET|UNDER the/.test(s) ? "bad" : (/GOAL MET\.|OVER the/.test(s) ? "good" : "");
+      return '<li class="' + c + '">' + esc(s) + '</li>';
+    }).join("") : '<li>Nothing to show yet. Fill in the earlier screens first.</li>';
+    $("drill").hidden = false; document.body.classList.add("noscroll"); $("drill-close").focus();
   }
+  function closeDrill() { $("drill").hidden = true; document.body.classList.remove("noscroll"); }
+  $("drill-close").onclick = closeDrill;
+  $("drill").addEventListener("click", function (e) { if (e.target === $("drill")) closeDrill(); });
 
-  /* ---------- machines (saved on this phone) ---------- */
-  function machineOptions(sel, current, allowBlankLabel, allowAll) {
-    sel.innerHTML = "";
-    var o = el("option", "", allowBlankLabel); o.value = ""; sel.appendChild(o);
-    S.machines.forEach(function (m) {
-      var op = el("option", "", m.name + (P.num(m.goal) ? " (" + P.fmtInt(P.num(m.goal)) + "/hr)" : " (no goal)")); op.value = m.name; sel.appendChild(op);
-    });
-    if (allowAll) { var a = el("option", "", "All machines"); a.value = "All machines"; sel.appendChild(a); }
-    if (current && !P.findMachine(S.machines, current) && !(allowAll && current === "All machines")) {
-      var x = el("option", "", current + " (not in list)"); x.value = current; sel.appendChild(x);
-    }
-    var add = el("option", "", "+ Add new machine\u2026"); add.value = "__add"; sel.appendChild(add);
-    var m = P.findMachine(S.machines, current);
-    sel.value = m ? m.name : (current || "");
-  }
-  function addMachinePrompt() {
-    var name = (prompt("New machine name (like Draw 5):") || "").trim();
-    if (!name) return null;
-    var ex = P.findMachine(S.machines, name); if (ex) return ex.name;
-    var g = P.num(prompt("Goal lbs per hour for " + name + ":", "2800"));
-    S.machines.push({ name: name, goal: g && g > 0 ? g : "" });
-    renderMachines(); return name;
-  }
-  function machineSelect(obj, id, blankLabel, allowAll) {
-    var sel = el("select"); sel.id = id;
-    machineOptions(sel, obj.machine, blankLabel, allowAll);
-    sel.addEventListener("change", function () {
-      if (sel.value === "__add") {
-        var n = addMachinePrompt();
-        if (n) obj.machine = n;
-        refreshSelects();
-      } else obj.machine = sel.value;
-      update();
-    });
-    sel._obj = obj; sel._blank = blankLabel; sel._all = allowAll;
-    return sel;
-  }
-  function refreshSelects() {
-    document.querySelectorAll("select.msel").forEach(function (s) { machineOptions(s, s._obj.machine, s._blank, s._all); });
-  }
-  function renderMachines() {
-    var box = $("machines"); box.innerHTML = "";
-    S.machines.forEach(function (m, i) {
-      var r = el("div", "mrow");
-      var nameF = field(m, "name", "Machine name", "", "text", "m" + i + "-name");
-      var oldName = m.name;
-      nameF.querySelector("input").addEventListener("input", function () {
-        var nv = m.name;
-        state.shift.rows.concat(state.shift.downtime, state.shift.runs).forEach(function (x) { if (P.mkey(x.machine) === P.mkey(oldName)) x.machine = nv; });
-        oldName = nv; refreshSelects(); update();
-      });
-      var goalF = field(m, "goal", "Goal lbs/hr", "", "numeric", "m" + i + "-goal", function () { refreshSelects(); });
-      var del = el("button", "warn", "\u2715"); del.setAttribute("aria-label", "Remove machine " + m.name);
-      del.addEventListener("click", function () {
-        if (!confirm("Remove " + (m.name || "this machine") + " from your list?")) return;
-        S.machines.splice(i, 1); renderMachines(); refreshSelects(); update();
-      });
-      r.appendChild(nameF); r.appendChild(goalF); r.appendChild(del); box.appendChild(r);
-    });
-    if (!S.machines.length) box.appendChild(el("p", "muted", "No machines yet. Add the ones you run and their goal lbs/hour."));
-  }
-
-  /* ---------- cards ---------- */
-  var FIELDS_MORE = [
-    ["finish", "Finish Size", "From work order: FINISH SIZE line", "text"],
-    ["grade", "Grade", "From work order: Grade", "text"],
-    ["compound", "Draw Compound", "", "text"],
-    ["package", "Package", "Like Batch or 1/2 Nylon", "text"],
-    ["avgWgt", "Avg wgt per coil (only if no work order total)", "Leave empty when Coils + Tot Avg Wgt are filled in", "decimal"],
-    ["weighed", "Weighed coils (optional)", "Real scale weights, separated by spaces, like 4600 4620. These replace avg x coils.", "text"]
-  ];
-  function outLine(text, id) {
-    var d = el("div", "out"); d.appendChild(el("span", "", text));
-    var b = el("b", "", "\u2013"); b.id = id; d.appendChild(b);
-    var e = el("em"); e.id = id + "-why"; d.appendChild(e); return d;
-  }
-  function renderCards() {
-    var box = $("cards"); box.innerHTML = "";
-    state.shift.rows.forEach(function (row, i) {
-      if (Array.isArray(row.weighed)) row.weighed = row.weighed.join(" ");
-      var p = el("div", "panel");
-      var head = el("div", "cardhead"); head.appendChild(el("b", "", "CARD " + (i + 1)));
-      var del = el("button", "warn", "REMOVE"); del.setAttribute("aria-label", "Remove card " + (i + 1));
-      del.addEventListener("click", function () {
-        if (!confirm("Remove card " + (i + 1) + (row.card ? " (" + row.card + ")" : "") + "?")) return;
-        state.shift.rows.splice(i, 1); if (!state.shift.rows.length) state.shift.rows.push(blankRow());
-        renderCards(); update();
-      });
-      head.appendChild(del); p.appendChild(head);
-      if (row.note) p.appendChild(el("p", "muted", "From tracker: " + row.note));
-      var g1 = el("div", "grid2");
-      g1.appendChild(field(row, "card", "Card #", "From work order: top left", "text", "c" + i + "-card"));
-      var mf = el("div", "f"); var ml = el("label", "", "Machine"); ml.htmlFor = "c" + i + "-machine";
-      var ms = machineSelect(row, "c" + i + "-machine", "pick a machine", false); ms.className = "msel";
-      mf.appendChild(ml); mf.appendChild(ms); mf.appendChild(el("span", "hint", "Sets the goal"));
-      g1.appendChild(mf); p.appendChild(g1);
-      var g2 = el("div", "grid2");
-      g2.appendChild(field(row, "woCoils", "Coils", "From work order: Coils", "numeric", "c" + i + "-woCoils"));
-      g2.appendChild(field(row, "woTotal", "Tot Avg Wgt", "From work order: Tot Avg Wgt (the total lbs)", "numeric", "c" + i + "-woTotal"));
-      p.appendChild(g2);
-      p.appendChild(outLine("AVG. WGT. (per coil)", "c" + i + "-avg"));
-      var cw = el("div", "f"); cw.style.marginTop = "10px";
-      var cl = el("label", "", "Coils IN: coils you drew this shift"); cl.htmlFor = "c" + i + "-coilsDrawn";
-      var st = el("div", "stepper");
-      var minus = el("button", "", "\u2212"); minus.setAttribute("aria-label", "One less coil");
-      var plus = el("button", "", "+"); plus.setAttribute("aria-label", "One more coil");
-      var ci = el("input"); ci.id = "c" + i + "-coilsDrawn"; ci.inputMode = "decimal"; ci.autocomplete = "off"; ci.value = row.coilsDrawn || "";
-      function syncOut() {
-        if (!row.halfCut) return;
-        var n = P.num(row.coilsDrawn); row.coilsOut = n && n > 0 ? String(n * 2) : "";
-        var o = $("c" + i + "-coilsOut"); if (o) o.value = row.coilsOut;
-      }
-      ci.addEventListener("input", function () { row.coilsDrawn = ci.value; syncOut(); update(); });
-      function bump(d) { var n = P.num(ci.value) || 0; n = Math.max(0, n + d); ci.value = n ? String(n) : ""; row.coilsDrawn = ci.value; syncOut(); update(); }
-      minus.addEventListener("click", function () { bump(-1); });
-      plus.addEventListener("click", function () { bump(1); });
-      st.appendChild(minus); st.appendChild(ci); st.appendChild(plus);
-      cw.appendChild(cl); cw.appendChild(st); cw.appendChild(el("span", "hint", "Count the coils you put on, not the cut pieces. Weight uses this number."));
-      p.appendChild(cw);
-      var ow = el("div", "grid2"), of = el("div", "f");
-      var ol = el("label", "", "Coils OUT (optional)"); ol.htmlFor = "c" + i + "-coilsOut";
-      var oi = el("input"); oi.id = "c" + i + "-coilsOut"; oi.inputMode = "decimal"; oi.autocomplete = "off"; oi.value = row.coilsOut || ""; oi.placeholder = "same as IN";
-      of.appendChild(ol); of.appendChild(oi); of.appendChild(el("span", "hint", "Pieces after cutting. Sheet shows IN=OUT, like 2=4"));
-      var hc = el("label", "check"); hc.style.alignSelf = "center";
-      var hcb = el("input"); hcb.type = "checkbox"; hcb.checked = !!row.halfCut; hcb.id = "c" + i + "-half";
-      hcb.addEventListener("change", function () { row.halfCut = hcb.checked; if (hcb.checked) syncOut(); else { row.coilsOut = ""; oi.value = ""; } update(); });
-      oi.addEventListener("input", function () {
-        row.coilsOut = oi.value; var n = P.num(row.coilsDrawn), o = P.num(oi.value);
-        row.halfCut = !!(n && o === n * 2); hcb.checked = row.halfCut; update();
-      });
-      hc.appendChild(hcb); hc.appendChild(document.createTextNode("Half-cut \u00d72"));
-      ow.appendChild(of); ow.appendChild(hc); p.appendChild(ow);
-      p.appendChild(outLine("WEIGHT (this card)", "c" + i + "-weight"));
-      var det = el("details"); det.appendChild(el("summary", "", "MORE: size, grade, compound, package, weighed coils"));
-      FIELDS_MORE.forEach(function (f) { det.appendChild(field(row, f[0], f[1], f[2], f[3], "c" + i + "-" + f[0])); });
-      if (row.finish || row.grade || row.compound || row.package || row.avgWgt || row.weighed) det.open = true;
-      p.appendChild(det);
-      var w = el("div", "warnbox"); w.id = "c" + i + "-warn"; p.appendChild(w);
-      box.appendChild(p);
-    });
-  }
-
-  /* ---------- breaks + downtime ---------- */
-  var REASONS = ["Die change", "Changeover", "Mechanical", "Electrical", "Waiting on material", "Waiting on crane", "Coil problem",
-    "Quality check", "Meeting", "Cleanup"];
-  function renderBreaks() {
-    var box = $("breaks"); box.innerHTML = "";
-    state.shift.breaks.forEach(function (b, i) {
-      var r = el("div", "brow");
-      var g = el("div", "grid2");
-      g.appendChild(field(b, "minutes", "Break " + (i + 1), "", "hm-min", "b" + i + "-min", saveBreakDefault));
-      var tf = field(b, "start", "Starts at", "", "text", "b" + i + "-start", saveBreakDefault);
-      tf.querySelector("input").type = "time"; g.appendChild(tf); r.appendChild(g);
-      var del = el("button", "warn", "\u2715"); del.setAttribute("aria-label", "Remove break " + (i + 1));
-      del.addEventListener("click", function () { state.shift.breaks.splice(i, 1); saveBreakDefault(); renderBreaks(); update(); });
-      r.appendChild(del); box.appendChild(r);
-    });
-    if (!state.shift.breaks.length) box.appendChild(el("p", "muted", "No breaks entered."));
-  }
-  function saveBreakDefault() {
-    S.breaks = state.shift.breaks.filter(function (b) { var n = P.num(b.minutes); return n && n > 0; })
-      .map(function (b) { return { minutes: P.num(b.minutes), start: b.start || "" }; });
-  }
-  function renderDowntime() {
-    var box = $("downtime"); box.innerHTML = "";
-    state.shift.downtime.forEach(function (d, i) {
-      var p = el("div", "drow");
-      var top = el("div", "grid2");
-      var minF = field(d, "minutes", "Time down", "", "hm-min", "d" + i + "-min");
-      top.appendChild(minF);
-      var mf = el("div", "f"); var ml = el("label", "", "Machine (optional)"); ml.htmlFor = "d" + i + "-machine";
-      var ms = machineSelect(d, "d" + i + "-machine", "none", true); ms.className = "msel";
-      mf.appendChild(ml); mf.appendChild(ms); top.appendChild(mf); p.appendChild(top);
-      var tm = el("div", "grid2");
-      function syncMin() {
-        var a = P.clock(d.start), b = P.clock(d.end), inp = minF.querySelector("input[data-hm]");
-        if (a !== null && b !== null) { d.minutes = String(((b - a) % 1440 + 1440) % 1440); inp.value = d.minutes; inp.readOnly = true; }
-        else inp.readOnly = false;
-        if (inp._hmSync) inp._hmSync();
-      }
-      [["start", "From (optional)"], ["end", "To"]].forEach(function (x) {
-        var f = field(d, x[0], x[1], "", "text", "d" + i + "-" + x[0], syncMin);
-        f.querySelector("input").type = "time"; tm.appendChild(f);
-      });
-      p.appendChild(tm);
-      p.appendChild(el("span", "hint", "With times, downtime during a break or overlapping other downtime only counts once."));
-      syncMin();
-      var rf = field(d, "reason", "Reason", "Tap a reason or type your own", "text", "d" + i + "-reason");
-      rf.querySelector("input").setAttribute("list", "reasons"); p.appendChild(rf);
-      var del = el("button", "warn", "REMOVE DOWNTIME"); del.style.width = "100%";
-      del.addEventListener("click", function () { state.shift.downtime.splice(i, 1); renderDowntime(); update(); });
-      p.appendChild(del); box.appendChild(p);
-    });
-    if (!state.shift.downtime.length) box.appendChild(el("p", "muted", "No downtime entered."));
-  }
-
-  /* ---------- hours each machine ran ---------- */
-  var runSig = null;
-  function runFor(name) {
-    var r = P.findRun(state.shift.runs, name);
-    if (!r) { r = { machine: name, mode: "all", custom: "" }; state.shift.runs.push(r); }
-    return r;
-  }
-  function renderRuns(res) {
-    var used = res.machinesRun, box = $("runhours");
-    var sig = used.map(function (m) { var r = P.findRun(state.shift.runs, m.name); return m.key + "|" + (r ? r.mode : "all"); }).join(",");
-    if (sig !== runSig) {
-      runSig = sig; box.innerHTML = "";
-      if (!used.length) box.appendChild(el("p", "muted", "Pick a machine on a card and it shows up here."));
-      used.forEach(function (m, i) {
-        var r = runFor(m.name), p = el("div", "runbox");
-        p.appendChild(el("b", "rname", m.name.toUpperCase() + ": hours this machine ran"));
-        var bt = el("div", "seg");
-        [["all", "ALL SHIFT"], ["half", "HALF SHIFT"], ["custom", "SET TIME"]].forEach(function (o) {
-          var b = el("button", r.mode === o[0] ? "on" : "", o[1]); b.type = "button"; b.id = "run" + i + "-btn-" + o[0];
-          b.setAttribute("aria-pressed", String(r.mode === o[0]));
-          b.addEventListener("click", function () {
-            r.mode = o[0]; update();
-            if (o[0] === "custom") { var c = $("run" + i + "-custom"); if (c) c.focus(); }
-          });
-          bt.appendChild(b);
-        });
-        p.appendChild(bt);
-        if (r.mode === "custom") {
-          var f = field(r, "custom", "How long it was running (h:mm, like 5:30)", "Before downtime. Downtime for this machine comes off by itself.", "text", "run" + i + "-custom");
-          f.querySelector("input").placeholder = "5:30"; f.style.marginTop = "8px"; p.appendChild(f);
-        }
-        var o1 = el("div", "out"); o1.appendChild(el("span", "", "RAN"));
-        var b1 = el("b"); b1.id = "run" + i + "-ran"; o1.appendChild(b1);
-        var e1 = el("em"); e1.id = "run" + i + "-why"; o1.appendChild(e1); p.appendChild(o1);
-        var o2 = el("div", "pmrow"); o2.id = "run" + i + "-vs"; p.appendChild(o2);
-        box.appendChild(p);
-      });
-    }
-    used.forEach(function (m, i) {
-      var b = $("run" + i + "-ran"); if (!b) return;
-      b.textContent = m.runMin !== null ? P.fmtHm(m.runMin) : "\u2013";
-      $("run" + i + "-why").textContent = m.runMin === null ? "Enter the shift length first" :
-        (m.mode === "half" ? "half shift " : (m.mode === "custom" && m.customMin > 0 ? "set to " : "all shift ")) +
-        P.fmtHm(m.baseMin) + (m.downMin ? " \u2212 " + m.downMin + " min downtime" : "") +
-        (m.goalLbs !== null ? " \u2192 goal " + P.fmtInt(m.goal) + " \u00d7 " + P.fmtHm(m.runMin) + " = " + P.fmtInt(m.goalLbs) + " lbs" : "");
-      var vs = $("run" + i + "-vs");
-      if (m.goalLbs === null || m.runMin === null) { vs.textContent = ""; return; }
-      var gap = m.lbs - m.goalLbs;
-      vs.className = "pmrow " + (gap >= 0 ? "ok" : "short");
-      vs.textContent = "Made " + P.fmtInt(m.lbs) + " lbs of " + P.fmtInt(m.goalLbs) + " lbs goal" +
-        (m.rate10 !== null ? " \u00b7 " + P.fmtTenths(m.rate10) + " lbs/hr vs " + P.fmtInt(m.goal) : "") +
-        " \u00b7 " + (gap >= 0 ? P.fmtInt(gap) + " over" : P.fmtInt(-gap) + " short");
-    });
-  }
-
-  /* ---------- results ---------- */
-  function cell(name, val) { var d = el("div"); d.appendChild(el("i", "", name)); d.appendChild(el("b", "", val || "\u2013")); return d; }
-  var last = null;
-  function update() {
-    var sh = coreShift(), res = P.compute(sh); last = { sh: sh, res: res };
-    res.rows.forEach(function (r, i) {
-      var a = $("c" + i + "-avg"); if (!a) return;
-      a.textContent = r.avg !== null ? P.fmtInt(r.avg) + " lbs" : "\u2013";
-      $("c" + i + "-avg-why").textContent = r.avgSource === "workorder" ? r.steps[0].replace(/^Card [^:]*: /, "") : (r.avgSource === "entered" ? "typed in under MORE" : (r.weightSource === "weighed" ? "not needed: weighed coils" : "fill in Coils + Tot Avg Wgt"));
-      $("c" + i + "-weight").textContent = r.weight !== null ? P.fmtInt(r.weight) + " lbs" : "\u2013";
-      var ws = r.steps[r.steps.length - 1];
-      $("c" + i + "-weight-why").textContent = r.weight !== null && ws ? ws.replace(/^Card [^:]*: /, "") : "";
-      $("c" + i + "-warn").textContent = r.warnings.join(" ");
-    });
-    // hours line under the shift section
-    var hs = res.steps.filter(function (s) { return /^Hours per shift:/.test(s); })[0];
-    $("hours-out").textContent = res.hours !== null ? res.hoursText + " hr" : "\u2013";
-    $("hours-out-why").textContent = hs ? hs.replace(/^Hours per shift: /, "") : (res.netMin !== null && res.netMin <= 0 ? "Breaks + downtime are more than the shift" : "Enter the shift length");
-    var sr = $("sheetrows"); sr.innerHTML = "";
-    var cellsAll = P.sheetCells(sh, res);
-    sh.rows.forEach(function (row, i) {
-      var r = res.rows[i]; if (!row.card && r.weight === null) return;
-      var d = el("div", "sheetrow");
-      d.appendChild(el("div", "t", "Card # " + (row.card || "?") + [row.finish, row.grade, row.compound, row.package, cellsAll[i][8][1]].filter(Boolean).map(function (x) { return " \u00b7 " + x; }).join("")));
-      var c = el("div", "cells");
-      c.appendChild(cell("Avg. Wgt.", r.avg !== null ? P.fmtInt(r.avg) : ""));
-      c.appendChild(cell("Coils Drawn", r.coilsText));
-      c.appendChild(cell("Weight", r.weight !== null ? P.fmtInt(r.weight) : ""));
-      d.appendChild(c); sr.appendChild(d);
-    });
-    $("r-total").textContent = P.fmtInt(res.total);
-    $("r-hours").textContent = res.hours !== null ? res.hoursText : "\u2013";
-    $("r-hm").textContent = res.hours !== null ? "(" + res.hmText + ")" : "";
-    $("r-goal").textContent = res.goalText || "\u2013";
-    $("r-rate").textContent = res.rateText || "\u2013";
-    var pm = $("permachine"); pm.innerHTML = "";
-    var gl = res.steps.filter(function (s) { return / ran .* \u00d7 .* lbs?\.$/.test(s) || /^Your goal for the shift:/.test(s); });
-    if (gl.length && res.goal10 !== null) {
-      pm.appendChild(el("b", "pmh", "HOW THE GOAL IS FIGURED"));
-      gl.forEach(function (s) { pm.appendChild(el("div", "pmrow", s)); });
-    }
-    var b = $("banner"); b.className = "banner " + res.status; b.textContent = "";
-    if (res.status === "incomplete") b.textContent = res.total ? res.headline : "Fill in a card to start";
-    else {
-      b.appendChild(document.createTextNode(res.status === "met" ? "\u2714 GOAL MET" : "\u2716 GOAL NOT MET"));
-      b.appendChild(el("small", "", res.status === "met"
-        ? P.fmtTenths(res.diff10) + " lbs/hr over goal (" + P.fmtTenths(res.pct10) + "%). " + P.fmtInt(res.overShort) + " lbs over for the shift."
-        : P.fmtTenths(-res.diff10) + " lbs/hr under goal (" + P.fmtTenths(res.pct10) + "% of goal), " + P.fmtInt(-res.overShort) +
-          " lbs short. You must list the problems and downtime reasons on the sheet."));
-    }
-    renderRuns(res);
-    var rowWarn = 0; res.rows.forEach(function (r) { rowWarn += r.warnings.length; });
-    $("warnings").textContent = res.warnings.slice(rowWarn).join(" ");
-    // problems
-    var pp = $("probpanel"); pp.className = "panel" + (res.status === "notmet" ? " must" : "");
-    $("prob-must").hidden = res.status !== "notmet";
-    var pl = $("problist"); pl.innerHTML = "";
-    if (res.problems.length) res.problems.forEach(function (p) { pl.appendChild(el("li", "", p)); });
-    else pl.appendChild(el("li", "muted", "Add downtime above and it shows up here."));
-    // math
-    var ol = $("steps"); ol.innerHTML = "";
-    res.steps.forEach(function (s) {
-      var li = el("li", /^GOAL NOT MET/.test(s) ? "bad" : (/GOAL MET\.$/.test(s) ? "good" : ""), s); ol.appendChild(li);
-    });
-    var lines = P.reportLines(sh, res); lines.push(""); lines.push("THE MATH:");
-    res.steps.forEach(function (s, i) { lines.push((i + 1) + ". " + s); });
-    $("summary").value = lines.join("\n");
-    if (!$("sheetview").hidden) renderSheetView();
-    var shh = P.num(state.shift.shiftHours); if (shh && shh > 0) S.shiftHours = shh;
-    if (P.clock(state.shift.start) !== null) S.shiftStart = state.shift.start;
+  /* ---------- screens ---------- */
+  function render() {
     save();
+    $("navbar").hidden = S.screen !== "log";
+    window.scrollTo(0, 0);
+    if (S.screen === "quick" || S.screen === "avg") return renderAvg();
+    if (S.screen === "rate") return renderRate();
+    if (S.screen === "log") return renderLog();
+    return renderHome();
+  }
+  function go(screen) { if (screen !== S.screen && (screen === "avg" || screen === "rate")) Q = { avg: "", tot: "", coils: "", ran: "", lbs: "", hrs: "", min: "", scan: null }; S.screen = screen; render(); }
+
+  function hasProgress() {
+    return S.rows.some(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card || r.avgWgt; }) || S.shiftHours || S.slotCount || S.downtime.length;
+  }
+  function renderHome() {
+    app.innerHTML = '<div class="home">' +
+      '<button id="go-quick" type="button">AVERAGE COIL WEIGHT<small>Card total, coils on card and coils ran: average, weight ran from a partial card, or a photo. Send them to your tracker.</small></button>' +
+      '<button id="go-rate" type="button">PRODUCTION RATE<small>Hours worked and lbs produced, minus downtime: your lbs per hour</small></button>' +
+      '<button id="go-log" type="button" class="solid">FILL OUT MY PRODUCTION LOG<small style="color:#000">' +
+      (hasProgress() ? "Picks up where you left off" : "One question per screen, then copy it onto the sheet") + '</small></button>' +
+      (window.SheetScan ? '<button id="go-scan" type="button" class="amber">SCAN MY SHEET<small>Take a picture of your filled-in sheet (all of it, or the shift so far) and check what it read</small></button>' : "") + '</div>';
+    $("go-quick").onclick = function () { go("avg"); };
+    $("go-rate").onclick = function () { go("rate"); };
+    $("go-log").onclick = function () { go("log"); };
+    if ($("go-scan")) $("go-scan").onclick = function () { S.step = 0; go("log"); openScan(); };
   }
 
-  /* ---------- copy-to-sheet view ---------- */
-  function renderSheetView() {
-    var sh = last.sh, res = last.res, box = $("sv-body"); box.innerHTML = "";
-    function line(label, val, cls) { var d = el("div", "svline" + (cls ? " " + cls : "")); d.appendChild(el("span", "", label)); d.appendChild(el("b", "", val || "-")); box.appendChild(d); }
-    line("Name", sh.name); line("Date", sh.date); line("Shift", sh.shift);
-    P.sheetCells(sh, res).forEach(function (cells, i) {
-      var r = res.rows[i]; if (!sh.rows[i].card && r.weight === null) return;
-      box.appendChild(el("h3", "", "ROW " + (i + 1)));
-      cells.forEach(function (c) { line(c[0], c[1]); });
-    });
-    box.appendChild(el("h3", "", "BOTTOM OF THE TABLE"));
-    line("Total Weight Produced", P.fmtInt(res.total), "big");
-    line("Hours per shift", res.hours !== null ? res.hoursText + "  (" + res.hmText + ")" : "", "big");
-    line("Goal: Lbs/Hour", res.goalText, "big");
-    line("Average Lbs/per Hour", res.rateText, "big");
-    var h = el("h3", res.status === "notmet" ? "bad" : "", "LIST ALL PROBLEMS AND REASONS FOR DOWNTIME" + (res.status === "notmet" ? " (MUST FILL IN: GOAL NOT MET)" : ""));
-    box.appendChild(h);
-    var ul = el("ul", "svlist");
-    (res.problems.length ? res.problems : ["(none entered)"]).forEach(function (p) { ul.appendChild(el("li", "", p)); });
-    box.appendChild(ul);
-    box.appendChild(el("h3", "", "MAINTENANCE ISSUES TO FOLLOW UP ON"));
-    box.appendChild(el("p", "svp", res.maintenance || "(none entered)"));
+  /* ---------- quick screens: AVERAGE COIL WEIGHT and PRODUCTION RATE ----------
+     Boxes start empty every time (nothing kept between visits). The math is the calc core's:
+     avg = P.quick(total, coils) and lb/hr = P.compute() with just hours, minutes off and lb. */
+  var Q = { avg: "", tot: "", coils: "", ran: "", lbs: "", hrs: "", min: "", scan: null };
+  function qfield(label, id, val, ph, mode, sub, hm) {
+    return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in" type="text" id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph) +
+      '" autocomplete="off" inputmode="' + (mode || "decimal") + '"' + (mode === "numeric" ? ' pattern="[0-9]*"' : "") + (hm ? ' data-hm="' + hm + '"' : "") + ' enterkeyhint="done">' + (sub ? '<p class="sub">' + sub + '</p>' : "") + '</div>';
   }
-  function openSheetView(open) {
-    $("sheetview").hidden = !open; document.body.classList.toggle("noscroll", open);
-    if (open) { renderSheetView(); $("sheetview").scrollTop = 0; }
-  }
-
-  /* ---------- fill from today's tracker (read only) ---------- */
-  var pending = null;
-  function readTracker() {
-    try { var raw = localStorage.getItem(TRACKER_KEY); if (!raw) return null; var s = JSON.parse(raw); return s && s.schema === "draw-rate/v5" ? s : null; }
-    catch (e) { return null; }
-  }
-  function checkTracker() {
-    var t = readTracker(), r = t ? P.fromTracker(t, new Date().toISOString()) : null;
-    $("fill-wrap").hidden = !(r && r.ok);
-  }
-  function previewTracker() {
-    var t = readTracker(); if (!t) { checkTracker(); return; }
-    pending = P.fromTracker(t, new Date().toISOString());
-    var ul = $("fill-list"); ul.innerHTML = "";
-    pending.summary.forEach(function (s) { ul.appendChild(el("li", "", s)); });
-    pending.downtime.forEach(function (d) { ul.appendChild(el("li", "muted", "Downtime: " + (d.machine ? d.machine + ": " : "") + d.minutes + " min, " + (d.reason || "reason not given") + (d.start ? " (" + d.start + " to " + d.end + ")" : ""))); });
-    pending.warnings.forEach(function (w) { ul.appendChild(el("li", "warnli", w)); });
-    $("fill-preview").hidden = false; $("fill-preview").scrollIntoView({ block: "start" });
-  }
-  function applyTracker(mode) {
-    var t = pending; if (!t) return;
-    t.machines.forEach(function (m) {
-      var ex = P.findMachine(S.machines, m.name);
-      if (!ex) S.machines.push({ name: m.name, goal: m.goal === null ? "" : m.goal });
-      else if (!P.num(ex.goal) && m.goal) ex.goal = m.goal;
-    });
-    var rows = t.rows.map(function (r) { var o = blankRow(); o.machine = r.machine; o.coilsDrawn = String(r.coilsDrawn); o.weighed = r.actualWeights.join(" "); o.finish = r.finish; o.note = r.note; return o; });
-    var downs = t.downtime.map(function (d) { return { minutes: String(d.minutes), reason: d.reason, machine: d.machine, start: d.start || "", end: d.end || "" }; });
-    var s = state.shift;
-    if (mode === "replace") {
-      s.rows = rows.length ? rows : [blankRow()]; s.downtime = downs; s.runs = [];
-      s.breaks = t.breaks.map(function (m) { return { minutes: String(m.minutes), start: m.start || "" }; });
-      s.start = t.start || s.start || "";
-      if (t.shiftHours !== null) s.shiftHours = String(t.shiftHours);
-      if (t.name) s.name = t.name; if (t.date) s.date = t.date;
-    } else {
-      s.rows = s.rows.filter(function (r) { return r.card || r.woTotal || r.woCoils || r.avgWgt || r.coilsDrawn || r.weighed; }).concat(rows);
-      if (!s.rows.length) s.rows.push(blankRow());
-      s.downtime = s.downtime.concat(downs);
+  /* One smart line: "12000 / 3", "12,000 lb 3 coils", "3 coils 12000" (total and coil count)
+     or "4400 4250 3800" / "4400, 4250, 3800" / "4400+4250" (a list of coil weights). */
+  function readAvgLine(text) {
+    var s = String(text || "").toLowerCase().replace(/(\d),(?=\d{3}(?!\d))/g, "$1");
+    var toks = [], re = /(\d+(?:\.\d+)?|\.\d+)\s*(lbs?\b|pounds?\b|#|coils?\b|c\b|pcs\b|pieces?\b)?/g, m;
+    while ((m = re.exec(s))) toks.push({ v: parseFloat(m[1]), u: m[2] ? (/^(c|coil|pc|piece)/.test(m[2]) ? "coils" : "lb") : "" });
+    if (!toks.length) return { ok: false, error: "" };
+    var cnt = toks.filter(function (t) { return t.u === "coils"; }), wts = toks.filter(function (t) { return t.u !== "coils"; });
+    var div = /[\/\u00f7]|\bper\b|\bover\b|\binto\b/.test(s);
+    var sumOf = function (a) { return a.reduce(function (x, t) { return x + t.v; }, 0); };
+    if (cnt.length > 1) return { ok: false, error: "Type the number of coils once." };
+    if (cnt.length === 1) {
+      if (!wts.length) return { ok: false, error: "Add the total lbs too, like 12000 lbs 3 coils." };
+      return { ok: true, mode: "total", total: sumOf(wts), count: cnt[0].v, weights: wts.length > 1 ? wts.map(function (t) { return t.v; }) : null };
     }
-    pending = null; runSig = null; $("fill-preview").hidden = true;
-    bindHeader(); renderMachines(); renderCards(); renderBreaks(); renderDowntime(); update();
-    toast("Filled from the tracker. Add the Card # for each row.");
-    $("cards").scrollIntoView({ block: "start" });
+    if (toks.length === 2 && (div || (Number.isInteger(toks[1].v) && toks[1].v <= 60 && toks[0].v >= toks[1].v * 10)))
+      return { ok: true, mode: "total", total: toks[0].v, count: toks[1].v, weights: null };
+    if (toks.length === 1) return { ok: false, error: "Add the number of coils (like " + P.fmtInt(Math.round(toks[0].v)) + " / 3) or type each coil weight." };
+    return { ok: true, mode: "list", total: sumOf(toks), count: toks.length, weights: toks.map(function (t) { return t.v; }) };
+  }
+  // the three boxes: CARD TOTAL WEIGHT, COILS ON CARD, COILS RAN (no division sign to type)
+  var PLAIN_RE = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^\.\d+$/;
+  function plainNum(v) { var t = String(v === null || v === undefined ? "" : v).trim(); return PLAIN_RE.test(t) ? parseFloat(t.replace(/,/g, "")) : null; }
+  function boxesRead() {
+    var tT = String(Q.tot || "").trim(), cT = String(Q.coils || "").trim(), rT = String(Q.ran || "").trim();
+    if (!tT && !cT && !rT) return { ok: false, error: "" };
+    var t = plainNum(tT), c = plainNum(cT), rn = rT ? plainNum(rT) : null;
+    if (!tT) return { ok: false, error: "Enter the card total weight in lbs." };
+    if (t === null || !(t > 0)) return { ok: false, error: "Card total weight: enter the weight in lbs as a plain number over 0, like 22895." };
+    if (t >= 1e7) return { ok: false, error: "Card total weight: " + P.fmtInt(t) + " lbs is too big for one card. Check the number." };
+    if (!cT) return { ok: false, error: "Enter how many coils are on the card." };
+    if (c === null || !(c > 0) || c % 1) return { ok: false, error: "Coils on card: enter a whole number over 0, like 5." };
+    if (c > 200) return { ok: false, error: "Coils on card: " + P.fmtNum(c) + " is more than one card holds. Check the number." };
+    if (rT && (rn === null || !(rn > 0) || rn % 1)) return { ok: false, error: "Coils ran: enter a whole number over 0, or leave it blank for just the average." };
+    return { ok: true, total: t, count: c, ran: rT ? rn : null };
+  }
+  function avgResult() {
+    if (Q.scan && Q.scan.tot === Q.tot && Q.scan.coils === Q.coils && !String(Q.ran || "").trim()) return Q.scan.res;
+    var r = boxesRead(); if (!r.ok) return r;
+    r.weights = null;
+    var q = P.quick(r.total, r.count, r.ran);
+    if (!q.ok && !q.over) return { ok: false, error: q.error };
+    var steps = [], readAs;
+    if (r.weights) {
+      steps.push("Coil weights: " + r.weights.map(function (w) { return P.fmtNum(w); }).join(" + ") + " = " + P.fmtNum(r.total) + " lbs");
+      readAs = r.weights.length + " coil weights, " + P.fmtNum(r.total) + " lbs in all";
+    } else readAs = P.fmtNum(r.total) + " lbs total, " + P.fmtNum(r.count) + " " + (r.count === 1 ? "coil" : "coils");
+    steps = steps.concat(q.lines);
+    return { ok: true, avg: q.avg, count: r.count, total: r.total, weight: q.weight, ran: q.ran,
+      leftCoils: q.leftCoils, leftWeight: q.leftWeight, over: q.over, note: q.note || "", steps: steps, readAs: readAs };
+  }
+  function renderAvg() {
+    app.innerHTML = '<h2>Average coil weight</h2><p class="muted">Type the card total weight and how many coils are on the card. Add how many you ran for the weight off a partial card, and to send them to your tracker.</p>' +
+      '<div class="panel">' + qfield("Card total weight (lbs)", "a-tot", Q.tot, "like 22895", "decimal") +
+      '<div class="row2">' + qfield("Coils on card", "a-coils", Q.coils, "like 5", "numeric") +
+      qfield("Coils ran", "a-ran", Q.ran, "optional", "numeric") + '</div>' +
+      '<p class="sub">Leave coils ran blank for just the average.</p>' +
+      '<p class="calc-note" id="a-note" aria-live="polite"></p></div>' +
+      '<div id="a-out"></div>' +
+      (window.SheetScan ? '<button id="a-photo" type="button" class="big amber">TAKE A PHOTO<small style="display:block;font-weight:normal;font-size:14px;margin-top:4px">Read the coil weights off your sheet, check them, then average</small></button><div id="scan-host"></div>' : "") +
+      '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
+    $("a-tot").addEventListener("input", function (e) { Q.tot = e.target.value; Q.scan = null; avgOut(); });
+    $("a-coils").addEventListener("input", function (e) { Q.coils = e.target.value; Q.scan = null; avgOut(); });
+    $("a-ran").addEventListener("input", function (e) { Q.ran = e.target.value; avgOut(); });
+    $("q-home").onclick = function () { go("home"); };
+    if ($("a-photo")) $("a-photo").onclick = function () {
+      SheetScan.start($("scan-host"), { onApply: applyAvgScan, applyLabel: "AVERAGE THESE", coilsOnly: true,
+        actionNote: "Check the weights and coil counts it read (fix any box), then tap AVERAGE THESE." });
+    };
+    avgOut();
+  }
+  function avgOut() {
+    var r = avgResult(), el = $("a-out"), note = $("a-note");
+    if (!r.ok) { el.innerHTML = ""; note.textContent = r.error || ""; return; }
+    note.textContent = r.over ? r.note : ("Read as: " + r.readAs);
+    var html = '<button class="num key" id="a-avg" type="button"><span>Avg coil weight<i>tap for the math</i></span><b>' + P.fmtInt(r.avg) + ' lbs</b></button>';
+    if (r.over) {
+      html += '<p class="calc-note" id="a-over">' + esc(r.note) + '</p>';
+    } else if (r.weight !== null && r.weight !== undefined) {
+      html += '<button class="num key" id="a-weight" type="button"><span>Weight ran<i>tap for the math</i></span><b>' + P.fmtInt(r.weight) + ' lbs</b></button>';
+      if (r.leftCoils !== null && r.leftCoils > 0) {
+        html += '<div class="num"><span>Coils left on card</span><b>' + P.fmtNum(r.leftCoils) + '</b></div>';
+        html += '<div class="num"><span>Weight left on card</span><b>' + P.fmtInt(r.leftWeight) + ' lbs</b></div>';
+      }
+      if (r.ran > 0 && r.ran % 1 === 0 && r.ran <= 60) html += '<button id="a-send" type="button" class="big solid" style="margin-top:12px">SEND TO TRACKER</button>';
+    } else if (!r.over) html += '<p class="muted" id="a-send-hint">Type coils ran to send them to your tracker.</p>';
+    el.innerHTML = html;
+    if ($("a-send")) $("a-send").onclick = function () { sendOpen(r); };
+    $("a-avg").onclick = function () { drill("Avg coil weight", P.fmtInt(r.avg) + " lbs", r.steps); };
+    if ($("a-weight")) $("a-weight").onclick = function () { drill("Weight ran", P.fmtInt(r.weight) + " lbs", r.steps); };
+  }
+  /* ---- SEND TO TRACKER: N coils of the average weight into the tracker's current shift.
+     This page never writes the shift itself: it leaves one request (drawRateInboxV1) and opens /draw/app/,
+     which logs the coils with its own addCoil() and shows the usual readback with UNDO. ---- */
+  var INBOX_KEY = "drawRateInboxV1";
+  function splitWeights(total, n) {     // whole pounds that add up to the exact total, e.g. 22900 over 3 -> 7634, 7633, 7633
+    var base = Math.floor(total / n), extra = Math.round(total - base * n), out = [];
+    for (var i = 0; i < n; i++) out.push(base + (i < extra ? 1 : 0));
+    return out;
+  }
+  function hm(v) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "").trim()); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; }
+  function trackerShift() {
+    var st = null; try { st = JSON.parse(localStorage.getItem(TRACKER_KEY) || "null"); } catch (e) {}
+    if (!st || !st.setupDone || !st.shift || !Array.isArray(st.machines) || !st.machines.length) return { none: true };
+    var s = st.shift, d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.date || ""), a = hm(s.start), b = hm(s.end);
+    if (!d || a === null || b === null || a === b) return { none: true };
+    var day = new Date(+d[1], +d[2] - 1, +d[3]), end = new Date(day.getTime()); end.setHours(0, b, 0, 0);
+    if (b < a) end.setDate(end.getDate() + 1);
+    return { st: st, end: end.getTime(), over: Date.now() >= end.getTime() };
+  }
+  function clockTxt(ms) {
+    var d = new Date(ms), h = d.getHours(), m = d.getMinutes(), now = new Date();
+    var same = d.toDateString() === now.toDateString();
+    return (same ? "" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " ") + ((h % 12) || 12) + ":" + (m < 10 ? "0" : "") + m + (h < 12 ? " AM" : " PM");
+  }
+  function sendClose() { $("send").hidden = true; document.body.classList.remove("noscroll"); }
+  function sendOpen(r) {
+    var n = r.ran, ws = splitWeights(r.weight, n), even = ws[0] === ws[ws.length - 1];
+    var what = P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils") + " (" + (even ? "" : "about ") + P.fmtInt(ws[0]) + " lbs each, " + P.fmtInt(r.weight) + " lbs total)";
+    var ts = trackerShift(), body = $("send-body"), h = "";
+    var go = function (machineId, toEnded) {
+      try { localStorage.setItem(INBOX_KEY, JSON.stringify({ at: Date.now(), shiftId: ts.st.shift.id, machineId: machineId, weights: ws, toEnded: !!toEnded, from: "calc-avg" })); }
+      catch (e) { toast("Could not send: this phone's storage is blocked."); return; }
+      location.href = "/draw/app/";
+    };
+    if (ts.none) {
+      h = '<p id="send-msg">No shift is set up in your tracker yet, so there is nowhere to log ' + esc(what) + '.</p>' +
+        '<button id="send-start" type="button" class="big solid">START A SHIFT IN THE TRACKER</button>' +
+        '<button id="send-cancel" type="button" class="big ghost" style="margin-top:10px">CANCEL</button>';
+    } else if (ts.over) {
+      h = '<p id="send-msg">Your tracker\u2019s shift ended at ' + esc(clockTxt(ts.end)) + '. Start today\u2019s shift first, then send ' + esc(what) + ' again.</p>' +
+        '<button id="send-start" type="button" class="big solid">START TODAY\u2019S SHIFT</button>' +
+        '<button id="send-anyway" type="button" class="big" style="margin-top:10px">LOG TO THE ENDED SHIFT ANYWAY</button>' +
+        '<button id="send-cancel" type="button" class="big ghost" style="margin-top:10px">CANCEL</button>';
+    } else {
+      var ms = ts.st.machines;
+      h = '<p id="send-msg">Send ' + esc(what) + ' to your tracker' + (ms.length === 1 ? ' (' + esc(ms[0].name || "your machine") + ')' : '') + '?</p>';
+      if (ms.length > 1) h += '<div class="field"><label class="lbl" for="send-mach">Which machine?</label><select id="send-mach"><option value="">Pick a machine</option>' +
+        ms.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.name || "Machine") + '</option>'; }).join("") + '</select></div>';
+      h += '<p class="calc-note" id="send-err"></p><div class="row2" style="margin-top:12px"><button id="send-cancel" type="button" class="big ghost">CANCEL</button><button id="send-go" type="button" class="big solid">SEND TO TRACKER</button></div>';
+    }
+    body.innerHTML = h;
+    $("send").hidden = false; document.body.classList.add("noscroll"); armGuard();
+    $("send-cancel").onclick = sendClose;
+    if ($("send-start")) $("send-start").onclick = function () { location.href = "/draw/app/" + (ts.none ? "" : "#newshift"); };
+    if ($("send-anyway")) $("send-anyway").onclick = function () {
+      var ms = ts.st.machines;
+      if (ms.length === 1) { go(ms[0].id, true); return; }
+      sendOpenLive(r, ws, what, ts, go, true);
+    };
+    if ($("send-go")) $("send-go").onclick = function () {
+      var ms = ts.st.machines, id = ms.length === 1 ? ms[0].id : $("send-mach").value;
+      if (!id) { $("send-err").textContent = "Pick the machine these coils ran on."; return; }
+      go(id, false);
+    };
+  }
+  // ended shift, more than one machine: same picker, logging to the ended shift on purpose
+  function sendOpenLive(r, ws, what, ts, go, toEnded) {
+    var ms = ts.st.machines;
+    $("send-body").innerHTML = '<p id="send-msg">Log ' + esc(what) + ' to the ended shift?</p><div class="field"><label class="lbl" for="send-mach">Which machine?</label><select id="send-mach"><option value="">Pick a machine</option>' +
+      ms.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.name || "Machine") + '</option>'; }).join("") + '</select></div>' +
+      '<p class="calc-note" id="send-err"></p><div class="row2" style="margin-top:12px"><button id="send-cancel" type="button" class="big ghost">CANCEL</button><button id="send-go" type="button" class="big solid">SEND TO TRACKER</button></div>';
+    $("send-cancel").onclick = sendClose;
+    $("send-go").onclick = function () { var id = $("send-mach").value; if (!id) { $("send-err").textContent = "Pick the machine these coils ran on."; return; } go(id, toEnded); };
+  }
+  $("send").addEventListener("click", function (e) { if (e.target === $("send")) sendClose(); });
+  document.addEventListener("keydown", function (e) { if (!$("send").hidden && e.key === "Escape") sendClose(); });
+
+  // photo of the sheet -> SheetScan review -> each card's lb and coils -> one average
+  function applyAvgScan(sc) {
+    var N = SheetScan.num, tot = 0, n = 0, steps = [];
+    (sc.coils || []).forEach(function (c, i) {
+      var cp = SheetScan.coilsParse(c.coils_text), cin = N(c.coils_in) !== null ? N(c.coils_in) : cp.in;
+      var w = N(c.weight), a = N(c.avg_wgt), lab = "Card " + (c.card || i + 1);
+      if (w !== null && w > 0 && cin !== null && cin > 0) { tot += w; n += cin; steps.push(lab + ": " + P.fmtNum(w) + " lbs, " + P.fmtNum(cin) + " " + (cin === 1 ? "coil" : "coils")); }
+      else if (a !== null && a > 0 && cin !== null && cin > 0) { var ww = a * cin; tot += ww; n += cin; steps.push(lab + ": " + P.fmtNum(a) + " lbs avg \u00d7 " + P.fmtNum(cin) + " = " + P.fmtNum(ww) + " lbs"); }
+      else if (w !== null && w > 0) { tot += w; n += 1; steps.push(lab + ": " + P.fmtNum(w) + " lbs (no coil count, counted as 1 coil)"); }
+    });
+    var q = P.quick(tot, n, 1);
+    if (!q.ok) { toast("No coil weights on that sheet. Fix them in the boxes, or type them."); return false; }
+    steps.push("All cards: " + P.fmtNum(tot) + " lbs over " + P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils"));
+    steps.push(q.lines[0]);
+    Q.tot = P.fmtNum(tot).replace(/,/g, ""); Q.coils = String(n); Q.ran = "";
+    Q.scan = { tot: Q.tot, coils: Q.coils, res: { ok: true, avg: q.avg, count: n, total: tot, steps: steps, readAs: "from the photo, " + P.fmtNum(tot) + " lbs over " + n + " coils" } };
+    $("a-tot").value = Q.tot; $("a-coils").value = Q.coils; $("a-ran").value = ""; avgOut();
+    setTimeout(function () { var o = $("a-out"); if (o) o.scrollIntoView({ block: "center" }); }, 50);
+    return true;
   }
 
-  /* ---------- wiring ---------- */
-  function bindHeader() {
-    [["h-name", "name"], ["h-date", "date"], ["h-shift", "shift"], ["shiftHours", "shiftHours"], ["shiftStart", "start"], ["maint", "maintenance"]].forEach(function (p) {
-      var e = $(p[0]); e.value = state.shift[p[1]] || ""; if (e._hmSync) e._hmSync();
-      if (!e._bound) { e._bound = true; e.addEventListener("input", function () { state.shift[p[1]] = e.value; update(); }); }
+  // lb produced: one number, or a few added up ("4400 + 4250")
+  function readLbs(text) {
+    var s = String(text || "").replace(/(\d),(?=\d{3}(?!\d))/g, "$1"), m, re = /(\d+(?:\.\d+)?|\.\d+)/g, v = [];
+    while ((m = re.exec(s))) v.push(parseFloat(m[1]));
+    return v;
+  }
+  function rateResult() {
+    var lbs = readLbs(Q.lbs), mins = readLbs(Q.min), hm = P.parseHm(Q.hrs);
+    if (!Q.hrs.trim() && !Q.lbs.trim()) return { ok: false, error: "" };
+    if (hm === null || !(hm > 0)) return { ok: false, error: "Type the hours worked, like 8 or 7:30." };
+    if (hm > 24 * 60) return { ok: false, error: "Hours worked is more than 24. Check it." };
+    if (!lbs.length) return { ok: false, error: "Type the lbs you produced." };
+    var total = lbs.reduce(function (a, b) { return a + b; }, 0);
+    var res = P.compute({ shiftHours: hm / 60, breaks: [], downtime: mins.map(function (x) { return { minutes: x }; }),
+      rows: [{ avgWgt: total, coilsDrawn: 1 }], machines: [] });
+    if (res.rate10 === undefined || res.rate10 === null) return { ok: false, error: (res.warnings || []).filter(function (w) { return !/machine/i.test(w); })[0] || "Check the numbers." };
+    var steps = [];
+    if (lbs.length > 1) steps.push("Lbs produced: " + lbs.map(function (x) { return P.fmtNum(x); }).join(" + ") + " = " + P.fmtNum(total) + " lbs");
+    steps = steps.concat(res.steps.filter(function (s) { return !/^Card /.test(s); }).map(function (s) {
+      return s.replace(/^Hours per shift: /, "Hours: ").replace(/ hr shift \u2212 0 min breaks \u2212 /, " hr worked \u2212 ").replace(/ min downtime = /, " min off = ");
+    }));
+    return { ok: true, rateText: res.rateText, hoursText: res.hoursText, hm: res.hmText, steps: steps, total: res.total };
+  }
+  function renderRate() {
+    app.innerHTML = '<h2>Production rate</h2><p class="muted">Your lbs per hour for the time you worked.</p>' +
+      '<div class="panel">' + qfield("Hours worked", "r-hrs", Q.hrs, "8 or 7:30", "numeric", "", "hm") + qfield("Lbs produced", "r-lbs", Q.lbs, "lbs") +
+      qfield("Downtime / breaks", "r-min", Q.min, "optional, like 30 or 15 30", "numeric", "Time not running, all added up. Leave it blank if the hours above are already run time.", "min") +
+      '<p class="calc-note" id="r-note" aria-live="polite"></p></div><div id="r-out"></div>' +
+      '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
+    [["r-hrs", "hrs"], ["r-lbs", "lbs"], ["r-min", "min"]].forEach(function (x) { $(x[0]).addEventListener("input", function (e) { Q[x[1]] = e.target.value; rateOut(); }); });
+    $("q-home").onclick = function () { go("home"); };
+    rateOut();
+  }
+  function rateOut() {
+    var r = rateResult(), el = $("r-out"), note = $("r-note");
+    note.textContent = r.ok ? "" : r.error;
+    if (!r.ok) { el.innerHTML = ""; return; }
+    el.innerHTML = '<button class="num" id="r-h" type="button"><span>Hours running<i>tap for the math</i></span><b>' + esc(r.hoursText) + '</b></button>' +
+      '<button class="num key" id="r-rate" type="button"><span>Production rate<i>lbs per hour &middot; tap for the math</i></span><b>' + esc(r.rateText) + '</b></button>';
+    $("r-h").onclick = function () { drill("Hours running", r.hm, r.steps.filter(function (s) { return /^Hours|^Downtime/.test(s); })); };
+    $("r-rate").onclick = function () { drill("Production rate", r.rateText + " lbs/hr", r.steps); };
+  }
+
+  /* ---------- production log wizard ---------- */
+  function renderLog() {
+    var tabs = '<div class="steps">' + STEPS.map(function (n, i) {
+      return '<button type="button" data-step="' + i + '" class="' + (i === S.step ? "cur" : (i < S.step ? "done" : "")) + '">' + (i + 1) + '<br>' + n + '</button>';
+    }).join("") + '</div>';
+    var body = [stepCoils, stepTime, stepMachines, stepResults][S.step]();
+    app.innerHTML = tabs + body;
+    app.querySelectorAll("[data-step]").forEach(function (b) { b.onclick = function () { S.step = +b.dataset.step; render(); }; });
+    [bindCoils, bindTime, bindMachines, bindResults][S.step]();
+    $("nav-back").textContent = S.step === 0 ? "\u2190 HOME" : "\u2190 BACK";
+    $("nav-next").textContent = S.step === 3 ? "SHEET VIEW" : "NEXT \u2192";
+  }
+  $("nav-back").onclick = function () { if (S.step === 0) go("home"); else { S.step--; render(); } };
+  // a finish size with no point (600, 1250): one tap to say what it is before moving on or sending
+  function finishPick(then) {
+    for (var i = 0; i < S.rows.length; i++) {
+      var r = S.rows[i], v = String(r.finish || "").trim();
+      if (!(window.Fields && Fields.sizeAmbig(v) && r.finishKeep !== v)) continue;
+      if (S.screen !== "log" || S.step !== 0) { S.step = 0; S.screen = "log"; render(); }
+      var el = $("r" + i + "-finish"); if (!el) return false;
+      (function (r, v) { Fields.sizePick(el, "Card " + (i + 1) + " finish size", function (nv) { if (nv === v) r.finishKeep = v; save(); finishPick(then); }); })(r, v);
+      return true;
+    }
+    then();
+    return false;
+  }
+  $("nav-next").onclick = function () { if (S.step === 3) finishPick(openSheet); else if (S.step === 0) finishPick(function () { S.step++; render(); }); else { S.step++; render(); } };
+
+  /* chips: Draw 1-9 shown as numbers, nothing else (an old saved name still shows as the current pick) */
+  var chipOpen = {};
+  function chips(prefix, cur) {
+    if (cur && !chipOpen[prefix]) return '<button type="button" class="big" data-chipopen="' + prefix + '" style="margin:0 0 10px;text-align:left">' + esc(cur) + ' <span style="color:var(--fg-dim);font-weight:normal">&middot; change</span></button>';
+    return '<div class="chips" role="group">' + DRAWS.map(function (d, i) {
+      return '<button type="button" data-chip="' + prefix + '" data-name="' + d + '" aria-label="' + d + '" class="' + (cur === d ? "on" : "") + '">' + (i + 1) + '</button>';
+    }).join("") + '</div>';
+  }
+
+  /* step 1: coils */
+  function trackerState() { try { return JSON.parse(localStorage.getItem(TRACKER_KEY) || "null"); } catch (e) { return null; } }
+  function stepCoils() {
+    var t = trackerState(), html = '<h2>Your coils</h2><p class="muted">One box per work order card. Weight counts the coils you ran in.</p>';
+    if (window.SheetScan) html += '<button class="big amber" id="scan" type="button">SCAN MY SHEET (CAMERA)</button><div id="scan-host"></div>';
+    if (t && t.schema === "draw-rate/v5") html += '<button class="big amber" id="fill" type="button"' + (window.SheetScan ? ' style="margin-top:10px"' : "") + '>FILL FROM TODAY\'S TRACKER</button><div id="fill-preview"></div>';
+    S.rows.forEach(function (r, i) {
+      var rr = P.computeRow(r, i);
+      html += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + (S.rows.length > 1 ? '<button class="xbtn" type="button" data-delrow="' + i + '" aria-label="Remove card ' + (i + 1) + '">&times;</button>' : "") + '</div>' +
+        field("Card #", "r" + i + "-card", r.card, "card number", 'inputmode="numeric"') +
+        (r.actualWeights && r.actualWeights.length ? '<p class="muted">' + (r.fromScan ? "From the sheet: " : "From the tracker: ") + r.actualWeights.length + ' weighed ' + (r.actualWeights.length === 1 ? "coil" : "coils") + '. ' + esc(r.note || "") + '</p>' :
+        r.avgWgt !== undefined && r.avgWgt !== "" ? field("Avg. Wgt. (lbs, from the sheet)", "r" + i + "-avgWgt", r.avgWgt, "avg weight", 'inputmode="decimal"') :
+        field("Work order Tot Avg Wgt (lbs)", "r" + i + "-woTotal", r.woTotal, "Tot Avg Wgt", 'inputmode="decimal"') +
+        field("Coils on the work order", "r" + i + "-woCoils", r.woCoils, "work order coils", 'inputmode="numeric"')) +
+        '<div class="grid2">' + field("Coils IN", "r" + i + "-coilsDrawn", r.coilsDrawn, "coils in") +
+        field("Coils OUT", "r" + i + "-coilsOut", r.coilsOut, "coils out") + '</div>' +
+        '<div class="cuts" role="group" aria-label="Cut">' + [[1, "No cut"], [2, "Half \u00d72"], [3, "Thirds \u00d73"]].map(function (c) {
+          return '<button type="button" data-cut="' + i + '" data-k="' + c[0] + '" class="' + ((r.cut || 0) === c[0] ? "on" : "") + '">' + c[1] + '</button>';
+        }).join("") + '</div>' +
+        '<span class="lbl">Which Draw? <span style="color:var(--ph)">(skip if you ran one machine)</span></span>' + chips("row" + i, r.machine) +
+        '<details><summary>+ Finish size, grade, compound, package</summary><div class="grid2">' +
+        field("Finish Size (in)", "r" + i + "-finish", r.finish, "finish size", 'inputmode="decimal"') + field("Grade", "r" + i + "-grade", r.grade, "grade", 'inputmode="text"') +
+        field("Draw Compound", "r" + i + "-compound", r.compound, "compound", 'inputmode="text" data-compound="1"') + field("Package", "r" + i + "-package", r.package, "package", 'inputmode="text"') +
+        '</div></details>' +
+        '<div class="live"><span>IN=OUT <b id="r' + i + '-io" style="font-size:16px">' + esc(rr.coilsText || "\u2013") + '</b> &middot; Avg</span><b id="r' + i + '-avg">' + (rr.avg !== null ? P.fmtInt(rr.avg) : "\u2013") + '</b></div>' +
+        '<div class="live"><span>Weight</span><b id="r' + i + '-w">' + (rr.weight !== null ? P.fmtInt(rr.weight) : "\u2013") + '</b></div></div>';
+    });
+    html += '<button class="big" id="add-row" type="button">+ ADD CARD</button>';
+    html += '<details style="margin-top:14px"><summary>+ Top of the sheet (name, date, shift)</summary><div class="panel">' +
+      field("Name", "h-name", S.name, "your name", 'inputmode="text"') + '<div class="grid2">' +
+      field("Date", "h-date", S.date, "date", 'inputmode="text"') + field("Shift", "h-shift", S.shift, "shift, like 6a-4p", 'inputmode="text"') + '</div></div></details>';
+    return html;
+  }
+  function rowLive(i) {
+    var r = S.rows[i], rr = P.computeRow(r, i);
+    $("r" + i + "-io").textContent = rr.coilsText || "\u2013";
+    $("r" + i + "-avg").textContent = rr.avg !== null ? P.fmtInt(rr.avg) : "\u2013";
+    $("r" + i + "-w").textContent = rr.weight !== null ? P.fmtInt(rr.weight) : "\u2013";
+  }
+  function bindCoils() {
+    S.rows.forEach(function (r, i) {
+      ["card", "avgWgt", "woTotal", "woCoils", "coilsDrawn", "coilsOut", "finish", "grade", "compound", "package"].forEach(function (k) {
+        var el = $("r" + i + "-" + k); if (!el) return;
+        el.addEventListener("input", function () {
+          r[k] = el.value;
+          if (k === "coilsDrawn" && r.cut > 1) { var n = P.num(el.value); r.coilsOut = n !== null && n > 0 ? P.fmtNum(n * r.cut).replace(/,/g, "") : ""; $("r" + i + "-coilsOut").value = r.coilsOut; }
+          if (k === "coilsOut") { r.cut = 0; app.querySelectorAll('[data-cut="' + i + '"]').forEach(function (b) { b.classList.remove("on"); }); }
+          save(); rowLive(i);
+        });
+      });
+    });
+    S.rows.forEach(function (r, i) {
+      var fe = $("r" + i + "-finish");
+      if (fe && window.Fields) fe.addEventListener("change", function () { var v = fe.value.trim(); if (Fields.sizeAmbig(v) && r.finishKeep !== v) Fields.sizePick(fe, "Card " + (i + 1) + " finish size", function (nv) { if (nv === v) { r.finishKeep = v; save(); } }); });
+    });
+    app.querySelectorAll("[data-cut]").forEach(function (b) {
+      b.onclick = function () {
+        var i = +b.dataset.cut, k = +b.dataset.k, r = S.rows[i], n = P.num(r.coilsDrawn);
+        r.cut = k; r.coilsOut = k > 1 && n !== null && n > 0 ? String(n * k) : "";
+        $("r" + i + "-coilsOut").value = r.coilsOut;
+        app.querySelectorAll('[data-cut="' + i + '"]').forEach(function (x) { x.classList.toggle("on", x === b); });
+        if (k > 1 && (n === null || n <= 0)) toast("Type coils IN first");
+        save(); rowLive(i);
+      };
+    });
+    bindChips(function (prefix, name) { var i = +prefix.slice(3), r = S.rows[i]; r.machine = r.machine === name ? "" : name; });
+    app.querySelectorAll("[data-delrow]").forEach(function (b) { b.onclick = function () { S.rows.splice(+b.dataset.delrow, 1); render(); }; });
+    $("add-row").onclick = function () { S.rows.push(blankRow()); render(); setTimeout(function () { var el = $("r" + (S.rows.length - 1) + "-card"); el.scrollIntoView({ block: "center" }); }, 30); };
+    [["h-name", "name"], ["h-date", "date"], ["h-shift", "shift"]].forEach(function (p) { $(p[0]).addEventListener("input", function (e) { S[p[1]] = e.target.value; save(); }); });
+    if ($("fill")) $("fill").onclick = showFill;
+    if ($("scan")) $("scan").onclick = openScan;
+    S.rows.forEach(function (r, i) { var el = $("r" + i + "-avgWgt"); if (el) el.addEventListener("change", function () { if (!el.value.trim()) { delete r.avgWgt; render(); } }); });
+  }
+  function bindChips(fn) {
+    app.querySelectorAll("[data-chip]").forEach(function (b) {
+      b.onclick = function () {
+        var prefix = b.dataset.chip, name = b.dataset.name, y = window.scrollY; fn(prefix, name);
+        delete chipOpen[prefix]; render(); window.scrollTo(0, y);
+      };
+    });
+    app.querySelectorAll("[data-chipopen]").forEach(function (b) {
+      b.onclick = function () { var y = window.scrollY; chipOpen[b.dataset.chipopen] = true; render(); window.scrollTo(0, y); };
     });
   }
-  function toggleMath(force) {
-    var p = $("mathpanel"), open = force !== undefined ? force : p.hidden;
-    p.hidden = !open; $("mathbtn").textContent = open ? "HIDE THE MATH" : "SHOW THE MATH";
-    $("mathbtn").setAttribute("aria-expanded", String(open));
-    if (open) p.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  /* fill from the tracker (read only) */
+  var fillData = null;
+  function normName(n) { var m = /^\s*draw\s*#?\s*([1-9])\s*$/i.exec(String(n || "")); return m ? "Draw " + m[1] : String(n || "").trim(); }
+  function showFill() {
+    fillData = P.fromTracker(trackerState(), new Date().toISOString());
+    var el = $("fill-preview");
+    if (!fillData.ok) { el.innerHTML = '<p class="warnbox">' + esc(fillData.warnings.join(" ") || "Nothing in the tracker yet.") + '</p>'; return; }
+    var lines = fillData.summary.slice();
+    fillData.downtime.forEach(function (d) { lines.push("Downtime: " + (d.machine || "Every draw") + ": " + d.minutes + " min" + (d.reason ? ", " + d.reason : "") + (d.start ? " (" + d.start + " to " + d.end + ")" : "")); });
+    el.innerHTML = '<div class="panel"><b style="color:var(--white)">The tracker has this for today:</b><ul class="muted" style="font-size:15px;padding-left:20px">' +
+      lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + '</ul><p class="muted">Card # comes in blank. The tracker itself is not changed.</p>' +
+      '<div class="grid2"><button id="fill-replace" type="button" class="solid">REPLACE</button><button id="fill-add" type="button">ADD</button></div>' +
+      '<button id="fill-cancel" type="button" class="big" style="margin-top:10px">CANCEL</button></div>';
+    $("fill-cancel").onclick = function () { el.innerHTML = ""; };
+    $("fill-replace").onclick = function () { applyFill(true); };
+    $("fill-add").onclick = function () { applyFill(false); };
   }
-  var dl = $("reasons"); REASONS.forEach(function (r) { var o = el("option"); o.value = r; dl.appendChild(o); });
-  $("mathbtn").addEventListener("click", function () { toggleMath(); });
-  $("rate-line").addEventListener("click", function () { toggleMath(true); });
-  $("add").addEventListener("click", function () {
-    var prev = state.shift.rows[state.shift.rows.length - 1] || {};
-    var r = blankRow(); r.machine = prev.machine || (S.machines.length === 1 ? S.machines[0].name : ""); state.shift.rows.push(r);
-    renderCards(); update();
-    var e = $("c" + (state.shift.rows.length - 1) + "-card"); if (e) { e.focus(); e.scrollIntoView({ block: "center" }); }
+  function applyFill(replace) {
+    var t = fillData, before = localStorage.getItem(TRACKER_KEY);
+    var rows = t.rows.map(function (x) { var r = blankRow(); r.machine = normName(x.machine); r.coilsDrawn = String(x.coilsDrawn); r.actualWeights = x.actualWeights; r.finish = x.finish || ""; r.note = x.note || ""; return r; });
+    var keep = keepRows();
+    S.rows = replace || !keep.length ? (rows.length ? rows : [blankRow()]) : keep.concat(rows);
+    var dts = t.downtime.map(function (d) { return { minutes: String(d.minutes), reason: d.reason, machine: d.machine === "All machines" || d.machine === "Every draw" ? "" : normName(d.machine), start: d.start, end: d.end }; });
+    S.downtime = replace ? dts : S.downtime.concat(dts);
+    if (replace || !shiftSpan()) {
+      if (t.start) S.start = t.start;
+      if (t.start && t.shiftHours !== null) S.end = endFrom(t.start, t.shiftHours);
+      deriveHours();
+    }
+    if (replace || !S.breaks.length) S.breaks = t.breaks.map(function (b) { return { minutes: String(b.minutes), start: b.start }; });
+    if (replace || !S.name) S.name = t.name || S.name;
+    if (replace || !S.date) S.date = t.date || S.date;
+    var ms = [];
+    rows.forEach(function (r) { if (r.machine && ms.indexOf(r.machine) < 0) ms.push(r.machine); });
+    t.machines.forEach(function (m) { var n = normName(m.name); if (m.goal !== null && (S.goals[n] === undefined || S.goals[n] === "")) S.goals[n] = String(m.goal); });
+    if (ms.length && (replace || !S.slotCount)) {
+      S.slotCount = Math.min(2, ms.length);
+      S.slots = [blankSlot(), blankSlot()];
+      ms.slice(0, 2).forEach(function (n, i) { S.slots[i].segments[0].machine = n; });
+    }
+    if (localStorage.getItem(TRACKER_KEY) !== before) console.error("tracker changed");
+    render(); toast(replace ? "Filled from the tracker" : "Added from the tracker");
+  }
+
+  function keepRows() { return S.rows.filter(function (r) { return r.woTotal || r.woCoils || r.coilsDrawn || r.card || r.avgWgt || (r.actualWeights && r.actualWeights.length); }); }
+
+  /* scan the paper sheet. Same REPLACE / ADD idea as the tracker fill:
+     REPLACE = the sheet's cards, downtime, breaks and machines take the place of what's here;
+     ADD = the sheet's cards and downtime go after what's here. Either way, boxes that are blank on the sheet don't wipe what you typed. */
+  function openScan() {
+    var host = $("scan-host"); if (!host || !window.SheetScan) return;
+    SheetScan.start(host, { onApply: applyScan,
+      actionNote: "REPLACE: the sheet takes the place of the cards, downtime and breaks here. ADD: puts the sheet\u2019s cards and downtime after what\u2019s already here." });
+  }
+  function applyScan(sc, replace) {
+    var N = SheetScan.num, str = function (x) { return x === null || x === undefined ? "" : String(x); };
+    var rows = sc.coils.map(function (c) {
+      var r = blankRow(), cin = N(c.coils_in), cout = N(c.coils_out), avg = N(c.avg_wgt), w = N(c.weight);
+      r.card = str(c.card); r.machine = SheetScan.drawName(c.machine); r.finish = str(c.finish); r.grade = str(c.grade); r.compound = str(c.compound); r.package = str(c.package);
+      if (cin !== null && cin > 0) {
+        r.coilsDrawn = str(cin);
+        if (cout !== null && cout !== cin) { r.coilsOut = str(cout); r.cut = cout === cin * 2 ? 2 : cout === cin * 3 ? 3 : 0; }
+        if (avg !== null && avg > 0) r.avgWgt = str(avg);
+        else if (w !== null && w > 0) r.avgWgt = str(Math.round(w / cin));
+      } else if (w !== null && w > 0) { r.actualWeights = [str(w)]; r.fromScan = true; r.note = "Coils drawn was blank on the sheet."; }
+      else if (avg !== null && avg > 0) r.avgWgt = str(avg);
+      return r;
+    });
+    var keep = keepRows();
+    S.rows = replace || !keep.length ? (rows.length ? rows : (replace ? [blankRow()] : S.rows)) : keep.concat(rows);
+    var dts = sc.downtime.map(function (d) { return { minutes: str(d.minutes), reason: str(d.reason), machine: SheetScan.drawName(d.machine), start: str(d.start), end: str(d.end) }; });
+    S.downtime = replace ? dts : S.downtime.concat(dts);
+    var brk = sc.breaks.map(function (b) { return { minutes: str(b.minutes), start: str(b.start) }; });
+    if (replace) S.breaks = brk; else S.breaks = S.breaks.concat(brk);
+    var set = function (k, v) { if (v && (replace || !S[k])) S[k] = v; };
+    set("name", sc.name); set("date", sc.date); set("shift", sc.shift);
+    if (sc.shift_start && (replace || !S.start)) S.start = sc.shift_start;
+    if (sc.shift_end && (replace || !S.end)) S.end = sc.shift_end;
+    deriveHours();
+    if (sc.maintenance) S.maintenance = replace || !S.maintenance ? sc.maintenance : S.maintenance + "; " + sc.maintenance;
+    var slots = sc.machines.map(function (m) {
+      var segs = m.segments.filter(function (g) { return g.machine; }).map(function (g) { return { machine: SheetScan.drawName(g.machine), from: str(g.from), to: "" }; });
+      segs.forEach(function (g, j) { if (j) { g.from = g.from || ""; segs[j - 1].to = g.from; } else g.from = ""; });
+      m.segments.forEach(function (g) { var n = SheetScan.drawName(g.machine), v = N(g.goal); if (n && v !== null && (replace || S.goals[n] === undefined || S.goals[n] === "")) S.goals[n] = str(v); });
+      return { mode: "all", minutes: "", segments: segs };
+    }).filter(function (sl) { return sl.segments.length; });
+    if (!slots.length) {
+      var ms = []; rows.forEach(function (r) { if (r.machine && ms.indexOf(r.machine) < 0) ms.push(r.machine); });
+      slots = ms.map(function (n) { var sl = blankSlot(); sl.segments[0].machine = n; return sl; });
+    }
+    if (slots.length && (replace || !S.slotCount)) {
+      S.slotCount = Math.min(2, slots.length);
+      S.slots = slots.slice(0, 2); while (S.slots.length < 2) S.slots.push(blankSlot());
+    }
+    moveOpen = {}; S.step = 0; render();
+    toast((replace ? "Filled from the sheet" : "Added from the sheet") + (slots.length > 2 ? " (only 2 machines fit here)" : ""));
+    return true;
+  }
+
+  /* step 2: time */
+  function stepTime() {
+    var html = '<h2>Your time</h2><div class="panel"><p class="help">Shift start and end. If the end is earlier than the start, it ends the next morning.</p>' +
+      '<div class="row2">' + tfield("Shift start", "t-start", S.start) + tfield("Shift end", "t-end", S.end) + '</div>' +
+      '<p class="calc-note" id="t-note">' + esc(spanNote()) + '</p></div>';
+    html += '<h2>Breaks</h2>';
+    S.breaks.forEach(function (b, i) {
+      html += '<div class="break-row">' + tfield("Break " + (i + 1) + " start", "b" + i + "-start", b.start) +
+        '<div class="field"><label class="lbl" for="b' + i + '-min">How long</label><input class="in" type="number" id="b' + i + '-min" value="' + esc(b.minutes) + '" placeholder="min" inputmode="numeric" pattern="[0-9]*" min="1" step="5" data-hm="min"></div>' +
+        '<button type="button" class="btn warn" data-delbrk="' + i + '" aria-label="Remove break ' + (i + 1) + '">X</button></div>';
+    });
+    html += '<button class="big" id="add-brk" type="button">+ ADD BREAK</button>';
+    html += '<h2>Downtime</h2><p class="muted">With clock times, downtime during a break or overlapping other downtime only counts once.</p>';
+    S.downtime.forEach(function (d, i) {
+      var timed = P.clock(d.start) !== null && P.clock(d.end) !== null;
+      html += '<div class="drow"><div class="row2">' + tfield("Started at", "d" + i + "-start", d.start) + tfield("Ended at", "d" + i + "-end", d.end) + '</div>' +
+        '<div class="grid2">' + field("Time down", "d" + i + "-min", d.minutes, "minutes down", 'inputmode="numeric" data-hm="min"' + (timed ? " readonly" : "")) +
+        '<div class="f"><label for="d' + i + '-mach">Machine</label><select id="d' + i + '-mach"><option value="">Every draw (whole shift)</option>' +
+        DRAWS.concat(d.machine && DRAWS.indexOf(d.machine) < 0 ? [d.machine] : []).map(function (n) { return '<option' + (d.machine === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select></div></div>' +
+        field("Reason", "d" + i + "-reason", d.reason, "what happened, like die change", 'inputmode="text" list="reasons"') +
+        '<button type="button" class="warn" style="width:100%" data-deldown="' + i + '">REMOVE DOWNTIME</button></div>';
+    });
+    html += '<button class="big" id="add-down" type="button">+ ADD DOWNTIME</button>';
+    html += '<button class="num key" id="t-out" type="button" style="margin-top:16px"><span>Hours per shift<i>tap for the math</i></span><b id="t-hours-out">\u2013</b></button>';
+    return html;
+  }
+  function timeLive() {
+    var c = calc(), r = c.res;
+    $("t-hours-out").textContent = r.hours !== null ? r.hoursText : "\u2013";
+  }
+  function bindTime() {
+    var upd = function () { S.start = $("t-start").value; S.end = $("t-end").value; deriveHours(); $("t-note").textContent = spanNote(); save(); timeLive(); };
+    ["t-start", "t-end"].forEach(function (id) { $(id).addEventListener("input", upd); $(id).addEventListener("change", upd); });
+    S.breaks.forEach(function (b, i) {
+      $("b" + i + "-min").addEventListener("input", function (e) { b.minutes = e.target.value; save(); timeLive(); });
+      ["input", "change"].forEach(function (ev) { $("b" + i + "-start").addEventListener(ev, function (e) { b.start = e.target.value; save(); timeLive(); }); });
+    });
+    S.downtime.forEach(function (d, i) {
+      var sync = function () {
+        var a = P.clock(d.start), b = P.clock(d.end), m = $("d" + i + "-min");
+        if (a !== null && b !== null) { d.minutes = String(((b - a) % 1440 + 1440) % 1440); m.value = d.minutes; m.readOnly = true; } else m.readOnly = false;
+        if (m._hmSync) m._hmSync();
+        save(); timeLive();
+      };
+      ["input", "change"].forEach(function (ev) {
+        $("d" + i + "-start").addEventListener(ev, function (e) { d.start = e.target.value; sync(); });
+        $("d" + i + "-end").addEventListener(ev, function (e) { d.end = e.target.value; sync(); });
+      });
+      $("d" + i + "-min").addEventListener("input", function (e) { d.minutes = e.target.value; save(); timeLive(); });
+      $("d" + i + "-mach").addEventListener("change", function (e) { d.machine = e.target.value; save(); timeLive(); });
+      $("d" + i + "-reason").addEventListener("input", function (e) { d.reason = e.target.value; save(); });
+    });
+    app.querySelectorAll("[data-delbrk]").forEach(function (b) { b.onclick = function () { S.breaks.splice(+b.dataset.delbrk, 1); render(); }; });
+    app.querySelectorAll("[data-deldown]").forEach(function (b) { b.onclick = function () { S.downtime.splice(+b.dataset.deldown, 1); render(); }; });
+    $("add-brk").onclick = function () { S.breaks.push({ minutes: "", start: "" }); render(); focusLast("b" + (S.breaks.length - 1) + "-min"); };
+    $("add-down").onclick = function () { S.downtime.push({ minutes: "", reason: "", machine: "", start: "", end: "" }); render(); focusLast("d" + (S.downtime.length - 1) + "-start"); };
+    $("t-out").onclick = function () {
+      var r = calc().res;
+      drill("Hours per shift", r.hours !== null ? r.hoursText + " hr (" + r.hmText + ")" : "", r.steps.filter(function (s) { return cat(s) === "hours"; }).concat(r.hours === null ? r.warnings.filter(function (w) { return /shift|break|downtime/i.test(w); }) : []));
+    };
+    timeLive();
+  }
+  function focusLast(id) { setTimeout(function () { var el = $(id); if (el) { el.scrollIntoView({ block: "center" }); } }, 30); }
+
+  /* step 3: machines */
+  function minsAfterStart(c) { var s = P.clock(S.start); return s === null || c === null ? null : ((c - s) % 1440 + 1440) % 1440; }
+  function fmt12(m) { m = ((m % 1440) + 1440) % 1440; var h = Math.floor(m / 60), mm = m % 60; return (h % 12 || 12) + ":" + (mm < 10 ? "0" : "") + mm + (h < 12 ? "a" : "p"); }
+  function timeline(sl, si) {
+    var sm = P.num(S.shiftHours), st = P.clock(S.start);
+    var segs = sl.segments, total = sm !== null && sm > 0 ? Math.round(sm * 60) : null;
+    if (segs.length < 2 || total === null || st === null) return "";
+    var marks = [0];
+    for (var j = 1; j < segs.length; j++) { var a = minsAfterStart(P.clock(segs[j].from)); marks.push(a === null ? null : Math.min(a, total)); }
+    marks.push(total);
+    var parts = "", ok = marks.every(function (x, i) { return x !== null && (i === 0 || x >= marks[i - 1]); });
+    var hm = function (m) { m = ((m % 1440) + 1440) % 1440; var h = Math.floor(m / 60), mm = m % 60; return (h % 12 || 12) + ":" + (mm < 10 ? "0" : "") + mm; };
+    segs.forEach(function (sg, j) {
+      var w = ok ? Math.max(marks[j + 1] - marks[j], 1) : 1;
+      parts += '<button type="button" style="flex-grow:' + w + '" class="' + (j % 2 ? "alt" : "") + '" data-tl="' + si + '-' + j + '" title="Tap to change the time">' +
+        esc(sg.machine.replace(/^Draw /, "D")) + (ok ? " " + hm(st + marks[j]) + "–" + hm(st + marks[j + 1]) : "") + '</button>';
+    });
+    return '<div class="tl" aria-label="Timeline, tap a part to change its time">' + parts + '</div><div class="tlx">' + (ok ? '<span>' + fmt12(st) + '</span><span>tap to change times</span><span>' + fmt12(st + total) + '</span>' : '<span style="color:var(--amber)">check the switch times</span>') + '</div>';
+  }
+  function goalInput(id, name) {
+    return field(esc(name) + " need rate (lbs/hr)", id, S.goals[name] === undefined ? "" : S.goals[name], "need rate (lbs/hr)", 'inputmode="numeric" data-goal="' + esc(name) + '"');
+  }
+  var moveOpen = {};
+  function stepMachines() {
+    var html = '<h2>Your machines</h2><p class="muted">1 machine or 2?</p><div class="count">' +
+      [1, 2].map(function (n) { return '<button type="button" data-count="' + n + '" class="' + (S.slotCount === n ? "on" : "") + '">' + n + ' MACHINE' + (n > 1 ? "S" : "") + '</button>'; }).join("") + '</div>';
+    slotsInUse().forEach(function (sl, si) {
+      var segs = sl.segments, first = segs[0], moved = segs.length > 1;
+      html += '<div class="slot"><b>MACHINE ' + (si + 1) + (first.machine ? ": " + esc(segs.map(function (s) { return s.machine; }).filter(Boolean).join(" \u2192 ")) : "") + '</b>';
+      html += '<span class="lbl">Which Draw?' + (moved ? " (first)" : "") + '</span>' + chips("slot" + si + "-0", first.machine);
+      if (first.machine) html += goalInput("g" + si + "-0", first.machine);
+      if (!moved && first.machine) {
+        html += '<span class="lbl">How long it ran</span><div class="runchoice">' + [["all", "All shift"], ["half", "Half shift"], ["custom", "Set hours"]].map(function (m) {
+          return '<button type="button" data-mode="' + si + '" data-m="' + m[0] + '" class="' + (sl.mode === m[0] ? "on" : "") + '">' + m[1] + '</button>';
+        }).join("") + '</div>';
+        if (sl.mode === "custom") html += field("Hours it ran", "s" + si + "-min", sl.minutes, "hours, like 5:30", 'inputmode="numeric" data-hm="hm"');
+      }
+      if (moved) {
+        html += timeline(sl, si);
+        if (P.clock(S.start) === null) html += tfield("Shift start", "s" + si + "-start", S.start, 'data-shiftstart="1"', "Needed so switch times work.");
+        segs.forEach(function (sg, j) {
+          if (j === 0) return;
+          html += '<div class="seg"><div class="cardhead"><b>MOVED TO ' + esc(sg.machine) + '</b><button class="xbtn" type="button" data-delseg="' + si + '-' + j + '" aria-label="Undo this move">&times;</button></div>' +
+            tfield("Switch time", "sw" + si + "-" + j, sg.from, 'data-switch="' + si + '-' + j + '"') +
+            (P.clock(sg.from) === null ? '<span class="hint" style="margin:-6px 0 8px">Type the switch time</span>' : "") +
+            goalInput("g" + si + "-" + j, sg.machine) + '</div>';
+        });
+      }
+      if (first.machine) {
+        if (moveOpen[si]) {
+          html += '<div class="movebox"><b style="color:var(--amber)">MOVED TO WHICH DRAW?</b>' + chips("move" + si, moveOpen[si].machine || "") +
+            tfield("Switch time", "mv" + si + "-time", moveOpen[si].time || "") +
+            '<div class="grid2"><button type="button" class="solid" id="mv' + si + '-ok">ADD MOVE</button><button type="button" id="mv' + si + '-x">CANCEL</button></div></div>';
+        } else html += '<button type="button" class="big amber" data-move="' + si + '" style="margin-top:6px">MOVED MACHINES</button>';
+      }
+      html += '</div>';
+    });
+    if (S.slotCount) html += '<button class="num key" id="m-goal" type="button"><span>Goal lbs/hr<i>tap for the math</i></span><b id="m-goal-out">\u2013</b></button><ul class="warnbox" id="m-warn"></ul>';
+    return html;
+  }
+  function machLive() {
+    var r = calc().res, g = $("m-goal-out"); if (!g) return;
+    g.textContent = r.goal10 !== null ? r.goalText : "\u2013";
+    $("m-warn").innerHTML = r.goal10 !== null ? "" : r.warnings.filter(function (w) { return !/^Card /.test(w); }).map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("");
+  }
+  function bindMachines() {
+    app.querySelectorAll("[data-count]").forEach(function (b) { b.onclick = function () { S.slotCount = +b.dataset.count; render(); }; });
+    bindChips(function (prefix, name) {
+      var m = /^slot(\d)-0$/.exec(prefix);
+      if (m) { var sg = S.slots[+m[1]].segments[0]; sg.machine = sg.machine === name ? "" : name; return; }
+      m = /^move(\d)$/.exec(prefix);
+      if (m) { var mo = moveOpen[+m[1]]; mo.time = ($("mv" + m[1] + "-time") || {}).value || mo.time; mo.machine = name; }
+    });
+    app.querySelectorAll("[data-goal]").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var n = el.dataset.goal; S.goals[n] = el.value;
+        app.querySelectorAll("[data-goal]").forEach(function (o) { if (o !== el && o.dataset.goal === n) o.value = el.value; });
+        save(); machLive();
+      });
+    });
+    app.querySelectorAll("[data-mode]").forEach(function (b) { b.onclick = function () { S.slots[+b.dataset.mode].mode = b.dataset.m; render(); if (b.dataset.m === "custom") focusLast("s" + b.dataset.mode + "-min"); }; });
+    slotsInUse().forEach(function (sl, si) { var el = $("s" + si + "-min"); if (el) el.addEventListener("input", function () { sl.minutes = el.value; save(); machLive(); }); });
+    app.querySelectorAll("[data-shiftstart]").forEach(function (el) { el.addEventListener("change", function () { S.start = el.value; deriveHours(); save(); render(); }); });
+    app.querySelectorAll("[data-switch]").forEach(function (el) {
+      el.addEventListener("change", function () {
+        var p = el.dataset.switch.split("-"), segs = S.slots[+p[0]].segments, j = +p[1];
+        segs[j].from = el.value; segs[j - 1].to = el.value; render();
+      });
+    });
+    app.querySelectorAll("[data-tl]").forEach(function (b) {
+      b.onclick = function () {
+        var p = b.dataset.tl.split("-"), j = +p[1], id = j === 0 ? (S.slots[+p[0]].segments.length > 1 ? "sw" + p[0] + "-1" : "") : "sw" + p[0] + "-" + j;
+        var el = $(id); if (!el) return;
+        el.scrollIntoView({ block: "center" }); el.classList.add("flash"); setTimeout(function () { el.classList.remove("flash"); }, 1200); el.focus();
+      };
+    });
+    app.querySelectorAll("[data-delseg]").forEach(function (b) {
+      b.onclick = function () {
+        var p = b.dataset.delseg.split("-"), segs = S.slots[+p[0]].segments, j = +p[1];
+        segs.splice(j, 1);
+        if (segs[j]) segs[j - 1].to = segs[j].from; else segs[j - 1].to = "";
+        render();
+      };
+    });
+    app.querySelectorAll("[data-move]").forEach(function (b) { b.onclick = function () { moveOpen[+b.dataset.move] = { machine: "", time: "" }; render(); focusLast("mv" + b.dataset.move + "-time"); }; });
+    slotsInUse().forEach(function (sl, si) {
+      if (!moveOpen[si]) return;
+      ["input", "change"].forEach(function (ev) { $("mv" + si + "-time").addEventListener(ev, function (e) { moveOpen[si].time = e.target.value; }); });
+      $("mv" + si + "-x").onclick = function () { delete moveOpen[si]; render(); };
+      $("mv" + si + "-ok").onclick = function () {
+        var mo = moveOpen[si];
+        if (!mo.machine) { toast("Pick the Draw you moved to"); return; }
+        if (P.clock(mo.time) === null) { toast("Type the switch time"); $("mv" + si + "-time").focus(); return; }
+        var segs = sl.segments, lastSeg = segs[segs.length - 1];
+        lastSeg.to = mo.time; segs.push({ machine: mo.machine, from: mo.time, to: "" });
+        delete moveOpen[si]; render();
+        if (S.goals[mo.machine] === undefined || S.goals[mo.machine] === "") focusLast("g" + si + "-" + (segs.length - 1));
+      };
+    });
+    if ($("m-goal")) $("m-goal").onclick = function () {
+      var r = calc().res;
+      drill("Goal lbs/hr", r.goal10 !== null ? r.goalText + " lbs/hr" : "", r.steps.filter(function (s) { return cat(s) === "goal"; }).concat(r.goal10 === null ? r.warnings : []));
+    };
+    machLive();
+  }
+
+  /* step 4: results (numbers only; tap for the math) */
+  function stepResults() {
+    var c = calc(), r = c.res, html = '<h2>Your numbers</h2><p class="muted">Tap any number to see how we got it.</p>';
+    var row = function (id, label, val, key) { return '<button class="num' + (key ? " key" : "") + '" type="button" id="' + id + '"><span>' + label + '</span><b>' + val + '</b></button>'; };
+    html += row("n-total", "Total Weight Produced", r.total ? P.fmtInt(r.total) : "\u2013");
+    html += row("n-hours", "Hours per shift", r.hours !== null ? r.hoursText : "\u2013");
+    html += row("n-goal", "Goal: Lbs/Hour", r.goal10 !== null ? r.goalText : "\u2013");
+    html += row("n-rate", "Average lbs/hr", r.rate10 !== null ? r.rateText : "\u2013", true);
+    if (r.status !== "incomplete") {
+      html += '<button type="button" id="n-status" class="banner ' + r.status + '">' + (r.status === "met" ? "GOAL MET" : "GOAL NOT MET") +
+        '<small>' + (r.status === "met" ? P.fmtTenths(r.diff10) + " lbs/hr over · " + Math.round(r.pct10 / 10) + "% of goal" : P.fmtTenths(-r.diff10) + " lbs/hr under · " + Math.round(r.pct10 / 10) + "% of goal. List problems and downtime on the sheet.") + '</small></button>';
+    }
+    var tot = r.machineTotals || [];
+    if (tot.length > 1 && r.goal10 !== null) tot.forEach(function (m, i) {
+      html += row("n-m" + i, esc(m.name) + " lbs/hr<i>made " + P.fmtInt(m.lbs) + " of " + P.fmtInt(m.goalLbs) + " lbs goal</i>", m.rate10 !== null ? P.fmtTenths(m.rate10) : "\u2013");
+    });
+    if (r.warnings.length) html += '<b style="color:var(--amber);display:block;margin-top:12px">Still to fix:</b><ul class="warnbox">' + r.warnings.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + '</ul>';
+    html += '<h2' + (r.status === "notmet" ? ' style="color:var(--red)"' : "") + '>Problems and downtime</h2><div class="panel">' +
+      (r.problems.length ? '<ul style="padding-left:20px;margin:0;color:var(--white);line-height:1.45">' + r.problems.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : '<p class="muted" style="margin:0">None entered. Add downtime on the Time screen.</p>') +
+      '<div class="f" style="margin-top:12px"><label for="maint">Maintenance issues to follow up on</label><textarea id="maint" placeholder="maintenance issues, like leaking hose">' + esc(S.maintenance) + '</textarea></div></div>';
+    html += '<button class="big solid" id="to-sheet" type="button" style="margin-top:8px">COPY TO SHEET VIEW (BIG TEXT)</button>';
+    html += '<button class="big warn" id="new-shift" type="button" style="margin-top:22px">START A NEW SHIFT (CLEAR ALL)</button>';
+    return html;
+  }
+  function bindResults() {
+    var r = calc().res, pick = function (cats) { return r.steps.filter(function (s) { return cats.indexOf(cat(s)) >= 0; }); };
+    $("n-total").onclick = function () { drill("Total Weight Produced", r.total ? P.fmtInt(r.total) + " lbs" : "", pick(["total"])); };
+    $("n-hours").onclick = function () { drill("Hours per shift", r.hours !== null ? r.hoursText + " hr (" + r.hmText + ")" : "", pick(["hours"])); };
+    $("n-goal").onclick = function () { drill("Goal: Lbs/Hour", r.goal10 !== null ? r.goalText + " lbs/hr" : "", pick(["goal"])); };
+    $("n-rate").onclick = function () { drill("Average lbs/hr", r.rate10 !== null ? r.rateText + " lbs/hr" : "", pick(["rate", "status"])); };
+    if ($("n-status")) $("n-status").onclick = function () { drill(r.status === "met" ? "GOAL MET" : "GOAL NOT MET", "", pick(["status"])); };
+    (r.machineTotals || []).forEach(function (m, i) {
+      var b = $("n-m" + i); if (!b) return;
+      b.onclick = function () {
+        drill(m.name, m.rate10 !== null ? P.fmtTenths(m.rate10) + " lbs/hr" : "", r.steps.filter(function (s) { return s.indexOf(m.name + " ") === 0 && cat(s) !== "total"; }));
+      };
+    });
+    $("maint").addEventListener("input", function (e) { S.maintenance = e.target.value; save(); });
+    $("to-sheet").onclick = openSheet;
+    $("new-shift").onclick = function () {
+      if (!confirm("Clear everything and start a new shift?")) return;
+      S = fresh(); S.screen = "log"; moveOpen = {}; render(); toast("Cleared");
+    };
+  }
+
+  /* ---------- copy-to-sheet view, same order as the paper form ---------- */
+  function openSheet() {
+    var c = calc(), sh = c.sh, r = c.res, one = usedNames().length === 1 ? usedNames()[0] : "";
+    var line = function (l, v, big) { return '<div class="svline' + (big ? " big" : "") + '"><span>' + l + '</span><b>' + esc(v) + '</b></div>'; };
+    var h = line("Name", S.name || "") + line("Date", window.Fields ? Fields.niceDate(S.date || "") : (S.date || "")) + line("Shift", S.shift || "");
+    sh.rows.forEach(function (row, i) {
+      var rr = r.rows[i];
+      var cells = [["Card #", row.card], ["Finish Size", row.finish], ["Grade", row.grade], ["Draw Compound", row.compound], ["Package", row.package],
+        ["Avg. Wgt.", rr.avg !== null ? P.fmtInt(rr.avg) : ""], ["Coils Drawn", rr.coilsText], ["Weight", rr.weight !== null ? P.fmtInt(rr.weight) : ""],
+        ["Machine", row.machine || one]];
+      h += '<div class="svrow"><div class="cells">' + cells.map(function (x) { return '<div><i>' + x[0] + '</i><b>' + esc(x[1] || "\u2013") + '</b></div>'; }).join("") + '</div></div>';
+    });
+    h += line("Total Weight Produced", r.total ? P.fmtInt(r.total) : "", true) + line("Hours per shift", r.hours !== null ? r.hoursText : "", true) +
+      line("Goal: Lbs/Hour", r.goalText, true) + line("Average lbs/hr", r.rateText, true);
+    if (r.status === "notmet") h += '<h3 class="bad">GOAL NOT MET: LIST ALL PROBLEMS AND REASONS FOR DOWNTIME</h3>';
+    else h += '<h3>List all problems and reasons for downtime</h3>';
+    h += r.problems.length ? '<ul class="svlist">' + r.problems.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : '<p class="svp">(none entered)</p>';
+    h += '<h3>Maintenance issues to follow up on</h3><p class="svp">' + esc(r.maintenance || "(none entered)") + '</p>';
+    $("sv-body").innerHTML = h; if (window.LogDB) LogDB.mount($("sv-body"), function () { return LogDB.fromTryout(S, calc()); }); $("sheetview").hidden = false; document.body.classList.add("noscroll"); $("sv-close").focus();
+  }
+  $("sv-close").onclick = function () { $("sheetview").hidden = true; document.body.classList.remove("noscroll"); };
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeDrill(); $("sv-close").onclick(); } });
+  /* Android Back: closes SEND TO TRACKER, the step-by-step, or the sheet copy, then goes back to the calculator's
+     first screen. It only leaves the page from the first screen with nothing open. */
+  var guardOn = false;
+  function armGuard() {
+    if (guardOn) return;
+    if (history.state && history.state.calcGuard) { guardOn = true; return; }
+    try { history.pushState({ calcGuard: 1 }, ""); guardOn = true; } catch (e) {}
+  }
+  function anyOpen() { return !$("send").hidden || !$("drill").hidden || !$("sheetview").hidden || S.screen !== "home"; }
+  document.addEventListener("pointerdown", function () { if (anyOpen()) armGuard(); }, true);
+  document.addEventListener("click", function () { setTimeout(function () { if (anyOpen()) armGuard(); }, 0); }, true);
+  window.addEventListener("popstate", function () {
+    guardOn = false;
+    if (!$("send").hidden) sendClose();
+    else if (!$("drill").hidden) closeDrill();
+    else if (!$("sheetview").hidden) $("sv-close").onclick();
+    else if (S.screen !== "home") go("home");
+    else return;
+    if (anyOpen()) armGuard();
   });
-  $("add-machine").addEventListener("click", function () { S.machines.push({ name: "", goal: "" }); renderMachines(); refreshSelects(); $("m" + (S.machines.length - 1) + "-name").focus(); });
-  $("add-break").addEventListener("click", function () { state.shift.breaks.push({ minutes: "" }); renderBreaks(); update(); $("b" + (state.shift.breaks.length - 1) + "-min").focus(); });
-  $("add-down").addEventListener("click", function () {
-    var rows = state.shift.rows, m = rows.length ? rows[rows.length - 1].machine : "";
-    state.shift.downtime.push({ minutes: "", reason: "", machine: m || "" }); renderDowntime(); update();
-    $("d" + (state.shift.downtime.length - 1) + "-min").focus();
-  });
-  $("copy").addEventListener("click", function () { copyText($("summary").value, $("summary")); });
-  $("copy-prob").addEventListener("click", function () { copyText(last.res.problems.join("\n") || "(none entered)"); });
-  $("sheetbtn").addEventListener("click", function () { openSheetView(true); });
-  $("sv-close").addEventListener("click", function () { openSheetView(false); });
-  $("fill").addEventListener("click", previewTracker);
-  $("fill-replace").addEventListener("click", function () { applyTracker("replace"); });
-  $("fill-merge").addEventListener("click", function () { applyTracker("merge"); });
-  $("fill-cancel").addEventListener("click", function () { pending = null; $("fill-preview").hidden = true; });
-  $("clear").addEventListener("click", function () {
-    if (!confirm("Clear this shift and start a new one? Your machines, shift length and breaks stay.")) return;
-    state.shift = fresh(S); runSig = null; save(); bindHeader(); renderCards(); renderBreaks(); renderDowntime(); update(); toggleMath(false); window.scrollTo(0, 0);
-  });
-  window.addEventListener("storage", function (e) { if (e.key === TRACKER_KEY) checkTracker(); });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) checkTracker(); });
-  bindQuick(); bindHeader(); renderMachines(); renderCards(); renderBreaks(); renderDowntime(); update(); checkTracker();
-  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(function () {});
+
+  (function () {
+    var qs = /[?&]go=(avg|rate|log)\b/.exec(location.search), fr = /[?&]from=(app|root)\b/.exec(location.search);
+    try { if (fr) sessionStorage.setItem("calcTryFrom", fr[1]); fr = sessionStorage.getItem("calcTryFrom"); } catch (e) { fr = fr && fr[1]; }
+    if (fr === "app") { var bk = document.querySelector("header a.back"); if (bk) bk.setAttribute("href", "/draw/app/"); }
+    if (qs) {
+      if (qs[1] === "log") { S.screen = "log"; } else go(qs[1]);
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    } else if (S.screen === "avg" || S.screen === "rate" || S.screen === "quick") S.screen = "home";
+  })();
+  render();
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {});
 })();
 </script>
-<script src="/data/fields.js"></script>
 </body>
 </html>

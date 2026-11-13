@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--
-  SCAN MY SHEET INTO THE TRACKER (tryout). Photo of the hand-filled P-310 -> /data/scan.js reads it (POST /scan)
+  SCAN MY SHEET INTO THE TRACKER. Photo of the hand-filled P-310 -> /data/scan.js reads it (POST /scan)
   -> review screen -> REPLACE or ADD writes the tracker's saved shift ("drawRateV5"). UNDO puts the old one back.
-  Looks and fits like the calculator tryout (/calc/try/): same CSS and PHONE FIT script.
+  Looks and fits like the calculator (/calc/): same CSS and PHONE FIT script.
 -->
 <html lang="en">
 <head>
@@ -34,7 +34,7 @@
 </script>
 <meta name="theme-color" content="#030a03">
 <meta name="robots" content="noindex">
-<title>Scan sheet into the tracker (tryout)</title>
+<title>Scan a Sheet into the Tracker</title>
 <link rel="icon" href="../icons/icon-192.png">
 <style>
 :root{--bg:#030a03;--panel:#061206;--fg:#39ff6a;--fg-dim:#1f9a3e;--fg-faint:rgba(57,255,106,.16);--amber:#ffc23d;--red:#ff5f56;--white:#eaffea;--ph:#5f7a63;
@@ -167,13 +167,13 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 </head>
 <body>
 <header>
-  <h1>SCAN MY SHEET<small>into the tracker <span class="trybadge">TRYOUT</span></small></h1>
+  <h1>SCAN MY SHEET<small>into the tracker</small></h1>
   <a class="back" href="../">&larr; TRACKER</a>
 </header>
 <main id="app"></main>
 <div class="toast" id="toast"></div>
 <script>
-/* Tryout: photo of the hand-filled P-310 -> review -> writes the tracker's saved shift (localStorage "drawRateV5").
+/* Photo of the hand-filled P-310 -> review -> writes the tracker's saved shift (localStorage "drawRateV5").
    Only writes after REPLACE or ADD. The tracker as it was is kept in "drawRateV5_beforeScan" so UNDO can put it back.
    The tracker page itself is not changed; it just loads the new data next time it opens.
    Each card becomes "coils drawn" coils at the sheet's Avg. Wgt. (or the card weight split evenly), logged at the time
@@ -212,7 +212,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
     if (t) {
       var n = t.coils.length, lb = t.coils.reduce(function (a, c) { return a + (+c.weight || 0); }, 0);
       h += '<div class="panel"><b style="color:var(--white)">In the tracker now:</b><ul class="muted" style="padding-left:20px;margin:6px 0 0">' +
-        '<li>' + esc(t.shift.date || "") + (t.shift.start ? ", " + fmt12(t.shift.start) + (t.shift.end ? " to " + fmt12(t.shift.end) : "") : "") + (t.shift.operator ? ", " + esc(t.shift.operator) : "") + '</li>' +
+        '<li>' + esc(window.Fields ? Fields.niceDate(t.shift.date || "") : (t.shift.date || "")) + (t.shift.start ? ", " + fmt12(t.shift.start) + (t.shift.end ? " to " + fmt12(t.shift.end) : "") : "") + (t.shift.operator ? ", " + esc(t.shift.operator) : "") + '</li>' +
         '<li>' + t.machines.map(function (m) { return esc(m.name) + " @ " + fmtLb(m.needRate) + " lbs/hr"; }).join(", ") + '</li>' +
         '<li>' + n + (n === 1 ? " coil, " : " coils, ") + fmtLb(lb) + ' lbs' + (t.downtime.length ? ", " + t.downtime.length + " downtime" : "") + '</li></ul></div>';
     } else h += '<p class="muted">The tracker is empty on this phone, so the sheet will start a new shift.</p>';
@@ -241,7 +241,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
     o.id = "scan-ask"; o.setAttribute("role", "alertdialog");
     o.style.cssText = "position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px";
     o.innerHTML = '<div class="panel" style="max-width:28rem;width:100%;border-color:var(--amber)"><b style="color:var(--white);font-size:18px;display:block;margin-bottom:14px">' + esc(msg) + '</b>' +
-      '<button type="button" class="big warn" id="scan-ask-no">' + esc(no) + '</button><button type="button" class="big amber" id="scan-ask-yes" style="margin-top:10px">' + esc(yes) + '</button></div>';
+      '<button type="button" class="big" id="scan-ask-no">' + esc(no) + '</button><button type="button" class="big amber" id="scan-ask-yes" style="margin-top:10px">' + esc(yes) + '</button></div>';
     document.body.appendChild(o);
     var close = function () { if (o.parentNode) o.parentNode.removeChild(o); window.removeEventListener("popstate", close); };
     try { history.pushState({ scanAsk: 1 }, ""); } catch (e) {}
@@ -256,7 +256,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
       var e0 = at(cur.shift.date, cur.shift.start, cur.shift.start), e1 = at(cur.shift.date, cur.shift.start, cur.shift.end);
       if (e0 !== null && e1 !== null && e1 <= e0) e1 += 86400000;
       if (e1 !== null && e1 <= now) {
-        ask("The tracker's shift (" + (cur.shift.date || "") + ", ended " + fmt12(cur.shift.end).replace(/a$/, " AM").replace(/p$/, " PM") + ") is over. Add the sheet's coils to that shift anyway?",
+        ask("The tracker's shift (" + (window.Fields ? Fields.niceDate(cur.shift.date || "") : (cur.shift.date || "")) + ", ended " + fmt12(cur.shift.end).replace(/a$/, " AM").replace(/p$/, " PM") + ") is over. Add the sheet's coils to that shift anyway?",
           "Add to that shift", "Cancel", function () { apply(sc, replace, true); });
         return false;
       }

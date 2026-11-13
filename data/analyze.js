@@ -209,7 +209,8 @@
     return C.n0(v);
   }
   function short(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "\u2026" : s; }
-  function md(s) { var d = parseYmd(s); return d ? (d.getMonth() + 1) + "/" + d.getDate() : s; }
+  var MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function md(s) { var d = parseYmd(s); return d ? MON3[d.getMonth()] + " " + d.getDate() : s; }
   function keyLabel(by, r) {
     if (by === "day") return C.day(r.key); if (by === "week") return "Wk of " + C.day(r.key);
     if (by === "operator") return r.op || r.key; if (by === "draw") return r.key ? "Draw " + r.key : "No Draw";
@@ -432,7 +433,7 @@
     var vis = sets.filter(function (x) { return !x.s.hidden; }), visKeys = {};
     vis.forEach(function (x) { Object.keys(x.b).forEach(function (k) { visKeys[k] = 1; }); });
     var vk = Object.keys(visKeys).sort(), x0 = vk.length ? dayNum(vk[0]) : 0, x1 = vk.length ? dayNum(vk[vk.length - 1]) : 0, step = unit === "week" ? 7 : 1;
-    var lab = function (x) { var d = new Date(Date.UTC(1970, 0, 1) + (x0 + x * step) * 864e5); return (d.getUTCMonth() + 1) + "/" + d.getUTCDate(); };
+    var lab = function (x) { var d = new Date(Date.UTC(1970, 0, 1) + (x0 + x * step) * 864e5); return MON3[d.getUTCMonth()] + " " + d.getUTCDate(); };
     lineChart($("cchart"), vis.map(function (x) {
       return { color: x.s.color, pts: Object.keys(x.b).sort().map(function (k) { var v = mval(x.b[k], m); return { x: (dayNum(k) - x0) / step, y: v === null ? null : v, tip: x.s.name + " \u00b7 " + (unit === "week" ? "wk of " : "") + md(k) + ": " + fmt(m, v) }; }) };
     }), { min: 0, max: Math.round((x1 - x0) / step), label: lab }, METRICS[m]);

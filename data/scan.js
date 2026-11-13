@@ -1,4 +1,4 @@
-/* SCAN SHEET (tryout): take a photo of a hand-filled P-310, read it, and show a review screen.
+/* SCAN SHEET: take a photo of a hand-filled P-310, read it, and show a review screen.
    Needs data/config.js first (window.LOGDB_API_BASE). Uses the same crew code as Submit (localStorage "logdbCrewCode").
    The photo is shrunk on the phone (about 1600 px, JPEG), sent once to POST /scan, and never saved anywhere.
    Nothing is filled in until the operator taps REPLACE or ADD on the review screen.
@@ -133,7 +133,7 @@
     c.host.innerHTML = '<div class="panel">' + (msg ? '<p class="warnbox" style="padding-left:0">' + esc(msg) + '</p>' : '<p class="muted" style="margin-top:0">The sheet reader needs the crew code (same one as Submit).</p>') +
       '<div class="f"><label for="scan-code">Crew code</label><input id="scan-code" type="password" autocomplete="off" placeholder="crew code"></div>' +
       '<button id="scan-code-go" type="button" class="big solid">READ THE SHEET</button>' +
-      '<button id="scan-x" type="button" class="warn big" style="margin-top:10px">CANCEL</button></div>';
+      '<button id="scan-x" type="button" class="big" style="margin-top:10px">CANCEL</button></div>';
     var go = function () { var v = document.getElementById("scan-code").value.trim(); if (!v) return; setCode(v); upload(c); };
     document.getElementById("scan-code-go").onclick = go;
     document.getElementById("scan-code").addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
@@ -154,7 +154,7 @@
     c.host.innerHTML = '<div class="panel"><p class="warnbox" style="padding-left:0;margin-top:0">' + esc(msg) + '</p>' +
       (retry && c.blob ? '<button id="scan-retry" type="button" class="big">TRY AGAIN</button>' : "") +
       '<button id="scan-new" type="button" class="big amber" style="margin-top:10px">TAKE A NEW PHOTO</button>' +
-      '<button id="scan-x" type="button" class="warn big" style="margin-top:10px">CANCEL</button></div>';
+      '<button id="scan-x" type="button" class="big" style="margin-top:10px">CANCEL</button></div>';
     if (document.getElementById("scan-retry")) document.getElementById("scan-retry").onclick = function () { upload(c); };
     document.getElementById("scan-new").onclick = function () { start(c.host, c.opts); };
     document.getElementById("scan-x").onclick = function () { c.host.innerHTML = ""; };
@@ -178,9 +178,10 @@
     if (!ok && val && !flagOf(p)) m = { cls: " scan-unclear", note: '<span class="scan-hint bad">Hard to read: looked like \u201c' + esc(val) + '\u201d. Check it.</span>' };
     return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><input class="in' + m.cls + '" type="time" id="' + id + '" data-p="' + p + '" value="' + (ok ? val : "") + '">' + m.note + '</div>';
   }
+  // Draw 1-9 only: a machine name the sheet had that isn't a draw number is shown as a note, never offered as a pick
   function machbox(p, label, val, allLabel) {
     var m = mark(p, DRAWS.indexOf(val) < 0 ? val : ""), id = "sc-" + p.replace(/\./g, "-"), opts = DRAWS.slice();
-    if (val && opts.indexOf(val) < 0) opts.push(val);
+    if (val && opts.indexOf(val) < 0) { if (!m.note) m = { cls: " scan-unclear", note: '<span class="scan-hint bad">The sheet said \u201c' + esc(val) + '\u201d. Pick its draw number.</span>' }; val = ""; }
     return '<div class="f"><label for="' + id + '">' + label + '</label><select id="' + id + '" data-p="' + p + '" class="' + m.cls.trim() + '"><option value="">' + esc(allLabel || "\u2013") + '</option>' +
       opts.map(function (n) { return '<option' + (n === val ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>' + m.note + '</div>';
   }
@@ -223,7 +224,7 @@
         '<div class="grid2">' + tbox(p + ".avg_wgt", "Avg. Wgt. (lbs)", v(r.avg_wgt), "avg weight", "decimal") + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
         '<div class="grid2">' + tbox(p + ".weight", "Weight (lbs)", v(r.weight), "weight", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
         '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
-        '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound") + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
+        '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound", "text", ' data-compound="1"') + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
     });
 
     if (full) h += '<h3>Downtime</h3>';
@@ -232,7 +233,7 @@
       var p = "downtime." + i;
       h += '<div class="card"><div class="cardhead"><b>DOWNTIME ' + (i + 1) + '</b>' + xbtn("d", i, "downtime " + (i + 1)) + '</div>' +
         '<div class="row2">' + clockbox(p + ".start", "Started at", x.start) + clockbox(p + ".end", "Ended at", x.end) + '</div>' +
-        '<div class="grid2">' + tbox(p + ".minutes", "Time down", v(x.minutes), "minutes down", "numeric", ' data-hm="min"') + machbox(p + ".machine", "Machine", x.machine, "All machines") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".minutes", "Time down", v(x.minutes), "minutes down", "numeric", ' data-hm="min"') + machbox(p + ".machine", "Machine", x.machine, "Every draw (whole shift)") + '</div>' +
         tbox(p + ".reason", "Reason", x.reason, "what happened, like die change") + '</div>';
     });
 
@@ -259,7 +260,7 @@
     h += (o.actionNote ? '<p class="muted" style="margin:14px 0 0;font-size:13px">' + o.actionNote + '</p>' : "") +
       (o.applyLabel ? '<div class="scan-actions"><button id="scan-replace" type="button" class="solid big">' + esc(o.applyLabel) + '</button></div>'
         : '<div class="scan-actions"><div class="grid2"><button id="scan-replace" type="button" class="solid">REPLACE</button><button id="scan-add" type="button">ADD</button></div></div>') +
-      '<button id="scan-cancel" type="button" class="warn big" style="margin-top:4px">CANCEL</button></div>';
+      '<button id="scan-cancel" type="button" class="big" style="margin-top:4px">CANCEL</button></div>';
     c.host.innerHTML = h;
     document.body.classList.add("scan-open");
     var host = c.host;

@@ -1,7 +1,7 @@
 /* "Submit to master log" for the calculator's Sheet view.
    Needs data/config.js loaded first (window.LOGDB_API_BASE).
 
-   Drop-in for /calc/try/ (two lines):
+   Drop-in for the calculator at /calc/ (two lines):
      <script src="/data/config.js"></script><script src="/data/submit.js"></script>      (in <head>)
      if (window.LogDB) LogDB.mount($("sv-body"), function () { return LogDB.fromTryout(S, calc()); });
                                                                        (at the end of openSheet())
@@ -55,6 +55,9 @@
     if (m) return m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]);
     m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(s);
     if (m) { var y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; var d = new Date(y, +m[1] - 1, +m[2]); if (d.getMonth() === +m[1] - 1) return isoDay(d); }
+    // "Fri Nov 13, 2026" or "Nov 13 2026" (the date style shown in the app)
+    m = /^(?:[a-z]{3,9}\.?,?\s+)?([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/i.exec(s);
+    if (m) { var mo = "janfebmaraprmayjunjulaugsepoctnovdec".indexOf(m[1].toLowerCase()) / 3; if (mo >= 0 && mo % 1 === 0) { var d2 = new Date(+m[3], mo, +m[2]); if (d2.getMonth() === mo) return isoDay(d2); } }
     return isoDay(new Date());
   }
   function r2(v) { return v === null || v === undefined ? null : Math.round(v * 100) / 100; }
@@ -343,7 +346,7 @@
     box.querySelector(".any").onclick = function () { sendAnyway(it.id); };
     box.querySelector(".no").onclick = function () { keep(it.id); };
   }
-  function day(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); return m ? +m[2] + "/" + +m[3] + "/" + m[1].slice(2) : (iso || "\u2013"); }
+  function day(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); if (!m) return iso || "\u2013"; var d = new Date(+m[1], +m[2] - 1, +m[3]); return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate() + ", " + m[1]; }
   function clock12(v) { var m = /^(\d{2}):(\d{2})$/.exec(v || ""); if (!m) return v || ""; var h = +m[1]; return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " AM" : " PM"); }
   /* opts (all optional): go = button text, send = what the button does instead of submit(getPayload),
      key = the outbox key of this log (tracker), title. */

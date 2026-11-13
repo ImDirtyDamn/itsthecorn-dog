@@ -142,6 +142,8 @@
   .btn.solid { background: var(--fg); color: #000; }
   .btn.solid:active { background: var(--white); }
   .btn.warn { border-color: var(--red); color: var(--red); }
+  .btn.danger { background: var(--red); border-color: var(--red); color: #000; font-weight: 700; }
+  .btn.danger:active { background: var(--white); border-color: var(--white); }
   .btn.small { min-height: 2.5rem; padding: 0.3rem 0.7rem; font-size: 0.85rem; }
   .btn:disabled { opacity: 0.35; cursor: default; }
   .link { background: none; border: 0; color: var(--amber); text-decoration: underline; cursor: pointer; padding: 0.5rem; font-size: 0.9rem; }
@@ -254,7 +256,10 @@
   .mc.down { border-left-color: var(--red); }
   #dtp { padding-bottom: 1rem; }
   #dtp h3 { color: var(--white); font-size: 1rem; margin: 1.5rem 0 0.6rem; letter-spacing: 0.06em; }
-  #dtp .btn.full { width: 100%; }
+  #dtp .btn.full { width: 100%; min-height: 3.5rem; font-size: 1.05rem; }
+  .dt-now { border: 2px solid var(--red); padding: 0.75rem 0.85rem; margin: 0.25rem 0 0.75rem; }
+  .dt-now b { display: block; color: var(--red); font-size: 1.15rem; letter-spacing: 0.06em; }
+  .dt-now span { display: block; color: var(--white); font-size: 0.95rem; margin-top: 0.3rem; line-height: 1.35; }
   select.in { background: #000; }
   .dt-past { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
   .dt-past .field { margin-bottom: 0; }
@@ -377,6 +382,7 @@
   .s-status.green { color: var(--fg); text-shadow: 0 0 8px rgba(57, 255, 106, 0.45); } .s-status.red { color: var(--red); }
   /* lbs ran total + ahead/behind line: green at/ahead of pace car, amber when a little behind, red when far behind */
   .s-status.amber { color: var(--amber); }
+  .s-status .s-pct { display: block; font-size: 0.62em; margin-top: 0.2rem; opacity: 0.95; }
   .big.pace-green, .s-n b.pace-green { color: var(--fg); }
   .big.pace-amber, .s-n b.pace-amber { color: var(--amber); text-shadow: none; }
   .big.pace-red, .s-n b.pace-red { color: var(--red); text-shadow: none; }
@@ -475,10 +481,11 @@
   .coil-tbl { table-layout: fixed; font-size: 0.85rem; }
   .coil-tbl th:nth-child(1), .coil-tbl td:nth-child(1) { width: 1.75rem; }
   .coil-tbl th:nth-child(3), .coil-tbl td:nth-child(3) { width: 4rem; white-space: nowrap; }
-  .coil-tbl th:nth-child(4), .coil-tbl td:nth-child(4) { width: 5.25rem; white-space: nowrap; }
-  .coil-tbl th:nth-child(5), .coil-tbl td:nth-child(5) { width: 4.25rem; }
+  .coil-tbl th:nth-child(4), .coil-tbl td:nth-child(4) { width: 4.75rem; white-space: nowrap; }
+  .coil-tbl th:nth-child(5), .coil-tbl td:nth-child(5) { width: 5.5rem; }
   .coil-tbl td { overflow-wrap: anywhere; }
-  .coil-tbl .btn.small { padding: 0.3rem 0.4rem; width: 100%; }
+  .coil-tbl td:nth-child(5) { overflow-wrap: normal; }
+  .coil-tbl .btn.small { padding: 0.3rem 0.3rem; width: 100%; white-space: nowrap; letter-spacing: 0.02em; }
   .edit-grid { grid-template-columns: 1fr; }
   .edit-grid .in, .dt-form .in { height: 3rem; }
   .dt-form { grid-template-columns: 4.5rem minmax(0, 1fr) auto; margin-bottom: 0.75rem; }
@@ -619,7 +626,7 @@
       <div class="top-r">
         <div class="clock" id="d-clock"></div>
         <a class="btn small calc-link" id="calc-link" href="/calc/" aria-label="Calculator: average coil weight, production rate or the full production log" aria-haspopup="dialog">&#9638; CALCULATOR</a>
-        <a class="btn small calc-link scan-link" id="scan-link" href="scan/" aria-label="Tryout: scan your paper production sheet into the tracker">SCAN SHEET <span class="try">TRY</span></a>
+        <a class="btn small calc-link scan-link" id="scan-link" href="scan/" aria-label="Scan your paper production sheet into the tracker">SCAN SHEET</a>
       </div>
       <div class="tools">
         <div class="vseg" role="group" aria-label="View">
@@ -680,7 +687,7 @@
     <div class="down-line" id="d-down" hidden></div>
 
     <section class="block">
-      <span class="lbl" id="d-delta-lbl">Deficit / surplus</span>
+      <span class="lbl" id="d-delta-lbl">Ahead / behind</span>
       <div class="delta" id="d-delta"><span id="d-delta-lbs">-</span><span class="pct" id="d-delta-pct"></span></div>
       <div class="sub" id="d-delta-note"></div>
     </section>
@@ -750,9 +757,9 @@
   <div class="sheet-box" id="cm-box">
     <h2 class="sheet-title" id="cm-title">CALCULATOR</h2>
     <div class="cm-list">
-      <a class="btn cm-opt" id="cm-avg" href="/calc/try/?go=avg&amp;from=app">AVERAGE COIL WEIGHT<small>Card total, coils on card and coils ran: average, weight ran, and send them to your tracker</small></a>
-      <a class="btn cm-opt" id="cm-rate" href="/calc/try/?go=rate&amp;from=app">PRODUCTION RATE<small>Hours worked and lbs produced, minus downtime: your lbs per hour</small></a>
-      <a class="btn cm-opt" id="cm-log" href="/calc/try/?go=log&amp;from=app">FULL PRODUCTION LOG<small>Fill out the whole sheet, one screen at a time</small></a>
+      <a class="btn cm-opt" id="cm-avg" href="/calc/?go=avg&amp;from=app">AVERAGE COIL WEIGHT<small>Card total, coils on card and coils ran: average, weight ran, and send them to your tracker</small></a>
+      <a class="btn cm-opt" id="cm-rate" href="/calc/?go=rate&amp;from=app">PRODUCTION RATE<small>Hours worked and lbs produced, minus downtime: your lbs per hour</small></a>
+      <a class="btn cm-opt" id="cm-log" href="/calc/?go=log&amp;from=app">FULL PRODUCTION LOG<small>Fill out the whole sheet, one screen at a time</small></a>
     </div>
     <button type="button" class="btn solid sheet-close" id="cm-close">CLOSE</button>
   </div>
@@ -776,13 +783,13 @@
     <p class="cfd-title" id="cfd-title"></p>
     <dl class="cfd-rows" id="cfd-rows"></dl>
     <div id="cfd-flags"></div>
-    <div class="ask-btns"><button type="button" class="btn warn" id="cfd-no">Go back</button><button type="button" class="btn solid" id="cfd-yes">Confirm</button></div>
+    <div class="ask-btns"><button type="button" class="btn" id="cfd-no">Go back</button><button type="button" class="btn solid" id="cfd-yes">Confirm</button></div>
   </div>
 </div>
 <div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
   <div class="ask-box">
     <p class="ask-msg" id="ask-msg"></p>
-    <div class="ask-btns" id="ask-btns"><button type="button" class="btn solid" id="ask-yes">Yes, log it</button><button type="button" class="btn warn" id="ask-no">Fix it</button></div>
+    <div class="ask-btns" id="ask-btns"><button type="button" class="btn solid" id="ask-yes">Yes, log it</button><button type="button" class="btn" id="ask-no">Fix it</button></div>
   </div>
 </div>
 <script src="/data/config.js"></script>
@@ -1540,16 +1547,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         for (var k = 1; k <= MAX_DRAW; k++) { var o = el("option", null, "Draw " + k); o.value = String(k); ds.appendChild(o); }
         ds.value = m.draw ? String(m.draw) : "";
         var ri = input("number", "wz-mrate-" + i, m.needRate, { inputmode: "decimal", min: "1", step: "10" });
-        var ni = input("text", "wz-mnick-" + i, m.nick || "", { autocomplete: "off", maxlength: "20", placeholder: "e.g. big block" });
         ds.addEventListener("change", function () { m.draw = validDraw(ds.value); setText($("wz-error"), ""); markTaken(); });
         ri.addEventListener("input", function () { m.needRate = num(ri.value); });
-        ni.addEventListener("input", function () { m.nick = ni.value; });
         var row = el("div", "row2");
         row.appendChild(field("Machine " + (i + 1) + " draw #", ds));
         row.appendChild(field("Need rate lbs/hr", ri));
         r.appendChild(row);
         if (!m.draw && m.name) r.appendChild(el("p", "calc-note", "Was saved as \"" + m.name + "\". Pick its draw number."));
-        r.appendChild(field("Nickname (optional)", ni));
         body.appendChild(r);
         sels.push(ds);
       });
@@ -1570,13 +1574,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var nums = draftNumbers(d);
       var tbl = el("table", "review"), tb = el("tbody");
       var add2 = function (k, v) { var tr = el("tr"); tr.appendChild(el("td", null, k)); tr.appendChild(el("td", null, v)); tb.appendChild(tr); };
-      add2("Date", d.date);
+      add2("Date", fmtShiftDay(d.date, true));
       add2("Schedule", fmtHHMM(d.start) + " – " + fmtHHMM(d.end) + (nums && nums.win.overnight ? " (next day)" : ""));
       add2("Breaks", d.breakMode === "list"
         ? d.breaks.map(function (b) { return fmtHHMM(b.start) + " " + b.minutes + "m"; }).join(", ") || "none"
         : (d.breakTotalMin || 0) + " min total");
       add2("Worked time", nums ? fmtDur(nums.worked) : "-");
-      d.machines.forEach(function (m) { add2(m.draw ? drawName(m.draw, m.nick) : (m.name || "Machine"), fmtInt(m.needRate) + " lbs/hr"); });
+      d.machines.forEach(function (m) { add2(m.draw ? drawName(m.draw) : (m.name || "Machine"), fmtInt(m.needRate) + " lbs/hr"); });
       if (d.operator) add2("Operator", d.operator);
       add2("Day target", nums ? fmtInt(nums.target) + " lbs" : "-");
       tbl.appendChild(tb); body.appendChild(tbl);
@@ -1585,7 +1589,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         var nd = nextShiftDate(d.start, d.end, nowW);
         var wb = el("div", "wz-warn"); wb.id = "wz-over-warn"; wb.setAttribute("role", "alert");
         wb.appendChild(el("p", null, "Heads up: this shift already ended (" + fmtShiftDay(d.date) + ", " + fmtHHMM(d.start) + " to " + fmtHHMM(d.end) +
-          (nums.win.overnight ? " next day" : "") + "). The dashboard will show it as over and 100% behind." + (wz.editing ? " That is fine if you are fixing an old shift." : "")));
+          (nums.win.overnight ? " next day" : "") + "). The dashboard will show it as over." + (wz.editing ? " That is fine if you are fixing an old shift." : "")));
         var fx = el("button", "btn", "USE " + fmtShiftDay(nd).toUpperCase() + " INSTEAD"); fx.type = "button"; fx.id = "wz-fix-date";
         fx.addEventListener("click", function () { d.date = nd; renderWizard(); });
         wb.appendChild(fx); body.appendChild(wb);
@@ -1648,7 +1652,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
   function wizardSummary() {
     var d = wz.draft, nums = draftNumbers(d), rows = [], flags = [], det = state.shift.details || {};
-    rows.push(["Date", fmtShiftDay(d.date)]);
+    rows.push(["Date", fmtShiftDay(d.date, true)]);
     rows.push(["Start / end", fmtHHMM(d.start) + " to " + fmtHHMM(d.end) + (nums && nums.win.overnight ? " (next day)" : "")]);
     rows.push(["Breaks", d.breakMode === "list"
       ? (d.breaks.map(function (b) { return fmtHHMM(b.start) + " for " + b.minutes + " min"; }).join(", ") || "none")
@@ -1657,7 +1661,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     d.machines.forEach(function (m, i) {
       var lab = "Machine " + (i + 1);
       rows.push([lab + " draw #", m.draw ? "Draw " + m.draw : "not picked"]);
-      if (m.nick) rows.push([lab + " nickname", m.nick]);
       rows.push([lab + " need rate", fmtInt(num(m.needRate)) + " lbs/hr"]);
       var rf = rateFlag(m.draw ? "Draw " + m.draw : lab, m.needRate); if (rf) flags.push({ t: rf });
       if (m.id && det[m.id]) {
@@ -1682,7 +1685,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var dropped = state.machines.filter(function (m) { return !keepIds[m.id] && coilsOf(m.id).length; });
     if (dropped.length && !submitWizard.ok) {
       askConfirm("Removing " + dropped.map(function (m) { return m.name; }).join(", ") + " also deletes its logged coils. Continue?",
-        "Remove it", "Keep it", function () { submitWizard.ok = true; submitWizard(); }, function () {});
+        "Remove it", "Keep it", function () { submitWizard.ok = true; submitWizard(); }, function () {}, null, true);
       return;
     }
     submitWizard.ok = false;
@@ -1691,8 +1694,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     state.machines = d.machines.map(function (m, i) {
       var prev = m.id && old[m.id];
       var dn = validDraw(m.draw), nick = str(m.nick || "", 20).replace(/^\s+|\s+$/g, "");
-      var name = dn ? drawName(dn, nick) : ((m.name || "").replace(/^\s+|\s+$/g, "") || "Machine " + (i + 1));
-      return { id: prev ? prev.id : uid("m"), slot: i + 1, name: name.slice(0, 40), needRate: num(m.needRate), draw: dn, nick: dn ? nick : "",
+      var name = dn ? drawName(dn) : ((m.name || "").replace(/^\s+|\s+$/g, "") || "Machine " + (i + 1));
+      return { id: prev ? prev.id : uid("m"), slot: i + 1, name: name.slice(0, 40), needRate: num(m.needRate), draw: dn, nick: "",   // machines are named Draw 1-9 only; an old nickname goes away when the setup is saved
         timerStartedAt: prev ? prev.timerStartedAt : null, timerAccumMs: prev ? prev.timerAccumMs : 0 };
     });
     var ids = {}; state.machines.forEach(function (m) { ids[m.id] = true; });
@@ -1732,7 +1735,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       head.appendChild(nm); head.appendChild(rt); c.appendChild(head);
       var stats = el("div", "mc-stats");
       var mk = function (label) { var dv = el("div"); dv.appendChild(el("span", "lbl", label)); var b = el("b", null, "-"); dv.appendChild(b); stats.appendChild(dv); return b; };
-      var ran = mk("Ran"), pc = mk("Pace car"), dl = mk("+/-");
+      var ran = mk("Ran"), pc = mk("Pace car"), dl = mk("Goal done");
       c.appendChild(stats);
       var wl = el("label", "wt-lbl", "COIL WEIGHT (LBS)"); wl.setAttribute("for", "log-" + i); c.appendChild(wl);
       var log = el("div", "mc-log");
@@ -1751,7 +1754,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       cards[m.id] = { ran: ran, pc: pc, dl: dl, last: last, dtx: dtx, dbt: dbt };
     });
     var s = state.shift;
-    setText($("d-shift"), s.date + " · " + fmtHHMM(s.start) + " – " + fmtHHMM(s.end) + (s.operator ? " · " + s.operator : ""));
+    setText($("d-shift"), fmtShiftDay(s.date) + " · " + fmtHHMM(s.start) + " – " + fmtHHMM(s.end) + (s.operator ? " · " + s.operator : ""));
     if (advOpen) renderAdvanced();
     if (dtOpen) renderDowntime();
     if (rcOpen) renderRecent();
@@ -1792,13 +1795,15 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
   // in-page confirm (big buttons; window.confirm can't label them)
   var askOpen = null;
-  function askConfirm(msg, yesText, noText, onYes, onNo, onEsc) {
+  // danger: the yes action deletes or ends something (solid red); the safe choice is always the neutral button
+  function askConfirm(msg, yesText, noText, onYes, onNo, onEsc, danger) {
     var box = $("ask"); if (askOpen) closeAsk(false);
     setText($("ask-msg"), msg); setText($("ask-yes"), yesText); setText($("ask-no"), noText);
+    $("ask-yes").className = "btn " + (danger ? "danger" : "solid"); $("ask-no").className = "btn";
     $("ask-btns").className = "ask-btns" + (yesText.length + noText.length > 24 ? " wrap" : "");
     askOpen = { yes: onYes, no: onNo, esc: onEsc, back: document.activeElement };
     box.hidden = false; armGuard();
-    try { $("ask-yes").focus(); } catch (e) {}
+    try { $(danger ? "ask-no" : "ask-yes").focus(); } catch (e) {}
   }
   function closeAsk(ok, esc) {
     var a = askOpen; askOpen = null; $("ask").hidden = true;
@@ -1909,10 +1914,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }
     return todayStr();
   }
-  function fmtShiftDay(ds) {
+  // dates users see: "Fri Nov 13" (full: "Fri Nov 13, 2026"); the stored date stays YYYY-MM-DD
+  function fmtShiftDay(ds, full) {
     var d = Calc.parseDate(ds); if (!d) return ds || "";
     var t = new Date(d.y, d.mo - 1, d.d);
-    return DAYS[t.getDay()] + " " + MONTHS[t.getMonth()] + " " + t.getDate();
+    return DAYS[t.getDay()] + " " + MONTHS[t.getMonth()] + " " + t.getDate() + (full ? ", " + t.getFullYear() : "");
   }
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   function overInfo(now) {
@@ -2002,16 +2008,16 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     // deficit / surplus
     var col = paceColor(r.delta);
     if (r.paceCar == null || r.phase === "before" || r.paceCar <= 0) {
-      setText($("d-delta-lbl"), "Deficit / surplus");
+      setText($("d-delta-lbl"), "Ahead / behind");
       setText($("d-delta-lbs"), "-"); setText($("d-delta-pct"), "");
       setCls($("d-delta"), "delta white");
       setText($("d-delta-note"), r.phase === "before" ? "Starts when the shift starts." : "");
     } else {
-      setText($("d-delta-lbl"), r.delta >= 0 ? "Surplus" : "Deficit");
-      setText($("d-delta-lbs"), fmtSigned(r.delta) + " lbs");
-      setText($("d-delta-pct"), fmtPct(r.deltaPct));
+      setText($("d-delta-lbl"), r.delta >= 0 ? "Ahead" : "Behind");
+      setText($("d-delta-lbs"), fmtInt(Math.abs(r.delta)) + " lbs " + (r.delta >= 0 ? "ahead" : "behind"));
+      setText($("d-delta-pct"), goalDone(r.deltaPct) + "% of goal done");
       setCls($("d-delta"), "delta glow " + col);
-      setText($("d-delta-note"), (r.delta >= 0 ? "ahead of" : "behind") + " the pace car");
+      setText($("d-delta-note"), "vs the pace car (where you should be by now)");
     }
 
     // projection
@@ -2025,7 +2031,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var vsTxt = "-", vsCls = "";
       if (paceOk || r.phase === "after") {
         var pv = r.projected == null ? r.lbsRan : r.projected, pd = pv - T;
-        vsTxt = fmtSigned(pd) + " lbs · " + fmtPct(pd / T * 100);
+        vsTxt = fmtInt(Math.abs(pd)) + " lbs " + (pd >= 0 ? "over" : "short") + " · " + Math.max(0, Math.round(pv / T * 100)) + "% of goal";
         vsCls = colorFor(pd / T * 100);
       }
       setText($("p-vs"), vsTxt); setCls($("p-vs"), vsCls);
@@ -2059,7 +2065,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var c = cards[mr.id]; if (!c) return;
       setText(c.ran, fmtInt(mr.lbs));
       setText(c.pc, mr.paceCar == null ? "-" : fmtInt(mr.paceCar));
-      setText(c.dl, mr.deltaPct == null || r.phase === "before" ? "-" : fmtPct(mr.deltaPct));
+      setText(c.dl, mr.deltaPct == null || r.phase === "before" ? "-" : goalDone(mr.deltaPct) + "%");
       setCls(c.dl, mr.deltaPct == null || r.phase === "before" ? "" : colorFor(mr.deltaPct));
       var lc = null, list = coilsOf(mr.id);
       if (list.length) lc = list[list.length - 1];
@@ -2245,7 +2251,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       askConfirm("Delete this " + fmtLb(c.weight) + " lbs coil?", "Delete it", "Keep it", function () {
         state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
         editingCoil = null; save(); tick(); renderAdvanced();
-      }, function () {});
+      }, function () {}, null, true);
     }));
     box.appendChild(line);
     return box;
@@ -2341,7 +2347,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (!confirmed) {
       askConfirm("Start a new shift? This clears today's coils and downtime. Your schedule and machines stay as defaults." +
         (has ? " This shift is sent to the master log first and kept under Past shifts for 7 days." : ""),
-        "Start new shift", "Cancel", function () { startNewShift(true); }, function () {}, function () {});
+        "Start new shift", "Cancel", function () { startNewShift(true); }, function () {}, function () {}, true);
       return;
     }
     var ask = false, sentKey = null;
@@ -2362,7 +2368,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   /* ========================= DOWNTIME (by weight) ========================= */
   var dtOpen = false, dtTarget = "all";
   var MINUS = "\u2212";
-  function dtName(id) { if (id === "all") return "All machines"; var m = machineById(id); return m ? m.name : "?"; }
+  function dtName(id) { if (id === "all") return "Whole shift"; var m = machineById(id); return m ? m.name : "?"; }
   function runningFor(id) {
     for (var i = 0; i < state.downtime.length; i++) { var d = state.downtime[i]; if (d.machineId === id && !d.endAt) return d; }
     return null;
@@ -2399,28 +2405,40 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var box = $("dtp"), now = Date.now(), r = Calc.compute(state, now);
     box.textContent = "";
     if (dtTarget !== "all" && !machineById(dtTarget)) dtTarget = "all";
-    box.appendChild(el("p", "sub", "Downtime comes off the day target and the pace car at the machine's need rate (All machines = every need rate added up). Time that falls on a break is never taken twice."));
+    box.appendChild(el("p", "sub", "Downtime comes off the shift target and the pace car at that draw's need rate. Pick Whole shift when every draw is down. Time during a break is not counted twice."));
     var sel = el("select", "in"); sel.id = "dt-target";
-    [["all", "All machines"]].concat(state.machines.map(function (m) { return [m.id, m.name + " · " + fmtInt(m.needRate) + " lbs/hr"]; })).forEach(function (o) {
+    [["all", "Whole shift (every draw)"]].concat(state.machines.map(function (m) { return [m.id, m.name + " · " + fmtInt(m.needRate) + " lbs/hr"]; })).forEach(function (o) {
       var op = el("option", null, o[1]); op.value = o[0]; sel.appendChild(op);
     });
     sel.value = dtTarget;
     sel.addEventListener("change", function () { dtTarget = sel.value; renderDowntime(); });
-    box.appendChild(field("Machine", sel));
+    box.appendChild(field("What is down", sel));
     var reason = input("text", "dt-reason", "", { maxlength: "200", placeholder: "Reason (optional)", autocomplete: "off" });
     box.appendChild(field("Reason", reason));
     var runNow = runningFor(dtTarget);
-    var sb = el("button", "btn warn full", runNow ? dtName(dtTarget).toUpperCase() + " IS DOWN · END IT BELOW" : "START DOWNTIME NOW");
-    sb.type = "button"; sb.id = "dt-start"; sb.disabled = !!runNow;
-    sb.addEventListener("click", function () { startDown(dtTarget, reason.value); });
-    box.appendChild(sb);
+    if (runNow) {
+      // down right now: say what is down and since when, and make ending it the one obvious tap
+      var a0 = Date.parse(runNow.startAt), st = el("div", "dt-now"); st.id = "dt-now";
+      st.appendChild(el("b", null, (dtTarget === "all" ? "WHOLE SHIFT" : dtName(dtTarget).toUpperCase()) + " IS DOWN"));
+      st.appendChild(el("span", null, "Since " + fmtClock(a0) + " · " + fmtDur(now - a0) + " so far · pace car paused" + (runNow.reason ? " · " + runNow.reason : "")));
+      box.appendChild(st);
+      var eb0 = el("button", "btn solid full", "END DOWNTIME · BACK RUNNING");
+      eb0.type = "button"; eb0.id = "dt-start";
+      eb0.addEventListener("click", function () { endDown(runNow); });
+      box.appendChild(eb0);
+    } else {
+      var sb = el("button", "btn danger full", "START DOWNTIME NOW");
+      sb.type = "button"; sb.id = "dt-start";
+      sb.addEventListener("click", function () { startDown(dtTarget, reason.value); });
+      box.appendChild(sb);
+    }
 
     box.appendChild(el("h3", null, "Log past downtime"));
     var g = el("div", "dt-past");
     var mi = input("number", "dt-min", "", { inputmode: "numeric", min: "1", step: "1", placeholder: "Min", "data-hm": "min" });
     var ti = input("time", "dt-from", "");
     var add = el("button", "btn small", "ADD"); add.type = "button"; add.id = "dt-add";
-    g.appendChild(field("How long", mi)); g.appendChild(field("Started at (blank = just ended)", ti)); g.appendChild(add);
+    g.appendChild(field("How long", mi)); g.appendChild(field("Started at (blank if it just ended)", ti)); g.appendChild(add);
     box.appendChild(g);
     var err = el("p", "err"); err.id = "dt-err"; box.appendChild(err);
     add.addEventListener("click", function () {
@@ -2459,7 +2477,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         xb.addEventListener("click", function () {
           askConfirm("Delete this downtime entry? Its lbs go back on the target.", "Delete it", "Keep it", function () {
             state.downtime = state.downtime.filter(function (y) { return y.id !== d.id; }); save(); tick(); renderDowntime();
-          }, function () {});
+          }, function () {}, null, true);
         });
         row.appendChild(xb);
       }
@@ -2475,7 +2493,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var al = el("div", "all"); al.appendChild(el("span", null, "TOTAL"));
     var av = el("span", null, ""); av.id = "dttot-all"; al.appendChild(av); tot.appendChild(al);
     box.appendChild(tot);
-    box.appendChild(el("p", "sub", "Overlapping entries on the same machine count once in the totals."));
+    box.appendChild(el("p", "sub", "Overlapping entries on the same draw count once in the totals."));
     updateDowntimeUI(r, now);
   }
 
@@ -2503,11 +2521,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var c = cards[mr.id]; if (!c || !c.dtx) return;
       var own = runningFor(mr.id), all = runningFor("all"), d = own || all;
       var t = "", cls = "mc-down-txt";
-      if (d) { t = "DOWN " + fmtDur(now - Date.parse(d.startAt)) + " now" + (own ? "" : " (all)") + " · " + lbOff(mr.downLb || 0) + " total"; cls += " red"; }
+      if (d) { t = "DOWN " + fmtDur(now - Date.parse(d.startAt)) + " now" + (own ? "" : " (whole shift)") + " · " + lbOff(mr.downLb || 0) + " total"; cls += " red"; }
       else if (mr.downMs > 0) t = "Down " + fmtDur(mr.downMs) + " · " + lbOff(mr.downLb) + " deducted";
       else t = "No downtime";
       setText(c.dtx, t); setCls(c.dtx, cls);
-      setText(c.dbt, own ? "BACK UP" : all ? "END ALL DOWN" : "START DOWNTIME");
+      setText(c.dbt, own ? "BACK UP" : all ? "SHIFT BACK UP" : "START DOWNTIME");
       setCls(c.dbt, own || all ? "btn small solid" : "btn small warn");
       var card = $("mc-" + i);
       if (card) { var want = d ? " down" : ""; if (card.className.indexOf(" down") >= 0 !== !!d) card.className = card.className.replace(" down", "") + want; }
@@ -2520,6 +2538,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         if (e && mr) setText(e, fmtDur(mr.downMs || 0) + " · " + lbOff(mr.downLb || 0));
       });
       var ea = $("dttot-all"); if (ea) setText(ea, fmtDur(r.downMs || 0) + " · " + lbOff(r.downLb || 0));
+      var dn = $("dt-now"), rn = runningFor(dtTarget);
+      if (dn && rn) { var a1 = Date.parse(rn.startAt); setText(dn.lastChild, "Since " + fmtClock(a1) + " · " + fmtDur(now - a1) + " so far · pace car paused" + (rn.reason ? " · " + rn.reason : "")); }
     }
   }
 
@@ -2618,7 +2638,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
           state.coils = state.coils.filter(function (x) { return x.id !== c.id; });
           if (rbCoil === c.id) hideReadback();
           rcEdit = null; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
-        });
+        }, function () {}, null, true);
       }); db.id = "rc-del-" + k;
       row.appendChild(eb); row.appendChild(db);
       if (rcEdit === c.id) {
@@ -2683,10 +2703,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function sRow(dl, label, value, cls, rowCls) {
     var d = el("div", rowCls || null); d.appendChild(el("dt", null, label)); d.appendChild(el("dd", cls || null, value)); dl.appendChild(d); return d;
   }
+  // "27,700 lbs behind · 14% of goal done": no minus sign; the percent is lbs made ÷ the goal so far (the pace car)
+  function goalDone(pct) { return pct == null || !isFinite(pct) ? null : Math.max(0, Math.round(100 + pct)); }
   function statusText(delta, pct) {
     if (delta == null || pct == null) return null;
     var ahead = delta >= 0;
-    return { t: fmtSigned(delta) + " lbs " + (ahead ? "AHEAD" : "BEHIND") + " (" + Math.abs(pct).toFixed(1) + "%)", cls: ahead ? "green" : "red" };
+    return { t: fmtInt(Math.abs(delta)) + " lbs " + (ahead ? "ahead" : "behind") + " · " + goalDone(pct) + "% of goal done", cls: ahead ? "green" : "red" };
   }
   function raceReady(r) { return !(r.paceCar == null || r.phase === "before" || r.phase === "invalid" || r.paceCar <= 0); }
   function downNow(id) { return runningFor(id) || runningFor("all"); }
@@ -2717,7 +2739,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     setText($("s-target"), T ? "TARGET " + fmtInt(T) + " lbs" : "");
     var st = raceReady(r) ? statusText(r.delta, r.deltaPct) : null;
     if (st) st.cls = paceColor(r.delta);
-    setText($("s-status"), st ? st.t : (r.phase === "before" ? "Starts when the shift starts" : r.phase === "invalid" ? "Setup incomplete · tap MORE OPTIONS, then EDIT SETUP" : "-"));
+    var ss = $("s-status"), sp = st ? st.t.split(" · ") : null;
+    if (sp && sp.length === 2) {   // big line: lbs ahead/behind; smaller line under it: % of goal done
+      if (ss.textContent !== sp[0] + sp[1]) { ss.textContent = ""; ss.appendChild(document.createTextNode(sp[0])); ss.appendChild(el("span", "s-pct", sp[1])); }
+    } else setText(ss, st ? st.t : (r.phase === "before" ? "Starts when the shift starts" : r.phase === "invalid" ? "Setup incomplete · tap MORE OPTIONS, then EDIT SETUP" : "-"));
     setCls($("s-status"), "s-status" + (st ? " " + st.cls : ""));
     var pj = $("s-proj"); pj.textContent = "";
     var proj = $("p-proj").textContent, hit = $("p-hit").textContent;
@@ -2729,7 +2754,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var downs = state.machines.filter(function (m) { return downNow(m.id); });
     var sd = $("s-down");
     if (downs.length) {
-      var names = state.machines.length > 1 && downs.length === state.machines.length && runningFor("all") ? ["ALL MACHINES"] : downs.map(function (m) { return m.name.toUpperCase(); });
+      var names = state.machines.length > 1 && downs.length === state.machines.length && runningFor("all") ? ["WHOLE SHIFT"] : downs.map(function (m) { return m.name.toUpperCase(); });
       var d0 = downNow(downs[0].id);
       setText(sd, names.join(" + ") + " DOWN " + fmtDur(now - Date.parse(d0.startAt)) + " · pace car paused");
       sd.hidden = false;
@@ -2869,7 +2894,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       ["menu-hist", "PAST SHIFTS", function () { $("hist-open").click(); }],
       ["menu-lookup", "JOB LOOKUP", function () { openLookup(); }],
       ["menu-calc", "CALCULATOR", simpleOnly(function () { $("calc-link").click(); })],
-      ["menu-scan", "SCAN SHEET (TRYOUT)", simpleOnly(function () { $("scan-link").click(); })],
+      ["menu-scan", "SCAN SHEET", simpleOnly(function () { $("scan-link").click(); })],
       "-",
       ["menu-new", "NEW SHIFT", simpleOnly(askNewShift), "warn"],
       "-",
@@ -2893,7 +2918,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var r = Calc.compute(state, Date.now()), live = r.phase === "live" || r.phase === "before";
     var msg = "End this shift and start a new one?" + (live && r.end ? " It runs until " + fmtClockDay(r.end, Date.now()) + "." : "") +
       (mlHasData() ? " It is sent to the master log and kept under Past shifts." : "");
-    askConfirm(msg, "End it, start new", "Keep this shift", function () { startNewShift(true); }, function () {}, function () {});
+    askConfirm(msg, "End it, start new", "Keep this shift", function () { startNewShift(true); }, function () {}, function () {}, true);
   }
   $("sheet").addEventListener("click", function (e) { if (e.target === $("sheet")) requestCloseSheet(); });
   document.addEventListener("keydown", function (e) { if (sheetKind && !askOpen && !cfdOpen && !e.defaultPrevented && e.key === "Escape") requestCloseSheet(); });
@@ -2939,7 +2964,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var grossPc = r.fraction * gross, downSo = mr ? mr.downSoFarLb : r.downSoFarLb, downAll = mr ? mr.downLb : r.downLb;
     var pc = mr ? mr.paceCar : r.paceCar, tg = mr ? mr.target : r.target;
     var dl = el("dl", "sh-rows");
-    sRow(dl, "Need rate" + (m ? "" : " (all machines)"), fmtInt(rate) + " lbs/hr");
+    sRow(dl, "Need rate" + (m ? "" : " (shift total)"), fmtInt(rate) + " lbs/hr");
     sRow(dl, "Shift worked time", fmtDur(r.workedTotalMs));
     sRow(dl, "Breaks excluded", r.breakMs > 0 ? fmtDur(r.breakMs) : "none");
     sRow(dl, "Day target before downtime", fmtInt(gross) + " lbs");
@@ -2997,11 +3022,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       body.appendChild(dl2);
       if (ready) {
         var p2 = el("p", "sh-math");
-        p2.appendChild(document.createTextNode("lbs: lbs ran " + MINUS + " pace car = "));
-        p2.appendChild(el("b", null, fmtInt(r.lbsRan) + " " + MINUS + " " + fmtInt(r.paceCar) + " = " + fmtSigned(r.delta) + " lbs"));
+        p2.appendChild(document.createTextNode((r.delta >= 0 ? "Ahead" : "Behind") + ": gap between lbs ran and the pace car = "));
+        p2.appendChild(el("b", null, fmtInt(Math.abs(r.delta)) + " lbs " + (r.delta >= 0 ? "ahead" : "behind")));
         p2.appendChild(el("br"));
-        p2.appendChild(document.createTextNode("%: that ÷ pace car = "));
-        p2.appendChild(el("b", null, fmtSigned(r.delta) + " ÷ " + fmtInt(r.paceCar) + " = " + fmtPct(r.deltaPct)));
+        p2.appendChild(document.createTextNode("Goal done: lbs ran ÷ pace car = "));
+        p2.appendChild(el("b", null, fmtInt(r.lbsRan) + " ÷ " + fmtInt(r.paceCar) + " = " + goalDone(r.deltaPct) + "%"));
         body.appendChild(p2);
       } else body.appendChild(el("p", "sh-sub", r.phase === "before" ? "Starts when the shift starts." : "No pace car yet."));
     } else if (sheetKind === "proj") {
@@ -3276,7 +3301,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (p.length !== 3) return ymd || "-";
     var dt = new Date(+p[0], +p[1] - 1, +p[2]);
     if (!isFinite(dt.getTime())) return ymd;
-    return DAYS[dt.getDay()] + " " + (dt.getMonth() + 1) + "/" + dt.getDate();
+    return DAYS[dt.getDay()] + " " + MONTHS[dt.getMonth()] + " " + dt.getDate();
   }
   function histEntryFromState(st, now) {
     var r = Calc.compute(st, now), H = 3600000;
@@ -3564,7 +3589,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (mlMode === "send") {
       var c = state.coils.length, lb = 0; state.coils.forEach(function (x) { lb += x.weight; });
       var r = Calc.compute(state, Date.now());
-      box.appendChild(el("p", "ml-line", "THIS SHIFT: " + (function (d) { var p = Calc.parseDate(d); return p ? p.mo + "/" + p.d : d; })(state.shift.date) + " · " + fmtHHMM(state.shift.start) + " – " + fmtHHMM(state.shift.end) +
+      box.appendChild(el("p", "ml-line", "THIS SHIFT: " + fmtShiftDay(state.shift.date) + " · " + fmtHHMM(state.shift.start) + " – " + fmtHHMM(state.shift.end) +
         " · " + c + (c === 1 ? " coil" : " coils") + " · " + fmtLb(lb) + " lbs" + (state.downtime.length ? " · " + state.downtime.length + " downtime" : "")));
       box.appendChild(el("p", "sh-sub", !mlHasData() ? "Nothing to send yet: log a coil or downtime first."
         : r.phase === "after" ? "The shift is over, so this sends the whole shift. NEW SHIFT also sends it by itself."
@@ -3628,7 +3653,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // keep the calculator ready for no-signal use: install its offline copy (its own scope) while there is signal
   try {
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost") && navigator.onLine)
-      setTimeout(function () { navigator.serviceWorker.register("/calc/try/sw.js", { scope: "/calc/try/" }).catch(function () {}); }, 4000);
+      setTimeout(function () { navigator.serviceWorker.register("/calc/sw.js", { scope: "/calc/" }).catch(function () {}); }, 4000);
   } catch (e) {}
 
   /* ---------- start ---------- */
@@ -3636,7 +3661,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   if (state.setupDone) { $("dash").hidden = false; buildDashboard(); tick(); }
   else openWizard(false);
   setInterval(tick, 1000);
-  /* SEND TO TRACKER from the calculator (/calc/try/?go=avg): it leaves one request in localStorage and opens this page.
+  /* SEND TO TRACKER from the calculator (/calc/?go=avg): it leaves one request in localStorage and opens this page.
      The coils go in here, through addCoil(), so they count like any other coil. Used once, then deleted. */
   (function takeInbox() {
     var raw = null, req = null;

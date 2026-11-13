@@ -191,11 +191,31 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
 .edtot b{color:var(--fg);font-size:20px}
 .diffl{margin:0 0 14px;padding-left:20px;color:var(--white);line-height:1.45;max-height:45vh;overflow-y:auto}
 .edited{border:1px solid var(--amber);color:var(--amber);padding:8px 10px;margin:10px 0;font-size:14px}
+/* desktop and wide tablets: use the screen (phones keep the single column above) */
+@media (min-width:900px){
+  body{max-width:1200px;padding:0 28px 48px}
+  header{padding:18px 0 14px}
+  h1{font-size:22px}
+  h1 small{font-size:14px;color:#7fbf8f}
+  .tabs{max-width:720px}
+  .stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+  .stat.wide{grid-column:auto}
+  .stat b{font-size:28px}
+  .toolbar{max-width:560px;margin-left:auto}
+  .loglist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .loglist .logcard{margin:0}
+  .logcard:hover{border-color:var(--fg-dim);background:#0a1c0a}
+  .overlay{padding:0 max(28px,calc((100vw - 1100px) / 2)) 40px}
+  .cells{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .confirm{align-items:center}
+  .confirm .box{border-bottom:1px solid var(--red)}
+}
+@media (min-width:1300px){ .loglist{grid-template-columns:repeat(3,minmax(0,1fr))} }
 </style>
 </head>
 <body>
 <header>
-  <h1>MASTER LOG<small>every submitted production log</small></h1>
+  <h1>MASTER LOG<small>Every production log sent in</small></h1>
   <div class="hbtns"><button id="lockbtn" type="button" class="ghost" hidden>LOCK</button><a class="back" href="/draw/app/">&larr; TRACKER</a></div>
 </header>
 <nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button><button type="button" data-v="lookup">LOOKUP</button></nav>
@@ -205,9 +225,9 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=3"></script>
-<script src="lookup.js?v=3"></script>
-<script src="fields.js?v=1"></script>
+<script src="analyze.js?v=4"></script>
+<script src="lookup.js?v=4"></script>
+<script src="fields.js?v=2"></script>
 <script>
 (function () {
   "use strict";
@@ -226,11 +246,21 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   function n1(v) { return v === null || v === undefined || v === "" ? "\u2013" : (Math.round(v * 10) / 10).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
   function nh(v) { return v === null || v === undefined ? "\u2013" : String(Math.round(v * 100) / 100); }
   var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  function day(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); if (!m) return s || ""; var d = new Date(+m[1], +m[2] - 1, +m[3]); return DOW[d.getDay()] + " " + (+m[2]) + "/" + (+m[3]) + "/" + m[1].slice(2); }
+  var MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  // "Fri Nov 13, 2026, 5:03 PM" (same date style as everywhere else)
+  function stamp(v) { var d = new Date(v); if (isNaN(d.getTime())) return String(v || ""); var y = d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" + (d.getDate() < 10 ? "0" : "") + d.getDate(); return day(y) + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
+  function day(s, short) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); if (!m) return s || ""; var d = new Date(+m[1], +m[2] - 1, +m[3]); return DOW[d.getDay()] + " " + MON3[d.getMonth()] + " " + d.getDate() + (short ? "" : ", " + m[1]); }
   function clock12(s) { var m = /^(\d{2}):(\d{2})$/.exec(s || ""); if (!m) return s || ""; var h = +m[1]; return ((h + 11) % 12 + 1) + ":" + m[2] + (h < 12 ? " AM" : " PM"); }
   function ymd(d) { return d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" + (d.getDate() < 10 ? "0" : "") + d.getDate(); }
   function draws(s) { return String(s || "").split(",").filter(Boolean); }
-  function badge(g) { return g === 1 ? '<span class="badge met">GOAL MET</span>' : g === 0 ? '<span class="badge notmet">NOT MET</span>' : '<span class="badge inc">NO GOAL</span>'; }
+  /* goal_met is null when the log was sent before the results were done (tracker sent mid-shift, or the calculator
+     without hours): that log still has a goal, so it says NOT FINISHED. NO GOAL SET only when there is no goal at all. */
+  function hasGoal(L) { return !!L && (+L.goal_lbhr > 0 || +L.goal_lbs > 0); }
+  function badge(g, L) {
+    if (g === 1) return '<span class="badge met">GOAL MET</span>';
+    if (g === 0) return '<span class="badge notmet">NOT MET</span>';
+    return hasGoal(L) ? '<span class="badge inc">NOT FINISHED</span>' : '<span class="badge inc">NO GOAL SET</span>';
+  }
 
   function api(path, opts) {
     opts = opts || {};
@@ -305,6 +335,13 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     if (F.draw) p.push("Draw " + F.draw);
     return p.length ? p.join(" \u00b7 ") : "all logs";
   }
+  function unratedNote(n) {
+    if (logs.length !== summary.count) return n + " not rated (no goal set, or sent before the shift was done)";
+    var none = logs.filter(function (l) { return l.goal_met !== 1 && l.goal_met !== 0 && !hasGoal(l); }).length, open = n - none, p = [];
+    if (open > 0) p.push(open + " not finished (sent before the shift was done)");
+    if (none > 0) p.push(none + " with no goal set");
+    return p.join(" \u00b7 ");
+  }
   function renderList() {
     $("lockbtn").hidden = false; setTabs();
     var s = summary || {}, rated = (s.met || 0) + (s.not_met || 0), pct = rated ? Math.round(s.met * 100 / rated) : 0;
@@ -323,14 +360,16 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       '<div class="stat"><i>Avg lbs/hr</i><b>' + n1(s.avg_lbhr) + '</b><small>all lbs \u00f7 all hrs</small></div>' +
       '<div class="stat"><i>Downtime</i><b>' + n1((s.downtime_minutes || 0) / 60) + ' hr</b><small>' + n0(s.downtime_minutes) + ' min</small></div>' +
       '<div class="stat wide"><i>Goal met</i><b>' + (rated ? s.met + " of " + rated + " (" + pct + "%)" : "\u2013") + '</b><div class="meter"><span style="width:' + pct + '%"></span></div>' +
-      (s.count > rated ? '<small>' + (s.count - rated) + ' without a goal</small>' : "") + '</div></div>';
+      (s.count > rated ? '<small>' + unratedNote(s.count - rated) + '</small>' : "") + '</div></div>';
     h += '<div class="toolbar"><button type="button" id="csv">EXPORT CSV</button><button type="button" id="refresh" class="ghost">REFRESH</button></div>';
     if (!logs.length) h += '<div class="msg">No logs match. Try ALL in the filters.</div>';
+    h += '<div class="loglist">';
     logs.forEach(function (l, i) {
       h += '<button type="button" class="logcard" data-i="' + i + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(day(l.shift_date)) + (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div>' +
-        '<div class="lc2">' + badge(l.goal_met) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + '</div>' +
+        '<div class="lc2">' + badge(l.goal_met, l) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + '</div>' +
         '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? n0(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LBS/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
     });
+    h += '</div>';
     if (hasMore) h += '<button type="button" class="big more" id="more">SHOW MORE</button>';
     $("app").innerHTML = h;
     $("fbox").addEventListener("toggle", function () { renderList.open = $("fbox").open; });
@@ -395,10 +434,10 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   }
   function closeDetail() { editing = null; $("detail").hidden = true; document.body.classList.remove("noscroll"); dropGuard(); }
   function renderDetail(j) {
-    var L = j.log, h = '<div style="margin:12px 0">' + badge(L.goal_met) + '</div>';
+    var L = j.log, h = '<div style="margin:12px 0">' + badge(L.goal_met, L) + '</div>';
     h += line("Shift", (L.shift_label ? L.shift_label + " \u00b7 " : "") + (L.shift_start ? clock12(L.shift_start) + " \u2013 " + clock12(L.shift_end) : "\u2013"));
     h += line("Total Weight Produced", n0(L.total_lbs), true) + line("Hours per shift", nh(L.net_hours), true) +
-      line("Goal: Lbs/Hour", n1(L.goal_lbhr), true) + line("Average Lbs/per Hour", n1(L.avg_lbhr), true) + line("Shift goal (lbs)", n0(L.goal_lbs));
+      line("Goal: Lbs/Hour", n1(L.goal_lbhr), true) + line("Average lbs/hr", n1(L.avg_lbhr), true) + line("Shift goal (lbs)", n0(L.goal_lbs));
     if (j.machines.length) {
       h += '<h3>Machines</h3>';
       [1, 2].forEach(function (slot) {
@@ -418,7 +457,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     var tracker = !!(j.raw && j.raw.raw && j.raw.raw.source === "tracker");
     j.coils.forEach(function (c) {
       var cells = [["Card #", c.work_order], ["Tot Avg Wgt", n0(c.tot_avg_wgt)], ["WO coils", c.wo_coils],
-        ["Avg. Wgt.", n0(c.avg_wgt)], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
+        ["Avg. Wgt.", n0(c.avg_wgt != null ? c.avg_wgt : (+c.weight > 0 && +c.coils_in > 0 ? Math.round(c.weight / c.coils_in) : null))], ["Coils Drawn", c.coils_text || c.coils_in], ["Weight", n0(c.weight)],
         ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
       if (c.start_size || c.reduction != null || c.shape === "shape") cells.push(["Start size", c.start_size], ["Reduction", c.reduction != null ? c.reduction + "%" : ""], ["Draw type", c.shape === "shape" ? "Shape" : "Round"]);
       if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
@@ -435,9 +474,9 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     if (L.problems) h += '<div class="muted" style="font-size:13px;margin-top:8px">AS WRITTEN ON THE SHEET</div><ul class="list">' + L.problems.split("\n").map(function (p) { return '<li>' + esc(p) + '</li>'; }).join("") + '</ul>';
     h += '<h3>Notes about the day</h3>' + (L.day_notes ? '<div class="daynotes">' + esc(L.day_notes) + '</div>' : '<p class="muted">None</p>');
     h += '<h3>Maintenance to follow up</h3><p style="color:var(--white);font-size:17px;margin:4px 0">' + esc(L.maintenance || "None") + '</p>';
-    h += '<h3>Record</h3>' + line("Sent", L.submitted_at ? new Date(L.submitted_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "\u2013") +
+    h += '<h3>Record</h3>' + line("Sent", L.submitted_at ? stamp(L.submitted_at) : "\u2013") +
       '<div class="svline"><span>Log id</span><b style="font-size:14px">' + esc(L.id) + '</b></div>';
-    if (j.raw && j.raw.edited) h = '<div class="edited">Edited by a supervisor ' + esc(j.raw.edited.at ? new Date(j.raw.edited.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "") + '. The operator\u2019s phone still has the shift as they logged it.</div>' + h;
+    if (j.raw && j.raw.edited) h = '<div class="edited">Edited by a supervisor ' + esc(j.raw.edited.at ? stamp(j.raw.edited.at) : "") + '. The operator\u2019s phone still has the shift as they logged it.</div>' + h;
     h += '<p class="muted" style="margin-top:14px">Operators can\u2019t change a log once it\u2019s sent. If this one is wrong, REVISIT THIS SHIFT lets you fix it here: it saves a corrected copy in place of this one.</p>' +
       '<button type="button" class="big solid" id="revisit" style="margin-top:6px">REVISIT THIS SHIFT</button>' +
       '<button type="button" class="big warn" id="del" style="margin-top:10px">DELETE THIS LOG</button>';
@@ -616,7 +655,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     var sh = Object.assign({}, raw.shift || {});
     [["date", "Shift date", L.shift_date], ["start", "Start", L.shift_start], ["end", "End", L.shift_end], ["operator", "Operator", L.operator]].forEach(function (f) {
       var nv = f[0] === "operator" ? d.operator.trim() : d[f[0]];
-      if ((f[2] || "") !== nv) ch.push(f[1] + ": " + ((f[0] === "start" || f[0] === "end") ? clock12(f[2]) || "blank" : f[2] || "blank") + " \u2192 " + ((f[0] === "start" || f[0] === "end") ? clock12(nv) || "blank" : nv || "blank"));
+      if ((f[2] || "") !== nv) ch.push(f[1] + ": " + ((f[0] === "start" || f[0] === "end") ? clock12(f[2]) || "blank" : f[0] === "date" ? day(f[2]) || "blank" : f[2] || "blank") + " \u2192 " + ((f[0] === "start" || f[0] === "end") ? clock12(nv) || "blank" : f[0] === "date" ? day(nv) || "blank" : nv || "blank"));
       sh[f[0]] = nv;
     });
     if ((L.problems || "") !== d.problems.trim()) ch.push("Problems / downtime notes changed");

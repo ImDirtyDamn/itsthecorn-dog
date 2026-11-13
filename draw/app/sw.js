@@ -1,7 +1,7 @@
 /* Draw Rate Tracker phone app - service worker.
    Cache-first, versioned. The version is a hash of the app files, so any change
    to them makes a new cache and the old one is deleted on activate. */
-var CACHE = "draw-rate-app-draw-20261112-v8";
+var CACHE = "draw-rate-app-draw-20261112-v9";
 var ASSETS = [
   "./",
   "./index.html",
@@ -46,7 +46,7 @@ self.addEventListener("fetch", function (e) {
   }
   var scope = new URL("./", self.location).pathname;
   if (url.pathname.indexOf(scope) !== 0 && req.mode !== "navigate") return;
-  // pages below the app (the /draw/app/scan/ tryout): network first, saved copy with no signal
+  // pages below the app (the /draw/app/scan/ page): network first, saved copy with no signal
   if (url.pathname.indexOf(scope) === 0 && url.pathname !== scope && url.pathname !== scope + "index.html" && /\/$|\.html$/.test(url.pathname)) {
     e.respondWith(fetch(req).then(function (res) {
       if (res && res.ok && res.type === "basic") { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
