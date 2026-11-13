@@ -467,7 +467,7 @@
       var p = "downtime." + i;
       h += '<div class="card"><div class="cardhead"><b>DOWNTIME ' + (i + 1) + '</b>' + xbtn("d", i, "downtime " + (i + 1)) + '</div>' +
         '<div class="row2">' + clockbox(p + ".start", "Started at", x.start) + clockbox(p + ".end", "Ended at", x.end) + '</div>' +
-        '<div class="grid2">' + tbox(p + ".minutes", "Time down", v(x.minutes), "minutes down", "numeric", ' data-hm="min"') + machbox(p + ".machine", "Machine", x.machine, "Every draw (whole shift)") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".minutes", "Time down", v(x.minutes), "minutes down", "numeric", ' data-hm="min"') + machbox(p + ".machine", "Machine", x.machine, "Pick a draw") + '</div>' +
         tbox(p + ".reason", "Reason", x.reason, "what happened, like die change") + '</div>';
     });
 

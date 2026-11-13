@@ -323,7 +323,7 @@ var ProdCalc = (function () {
     }
     run.forEach(function (m) { steps.push((m.label || m.name) + " ran " + fmtHrs(m.runMin) + " \u00d7 " + fmtInt(m.goal) + " = " + fmtInt(m.goalLbs) + " lbs."); });
     var line = "Your goal for the shift: " + fmtInt(rhu(gsum / 60)) + " lbs. Spread over " + fmtHrs(netMin) + " = " + fmtTenths(goal10) + " lbs/hr.";
-    if (run.length > 1 && allNote !== false) line += " (If " + (run.length === 2 ? "both" : "all " + run.length) + " ran all shift it would be " +
+    if (run.length > 1 && allNote !== false) line += " (If " + (run.length === 2 ? "both" : "all " + run.length) + " ran the full shift it would be " +
       fmtInt(sum(run.map(function (m) { return m.goal; }))) + " lbs/hr.)";
     steps.push(line);
     return [goal10, text, gsum];
@@ -552,8 +552,8 @@ var ProdCalc = (function () {
       if (m.mode === "half") { base = rhu(avail / 2); label = "half shift"; }
       else if (m.mode === "custom" && m.customMin !== null && m.customMin > 0) { base = rhu(m.customMin); label = "set to"; }
       else {
-        if (m.mode === "custom") warnings.push(m.name + ": type how long it ran (like 5:30). Using all shift for now.");
-        base = avail; label = "all shift";
+        if (m.mode === "custom") warnings.push(m.name + ": type how long it ran (like 5:30). Using the full shift for now.");
+        base = avail; label = "full shift";
       }
       var dm = downFor(dts.filter(function (x) { return x.key === "" || x.key === m.key; }));
       m.baseMin = base; m.downMin = dm; m.runMin = Math.max(0, base - dm);
@@ -596,12 +596,12 @@ var ProdCalc = (function () {
     if (diff10 >= 0) {
       res.status = "met";
       steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(diff10) + " lbs/hr OVER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal). GOAL MET.");
-      steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(overShort) + " lbs over.");
+      steps.push("Your shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(overShort) + " lbs over.");
       res.headline = "GOAL MET · " + fmtTenths(diff10) + " lbs/hr over · " + pctOf(pct10) + "% of goal";
     } else {
       res.status = "notmet";
       steps.push("You ran " + fmtTenths(rate10) + " lbs/hr, that is " + fmtTenths(-diff10) + " lbs/hr UNDER the " + goalText + " goal (" + fmtTenths(pct10) + "% of goal).");
-      steps.push("Whole shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(-overShort) + " lbs short (about " +
+      steps.push("Your shift: goal " + fmtInt(shiftGoal) + " lbs. You made " + fmtInt(total) + " lbs, " + fmtInt(-overShort) + " lbs short (about " +
         fmtInt(minutes) + " " + plural(minutes, "minute", "minutes") + " of running at goal speed).");
       steps.push("GOAL NOT MET: you must list the problems and downtime reasons on the sheet.");
       res.headline = "GOAL NOT MET · " + fmtTenths(-diff10) + " lbs/hr under · " + pctOf(pct10) + "% of goal";
@@ -860,7 +860,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (/^Card |^Total Weight/.test(s)) return "total";
     if (/^Breaks|^Downtime|^Hours per shift/.test(s)) return "hours";
     if (/^Average Lbs/.test(s)) return "rate";
-    if (/^You ran|^Whole shift|^GOAL NOT MET/.test(s)) return "status";
+    if (/^You ran|^Your shift|^Whole shift|^GOAL NOT MET/.test(s)) return "status";
     if (/ made [\d,]+ lbs?/.test(s)) return "machine";
     return "goal";
   }
@@ -1381,12 +1381,19 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     });
     html += '<button class="big" id="add-brk" type="button">+ ADD BREAK</button>';
     html += '<h2>Downtime</h2><p class="muted">With clock times, downtime during a break or overlapping other downtime only counts once.</p>';
+    // machine choices: the draws on this sheet (Draw 1 to Draw 9 if none picked yet); one draw = already picked
+    var onSheet = [], addOn = function (n) { if (DRAWS.indexOf(n) >= 0 && onSheet.indexOf(n) < 0) onSheet.push(n); };
+    (S.slots || []).forEach(function (sl) { (sl.segments || []).forEach(function (sg) { addOn(sg.machine); }); });
+    (S.rows || []).forEach(function (r) { addOn(r.machine); });
+    onSheet.sort();
+    var dChoices = onSheet.length ? onSheet : DRAWS;
     S.downtime.forEach(function (d, i) {
+      if (!d.machine && onSheet.length === 1) { d.machine = onSheet[0]; save(); }
       var timed = P.clock(d.start) !== null && P.clock(d.end) !== null;
       html += '<div class="drow"><div class="row2">' + tfield("Started at", "d" + i + "-start", d.start) + tfield("Ended at", "d" + i + "-end", d.end) + '</div>' +
         '<div class="grid2">' + field("Time down", "d" + i + "-min", d.minutes, "minutes down", 'inputmode="numeric" data-hm="min"' + (timed ? " readonly" : "")) +
-        '<div class="f"><label for="d' + i + '-mach">Machine</label><select id="d' + i + '-mach"><option value="">Every draw (whole shift)</option>' +
-        DRAWS.concat(d.machine && DRAWS.indexOf(d.machine) < 0 ? [d.machine] : []).map(function (n) { return '<option' + (d.machine === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select></div></div>' +
+        '<div class="f"><label for="d' + i + '-mach">Machine</label><select id="d' + i + '-mach">' + (d.machine ? "" : '<option value="">Pick a draw</option>') +
+        dChoices.concat(d.machine && dChoices.indexOf(d.machine) < 0 ? [d.machine] : []).map(function (n) { return '<option' + (d.machine === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>' + (d.machine ? "" : '<span class="calc-note" id="d' + i + '-mpick" style="color:var(--amber)">Pick which draw was down.</span>') + '</div></div>' +
         field("Reason", "d" + i + "-reason", d.reason, "what happened, like die change", 'inputmode="text" list="reasons"') +
         '<button type="button" class="warn" style="width:100%" data-deldown="' + i + '">REMOVE DOWNTIME</button></div>';
     });
@@ -1417,7 +1424,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         $("d" + i + "-end").addEventListener(ev, function (e) { d.end = e.target.value; sync(); });
       });
       $("d" + i + "-min").addEventListener("input", function (e) { d.minutes = e.target.value; save(); timeLive(); });
-      $("d" + i + "-mach").addEventListener("change", function (e) { d.machine = e.target.value; save(); timeLive(); });
+      $("d" + i + "-mach").addEventListener("change", function (e) { d.machine = e.target.value; var pk = $("d" + i + "-mpick"); if (pk) pk.hidden = !!d.machine; save(); timeLive(); });
       $("d" + i + "-reason").addEventListener("input", function (e) { d.reason = e.target.value; save(); });
     });
     app.querySelectorAll("[data-delbrk]").forEach(function (b) { b.onclick = function () { S.breaks.splice(+b.dataset.delbrk, 1); render(); }; });
@@ -1464,7 +1471,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       html += '<span class="lbl">Which Draw?' + (moved ? " (first)" : "") + '</span>' + chips("slot" + si + "-0", first.machine);
       if (first.machine) html += goalInput("g" + si + "-0", first.machine);
       if (!moved && first.machine) {
-        html += '<span class="lbl">How long it ran</span><div class="runchoice">' + [["all", "All shift"], ["half", "Half shift"], ["custom", "Set hours"]].map(function (m) {
+        html += '<span class="lbl">How long it ran</span><div class="runchoice">' + [["all", "Full shift"], ["half", "Half shift"], ["custom", "Set hours"]].map(function (m) {
           return '<button type="button" data-mode="' + si + '" data-m="' + m[0] + '" class="' + (sl.mode === m[0] ? "on" : "") + '">' + m[1] + '</button>';
         }).join("") + '</div>';
         if (sl.mode === "custom") html += field("Hours it ran", "s" + si + "-min", sl.minutes, "hours, like 5:30", 'inputmode="numeric" data-hm="hm"');

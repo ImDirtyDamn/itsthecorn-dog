@@ -321,7 +321,7 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
       var m = d.machine ? find(d.machine) : null, a = at(sh.date, sh.start, d.start), b = at(sh.date, sh.start, d.end), mins = N(d.minutes);
       if (a !== null && b !== null && b <= a) b += 86400000;
       if (a === null || b === null) { if (!(mins > 0)) return; b = b !== null ? b : (a !== null ? a + mins * 60000 : when); a = b - mins * 60000; }
-      downtime.push({ id: uid("d"), machineId: m ? m.id : "all", loggedAt: iso(b), startAt: iso(a), endAt: iso(b), minutes: (b - a) / 60000, reason: String(d.reason || "").slice(0, 200) });
+      downtime.push({ id: uid("d"), machineId: m ? m.id : (machines.length === 1 ? machines[0].id : "all"), loggedAt: iso(b), startAt: iso(a), endAt: iso(b), minutes: (b - a) / 60000, reason: String(d.reason || "").slice(0, 200) });
     });
     var st = { schema: SCHEMA, setupDone: true, shift: sh, machines: machines, coils: coils, downtime: downtime, settings: cur && cur.settings ? cur.settings : undefined };
     var before = localStorage.getItem(KEY);

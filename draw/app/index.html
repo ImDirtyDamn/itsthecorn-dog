@@ -1529,7 +1529,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
     if (step === "machines") {
       title = d.machines.length > 1 ? "Need rate at each machine" : "Need rate for your machine";
-      help = "Pick the draw number for each machine and enter the lbs/hr you need from it. The draw number is how the supervisor log sorts your shift.";
+      help = "Pick the draw number for each machine and enter the lbs/hr you need from it. The draw number is how your shift is filed in the master log.";
       var sels = [];
       var markTaken = function () {
         sels.forEach(function (sel, i) {
@@ -2348,9 +2348,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
 
   /* ========================= DOWNTIME (by weight) ========================= */
-  var dtOpen = false, dtTarget = "all";
+  var dtOpen = false, dtTarget = "";   // a draw the operator is logged in on ("" = not picked yet)
   var MINUS = "\u2212";
-  function dtName(id) { if (id === "all") return "Whole shift"; var m = machineById(id); return m ? m.name : "?"; }
+  // "all" is only in shifts saved before the whole-shift choice was removed: still shown and counted
+  function dtName(id) { if (id === "all") return "Every draw"; var m = machineById(id); return m ? m.name : "?"; }
   function runningFor(id) {
     for (var i = 0; i < state.downtime.length; i++) { var d = state.downtime[i]; if (d.machineId === id && !d.endAt) return d; }
     return null;
@@ -2386,10 +2387,21 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function renderDowntime() {
     var box = $("dtp"), now = Date.now(), r = Calc.compute(state, now);
     box.textContent = "";
-    if (dtTarget !== "all" && !machineById(dtTarget)) dtTarget = "all";
-    box.appendChild(el("p", "sub", "Downtime comes off the shift target and the pace car at that draw's need rate. Pick Whole shift when every draw is down. Time during a break is not counted twice."));
+    // only the draws this shift is logged in on; one draw = already picked
+    if (!machineById(dtTarget)) dtTarget = state.machines.length === 1 ? state.machines[0].id : "";
+    box.appendChild(el("p", "sub", "Downtime comes off the shift target and the pace car at that draw's need rate. Time during a break is not counted twice."));
+    var oldAll = runningFor("all");
+    if (oldAll) {   // a whole-shift downtime started before this update: still let them end it
+      var oa = el("div", "dt-now"); oa.id = "dt-now-all";
+      oa.appendChild(el("b", null, "EVERY DRAW IS DOWN"));
+      oa.appendChild(el("span", null, "Since " + fmtClock(Date.parse(oldAll.startAt)) + " · " + fmtDur(now - Date.parse(oldAll.startAt)) + " so far · pace car paused"));
+      box.appendChild(oa);
+      var ob = el("button", "btn solid full", "END DOWNTIME · BACK RUNNING"); ob.type = "button"; ob.id = "dt-end-all";
+      ob.addEventListener("click", function () { endDown(oldAll); });
+      box.appendChild(ob);
+    }
     var sel = el("select", "in"); sel.id = "dt-target";
-    [["all", "Whole shift (every draw)"]].concat(state.machines.map(function (m) { return [m.id, m.name + " · " + fmtInt(m.needRate) + " lbs/hr"]; })).forEach(function (o) {
+    (dtTarget ? [] : [["", "Pick a draw"]]).concat(state.machines.map(function (m) { return [m.id, m.name]; })).forEach(function (o) {
       var op = el("option", null, o[1]); op.value = o[0]; sel.appendChild(op);
     });
     sel.value = dtTarget;
@@ -2401,7 +2413,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (runNow) {
       // down right now: say what is down and since when, and make ending it the one obvious tap
       var a0 = Date.parse(runNow.startAt), st = el("div", "dt-now"); st.id = "dt-now";
-      st.appendChild(el("b", null, (dtTarget === "all" ? "WHOLE SHIFT" : dtName(dtTarget).toUpperCase()) + " IS DOWN"));
+      st.appendChild(el("b", null, dtName(dtTarget).toUpperCase() + " IS DOWN"));
       st.appendChild(el("span", null, "Since " + fmtClock(a0) + " · " + fmtDur(now - a0) + " so far · pace car paused" + (runNow.reason ? " · " + runNow.reason : "")));
       box.appendChild(st);
       var eb0 = el("button", "btn solid full", "END DOWNTIME · BACK RUNNING");
@@ -2411,7 +2423,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     } else {
       var sb = el("button", "btn danger full", "START DOWNTIME NOW");
       sb.type = "button"; sb.id = "dt-start";
-      sb.addEventListener("click", function () { startDown(dtTarget, reason.value); });
+      sb.addEventListener("click", function () {
+        if (!machineById(dtTarget)) { setText($("dt-err"), "Pick which draw is down first."); sel.focus(); return; }
+        startDown(dtTarget, reason.value);
+      });
       box.appendChild(sb);
     }
 
@@ -2425,6 +2440,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var err = el("p", "err"); err.id = "dt-err"; box.appendChild(err);
     add.addEventListener("click", function () {
       var mins = num(mi.value), n = Date.now(), a;
+      if (!machineById(dtTarget)) { setText(err, "Pick which draw was down (WHAT IS DOWN, above)."); sel.focus(); return; }
       if (!(mins > 0)) { setText(err, "Enter how long it was down (hrs and mins)."); return; }
       if (mins > 24 * 60) { setText(err, "Downtime can be 24 hours (1,440 min) at most. Check the minutes."); return; }
       if (ti.value) {
@@ -2503,11 +2519,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var c = cards[mr.id]; if (!c || !c.dtx) return;
       var own = runningFor(mr.id), all = runningFor("all"), d = own || all;
       var t = "", cls = "mc-down-txt";
-      if (d) { t = "DOWN " + fmtDur(now - Date.parse(d.startAt)) + " now" + (own ? "" : " (whole shift)") + " · " + lbOff(mr.downLb || 0) + " total"; cls += " red"; }
+      if (d) { t = "DOWN " + fmtDur(now - Date.parse(d.startAt)) + " now" + (own ? "" : " (every draw)") + " · " + lbOff(mr.downLb || 0) + " total"; cls += " red"; }
       else if (mr.downMs > 0) t = "Down " + fmtDur(mr.downMs) + " · " + lbOff(mr.downLb) + " deducted";
       else t = "No downtime";
       setText(c.dtx, t); setCls(c.dtx, cls);
-      setText(c.dbt, own ? "BACK UP" : all ? "SHIFT BACK UP" : "START DOWNTIME");
+      setText(c.dbt, own || all ? "BACK UP" : "START DOWNTIME");
       setCls(c.dbt, own || all ? "btn small solid" : "btn small warn");
       var card = $("mc-" + i);
       if (card) { var want = d ? " down" : ""; if (card.className.indexOf(" down") >= 0 !== !!d) card.className = card.className.replace(" down", "") + want; }
@@ -2597,7 +2613,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     box.appendChild(el("p", "sub", "Last 10 coils, newest first. Fix a wrong weight or machine here; every total, the pace car and the projection update."));
     if (state.machines.length > 1) {
       var f = el("div", "rc-filter");
-      [["all", "All"]].concat(state.machines.map(function (m) { return [m.id, m.name]; })).forEach(function (o, k) {
+      [["all", "My draws"]].concat(state.machines.map(function (m) { return [m.id, m.name]; })).forEach(function (o, k) {
         var b = el("button", "btn" + (rcFilter === o[0] ? " on" : ""), o[1]); b.type = "button"; b.id = "rc-f-" + (k ? k - 1 : "all");
         b.addEventListener("click", function () { rcFilter = o[0]; rcEdit = null; renderRecent(); });
         f.appendChild(b);
@@ -2747,7 +2763,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var downs = state.machines.filter(function (m) { return downNow(m.id); });
     var sd = $("s-down");
     if (downs.length) {
-      var names = state.machines.length > 1 && downs.length === state.machines.length && runningFor("all") ? ["WHOLE SHIFT"] : downs.map(function (m) { return m.name.toUpperCase(); });
+      var names = state.machines.length > 1 && downs.length === state.machines.length && runningFor("all") ? ["EVERY DRAW"] : downs.map(function (m) { return m.name.toUpperCase(); });
       var d0 = downNow(downs[0].id);
       setText(sd, names.join(" + ") + " DOWN " + fmtDur(now - Date.parse(d0.startAt)) + " · pace car paused");
       sd.hidden = false;
@@ -2957,7 +2973,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var grossPc = r.fraction * gross, downSo = mr ? mr.downSoFarLb : r.downSoFarLb, downAll = mr ? mr.downLb : r.downLb;
     var pc = mr ? mr.paceCar : r.paceCar, tg = mr ? mr.target : r.target;
     var dl = el("dl", "sh-rows");
-    sRow(dl, "Need rate" + (m ? "" : " (shift total)"), fmtInt(rate) + " lbs/hr");
+    sRow(dl, "Need rate" + (m || state.machines.length < 2 ? "" : " (your draws added up)"), fmtInt(rate) + " lbs/hr");
     sRow(dl, "Shift worked time", fmtDur(r.workedTotalMs));
     sRow(dl, "Breaks excluded", r.breakMs > 0 ? fmtDur(r.breakMs) : "none");
     sRow(dl, "Day target before downtime", fmtInt(gross) + " lbs");
