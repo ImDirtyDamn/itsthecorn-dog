@@ -102,6 +102,8 @@ details>summary{min-height:48px;display:flex;align-items:center;cursor:pointer;c
 .banner small{display:block;font-weight:normal;font-size:14px;margin-top:4px;color:var(--white)}
 .banner.notmet{border-color:var(--red);color:var(--red)}
 .banner.incomplete{border-color:var(--amber);color:var(--amber)}
+.oddbox{border:2px solid var(--amber);color:var(--white);padding:10px 12px;margin:10px 0;font-size:15px;line-height:1.4}.oddbox b{display:block;color:var(--amber);font-size:17px;margin-bottom:4px}
+.num.key.odd b{color:var(--amber);text-shadow:none}
 .warnbox{color:var(--amber);font-size:15px;line-height:1.4;padding-left:20px;margin:6px 0}
 .slot{border:1px solid var(--fg-dim);padding:12px;margin:12px 0;background:var(--panel)}
 .slot>b{display:block;color:var(--white);letter-spacing:.06em;margin-bottom:8px}
@@ -171,13 +173,13 @@ html.fit .sheet{max-height:calc(var(--fvh) * 85)}
 </head>
 <body>
 <header>
-  <h1>PRODUCTION LOG<small>P-310 helper</small></h1>
+  <h1>PRODUCTION REPORT<small>calculator</small></h1>
   <a class="back" href="/draw/app/">&larr; TRACKER</a>
 </header>
 <main id="app"></main>
 <div class="navbar" id="navbar" hidden><div class="in"><button id="nav-back" type="button" class="ghost">&larr; BACK</button><button id="nav-next" type="button" class="solid">NEXT &rarr;</button></div></div>
 <div class="overlay" id="drill" hidden role="dialog" aria-label="How we got it"><div class="sheet"><div class="top"><b id="drill-title"></b><button id="drill-close" type="button">CLOSE</button></div><div class="big" id="drill-big"></div><p class="muted" id="drill-sub">How we got it, step by step:</p><ol class="math" id="drill-steps"></ol></div></div>
-<div class="sheetview" id="sheetview" hidden role="dialog" aria-label="Copy to sheet"><div class="svtop"><b>COPY ONTO THE P-310</b><button id="sv-close" type="button">CLOSE</button></div><div id="sv-body"></div></div>
+<div class="sheetview" id="sheetview" hidden role="dialog" aria-label="Copy to sheet"><div class="svtop"><b>COPY ONTO THE SHEET</b><button id="sv-close" type="button">CLOSE</button></div><div id="sv-body"></div></div>
 <datalist id="reasons"><option value="die change"><option value="coil problem"><option value="wire break"><option value="waiting on coils"><option value="maintenance"><option value="meeting"><option value="power"></datalist>
 <div class="toast" id="toast"></div>
 <div class="overlay" id="send" hidden role="dialog" aria-modal="true" aria-labelledby="send-title"><div class="sheet"><div class="top"><b id="send-title">SEND TO TRACKER</b></div><div id="send-body"></div></div></div>
@@ -968,7 +970,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
       '<p class="sub">Leave coils ran blank for just the average.</p>' +
       '<p class="calc-note" id="a-note" aria-live="polite"></p></div>' +
       '<div id="a-out"></div>' +
-      (window.SheetScan ? '<button id="a-photo" type="button" class="big amber">TAKE A PHOTO<small style="display:block;font-weight:normal;font-size:14px;margin-top:4px">Read the coil weights off your sheet, check them, then average</small></button><div id="scan-host"></div>' : "") +
+      (window.SheetScan ? '<button id="a-photo" type="button" class="big amber">TAKE A PHOTO<small style="display:block;font-weight:normal;font-size:14px;margin-top:4px">Read the card total and coils off your job card, check them, then average</small></button><div id="scan-host"></div>' : "") +
       '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
     $("a-tot").addEventListener("input", function (e) { Q.tot = e.target.value; Q.scan = null; avgOut(); });
     $("a-coils").addEventListener("input", function (e) { Q.coils = e.target.value; Q.scan = null; avgOut(); });
@@ -976,7 +978,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     $("q-home").onclick = function () { go("home"); };
     if ($("a-photo")) $("a-photo").onclick = function () {
       SheetScan.start($("scan-host"), { onApply: applyAvgScan, applyLabel: "AVERAGE THESE", coilsOnly: true,
-        actionNote: "Check the weights and coil counts it read (fix any box), then tap AVERAGE THESE." });
+        actionNote: "Check the card total and the coils on the card (fix any box), then tap AVERAGE THESE." });
     };
     avgOut();
   }
@@ -984,7 +986,10 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var r = avgResult(), el = $("a-out"), note = $("a-note");
     if (!r.ok) { el.innerHTML = ""; note.textContent = r.error || ""; return; }
     note.textContent = r.over ? r.note : ("Read as: " + r.readAs);
-    var html = '<button class="num key" id="a-avg" type="button"><span>Avg coil weight<i>tap for the math</i></span><b>' + P.fmtInt(r.avg) + ' lbs</b></button>';
+    var rng = window.Fields && Fields.COIL_LBS ? Fields.COIL_LBS : { min: 3000, max: 6000 }, odd = r.avg < rng.min || r.avg > rng.max;
+    var html = odd ? '<div class="oddbox" id="a-odd" role="alert"><b>That looks off: ' + P.fmtInt(r.avg) + ' lbs a coil.</b>Check the card total and coils on card above. Coils here usually weigh ' +
+      P.fmtInt(rng.min) + ' to ' + P.fmtInt(rng.max) + ' lbs.</div>' : "";
+    html += '<button class="num key' + (odd ? " odd" : "") + '" id="a-avg" type="button"><span>Avg coil weight<i>tap for the math</i></span><b>' + P.fmtInt(r.avg) + ' lbs</b></button>';
     if (r.over) {
       html += '<p class="calc-note" id="a-over">' + esc(r.note) + '</p>';
     } else if (r.weight !== null && r.weight !== undefined) {
@@ -1077,22 +1082,21 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   $("send").addEventListener("click", function (e) { if (e.target === $("send")) sendClose(); });
   document.addEventListener("keydown", function (e) { if (!$("send").hidden && e.key === "Escape") sendClose(); });
 
-  // photo of the sheet -> SheetScan review -> each card's lb and coils -> one average
+  // photo of the job card -> SheetScan review -> one average.
+  // The card total (upper right of the job card) is the source: average = card total / coils on the card.
+  // The review already took that total out of the coil rows (it is never counted as a coil); the coil weights only check it.
   function applyAvgScan(sc) {
-    var N = SheetScan.num, tot = 0, n = 0, steps = [];
-    (sc.coils || []).forEach(function (c, i) {
-      var cp = SheetScan.coilsParse(c.coils_text), cin = N(c.coils_in) !== null ? N(c.coils_in) : cp.in;
-      var w = N(c.weight), a = N(c.avg_wgt), lab = "Card " + (c.card || i + 1);
-      if (w !== null && w > 0 && cin !== null && cin > 0) { tot += w; n += cin; steps.push(lab + ": " + P.fmtNum(w) + " lbs, " + P.fmtNum(cin) + " " + (cin === 1 ? "coil" : "coils")); }
-      else if (a !== null && a > 0 && cin !== null && cin > 0) { var ww = a * cin; tot += ww; n += cin; steps.push(lab + ": " + P.fmtNum(a) + " lbs avg \u00d7 " + P.fmtNum(cin) + " = " + P.fmtNum(ww) + " lbs"); }
-      else if (w !== null && w > 0) { tot += w; n += 1; steps.push(lab + ": " + P.fmtNum(w) + " lbs (no coil count, counted as 1 coil)"); }
-    });
-    var q = P.quick(tot, n, 1);
-    if (!q.ok) { toast("No coil weights on that sheet. Fix them in the boxes, or type them."); return false; }
-    steps.push("All cards: " + P.fmtNum(tot) + " lbs over " + P.fmtNum(n) + " " + (n === 1 ? "coil" : "coils"));
+    var cm = sc.card_check || SheetScan.cardMath(sc), steps = [];
+    if (!(cm.total > 0) || !(cm.coils > 0)) { toast("No card total or coils read. Fix them in the boxes, or type them."); return false; }
+    var q = P.quick(cm.total, cm.coils, 1);
+    if (!q.ok) { toast("No card total or coils read. Fix them in the boxes, or type them."); return false; }
+    if (cm.printed) steps.push("Card total printed on the card: " + P.fmtNum(cm.printed) + " lbs");
+    if (cm.sum > 0) steps.push("Coil weights read add up to " + P.fmtNum(cm.sum) + " lbs" + (cm.printed ? (cm.matched ? ", same as the card total" : ", NOT the card total: check the card") : ""));
+    steps.push("Coils on the card: " + P.fmtNum(cm.coils));
     steps.push(q.lines[0]);
-    Q.tot = P.fmtNum(tot).replace(/,/g, ""); Q.coils = String(n); Q.ran = "";
-    Q.scan = { tot: Q.tot, coils: Q.coils, res: { ok: true, avg: q.avg, count: n, total: tot, steps: steps, readAs: "from the photo, " + P.fmtNum(tot) + " lbs over " + n + " coils" } };
+    Q.tot = P.fmtNum(cm.total).replace(/,/g, ""); Q.coils = String(cm.coils); Q.ran = "";
+    Q.scan = { tot: Q.tot, coils: Q.coils, res: { ok: true, avg: q.avg, count: cm.coils, total: cm.total, steps: steps,
+      readAs: "from the photo, card total " + P.fmtNum(cm.total) + " lbs over " + cm.coils + " " + (cm.coils === 1 ? "coil" : "coils") + (cm.printed && cm.matched ? " (coil weights match it)" : "") } };
     $("a-tot").value = Q.tot; $("a-coils").value = Q.coils; $("a-ran").value = ""; avgOut();
     setTimeout(function () { var o = $("a-out"); if (o) o.scrollIntoView({ block: "center" }); }, 50);
     return true;
@@ -1650,7 +1654,11 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     } else if (S.screen === "avg" || S.screen === "rate" || S.screen === "quick") S.screen = "home";
   })();
   render();
-  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {});
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
+    var check = function () { if (navigator.onLine) reg.update().catch(function () {}); };
+    check();
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") check(); });
+  }).catch(function () {});
 })();
 </script>
 </body>

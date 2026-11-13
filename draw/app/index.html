@@ -44,8 +44,8 @@
         "minutes": 15 | null, "reason": "" }   // minutes = endAt - startAt (null while running)
     ],                                    // coil.downtimeMin is a note only; it does not change totals
     "settings": {                         // per device, kept across shifts
-      "confirmUnderLb": 3000,             // ask "is that right?" for a coil under this
-      "confirmOverLb": 5000,              // ask "coil weight, not the coil ID?" for a coil over this
+      "confirmUnderLb": 3000,             // fixed (Fields.COIL_LBS), not set by operators: ask for a coil under this
+      "confirmOverLb": 6000,              // fixed (Fields.COIL_LBS): ask "coil weight, not the coil ID?" over this
       "view": "simple" | "full"           // dashboard view (SIMPLE = just the race)
     }
   }
@@ -1148,13 +1148,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function defaultMachine(i) {
     return { id: uid("m"), slot: i + 1, name: "Draw " + (i + 1), needRate: DEFAULT_RATE, draw: i + 1, nick: "", timerStartedAt: null, timerAccumMs: 0 };
   }
-  var DEFAULT_CONFIRM_UNDER_LB = 3000, DEFAULT_CONFIRM_OVER_LB = 5000;   // fat-finger checks (Advanced > Settings)
+  // fat-finger checks: one fixed range for every phone (Fields.COIL_LBS, shared with the calculator and photo
+  // checks). Operators can't change it, and an old saved custom range is ignored.
+  var COIL_RANGE = window.Fields && Fields.COIL_LBS ? Fields.COIL_LBS : { min: 3000, max: 6000 };
+  var DEFAULT_CONFIRM_UNDER_LB = COIL_RANGE.min, DEFAULT_CONFIRM_OVER_LB = COIL_RANGE.max;
   function defaultSettings() { return { confirmUnderLb: DEFAULT_CONFIRM_UNDER_LB, confirmOverLb: DEFAULT_CONFIRM_OVER_LB, view: "simple" }; }
   function cleanSettings(x) {
     var d = defaultSettings(); x = x && typeof x === "object" ? x : {};
-    var u = num(x.confirmUnderLb), o = num(x.confirmOverLb);
-    if (u >= 0 && u < 1e6) d.confirmUnderLb = u;
-    if (o > 0 && o < 1e7) d.confirmOverLb = o;
     if (x.view === "full") d.view = "full";
     return d;
   }
@@ -1769,7 +1769,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // Nothing is ever changed to make it fit: -500, 1e3, 4500 lbs, abc and 0 are refused with a message.
   var MAX_COIL_LB = 100000;
   function checkCoilWeight(raw, inp, showErr, onOk) {
-    var t = String(raw == null ? "" : raw).trim(), set = state.settings || defaultSettings();
+    var t = String(raw == null ? "" : raw).trim(), set = defaultSettings();
     var ask = "Enter the coil weight in lbs";
     if (!t) { showErr(ask + "."); return; }
     if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^\.\d+$/.test(t)) {
@@ -2155,26 +2155,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
       adv.appendChild(sec);
     });
-
-    // settings: fat-finger checks
-    var st = el("div", "adv-mach"); st.id = "adv-settings";
-    st.appendChild(el("h3", null, "Settings · weight checks"));
-    st.appendChild(el("p", "sub", "Logging a coil under or over these asks the operator to confirm before it counts."));
-    var sg = el("div", "row2");
-    var smin = input("text", "set-min", String(state.settings.confirmUnderLb), { inputmode: "decimal", autocomplete: "off" });
-    var smax = input("text", "set-max", String(state.settings.confirmOverLb), { inputmode: "decimal", autocomplete: "off" });
-    sg.appendChild(field("Ask if under (lbs)", smin)); sg.appendChild(field("Ask if over (lbs)", smax));
-    st.appendChild(sg);
-    var serr = el("p", "err"); serr.id = "set-err";
-    var sb = smallBtn("SAVE CHECKS", "", function () {
-      var u = num(smin.value.replace(/,/g, "")), o = num(smax.value.replace(/,/g, ""));
-      if (!(u >= 0) || !(o > 0) || u >= o) { setText(serr, "Under must be less than over, both in lbs."); setCls(serr, "err"); return; }
-      state.settings = cleanSettings({ confirmUnderLb: u, confirmOverLb: o, view: state.settings.view }); save();
-      setCls(serr, "err green"); setText(serr, "Saved: asks under " + fmtInt(u) + " lbs and over " + fmtInt(o) + " lbs.");
-    }); sb.id = "set-save";
-    var sr = smallBtn("DEFAULTS", "", function () { smin.value = DEFAULT_CONFIRM_UNDER_LB; smax.value = DEFAULT_CONFIRM_OVER_LB; });
-    var sl = el("div", "adv-line"); sl.appendChild(sb); sl.appendChild(sr); st.appendChild(sl); st.appendChild(serr);
-    adv.appendChild(st);
 
     // export
     var ex = el("div", "adv-mach");
@@ -3742,11 +3722,21 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   var secure = window.location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
   if ("serviceWorker" in navigator && secure) {
     var hadController = !!navigator.serviceWorker.controller;
+    // A new version took over. The shift is saved on the phone, so load it right away unless someone is
+    // typing (then show the UPDATE bar instead).
     navigator.serviceWorker.addEventListener("controllerchange", function () {
-      if (hadController) $("update").hidden = false;
+      if (hadController) {
+        var ae = document.activeElement, typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
+        if (typing) $("update").hidden = false; else window.location.reload();
+      }
       hadController = true;
     });
-    navigator.serviceWorker.register("/draw/app/sw.js", { scope: "/draw/app/" }).then(function () {
+    navigator.serviceWorker.register("/draw/app/sw.js", { scope: "/draw/app/", updateViaCache: "none" }).then(function (reg) {
+      // an installed app is often resumed, not reopened, so the phone never looks for a new version by itself:
+      // check every time the app comes back to the screen (and once now)
+      var check = function () { if (navigator.onLine) reg.update().catch(function () {}); };
+      check();
+      document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") check(); });
       return navigator.serviceWorker.ready;
     }).then(function () {
       status.textContent = "Offline ready · data saves on this device";

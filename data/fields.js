@@ -99,6 +99,9 @@
       if (g && g.display === "grid" && g.gridTemplateColumns.split(" ").length > 1) { n.style.gridColumn = "1 / -1"; break; }
     }
   }
+  /* ---- plausible weight of one coil (lbs). One place to change it: the photo review and the calculator both warn
+     (a soft warning, never a block) when a coil or an average falls outside it, and the tracker asks to confirm. ---- */
+  var COIL_LBS = { min: 3000, max: 6000 };   // the tracker's log-a-coil confirm uses it too
   /* ---- compound ---- */
   var COMPOUNDS = ["4392", "3814", "TN5", "1360", "Drawsol", "Salvia"], OTHER = "__other";
   function compoundKnown(v) {
@@ -205,5 +208,5 @@
     return null;
   }
   window.Fields = { hmSplit: hmSplit, hmJoin: hmJoin, enhance: enhance, scan: scan, sizeAmbig: sizeAmbig, sizeChoices: sizeChoices, sizePick: sizePick, sizeNeedsPick: sizeNeedsPick,
-    compound: compound, compoundKnown: compoundKnown, COMPOUNDS: COMPOUNDS, niceDate: niceDate };
+    COIL_LBS: COIL_LBS, compound: compound, compoundKnown: compoundKnown, COMPOUNDS: COMPOUNDS, niceDate: niceDate };
 })();

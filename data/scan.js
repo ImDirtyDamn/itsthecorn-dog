@@ -54,6 +54,9 @@
     '.scan-legend span{display:inline-flex;align-items:center;gap:6px;color:var(--fg-dim)}' +
     '.scan-legend i{display:inline-block;width:18px;height:14px;border:2px solid var(--red)}.scan-legend i.c{border-color:var(--amber)}' +
     'body.scan-open .navbar{display:none!important}' +
+    '.scan-avg{display:flex;align-items:center;min-height:48px;opacity:.9}.scan-avg .muted{font-size:13px}' +
+    '.scan-warn{border:2px solid var(--amber);padding:12px;margin:10px 0;color:var(--white)}.scan-warn b{display:block;color:var(--amber);font-size:17px;margin-bottom:6px}.scan-warn span{display:block;font-size:14px}' +
+    '.scan-note{border:1px solid var(--fg-dim);padding:10px;margin:10px 0;color:var(--white);font-size:14px}' +
     '.scan-actions{position:sticky;bottom:0;background:var(--bg);padding:8px 0 calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--fg-faint);margin-top:8px;z-index:5}';
   function addCss() { if (document.getElementById("scan-css")) return; var s = document.createElement("style"); s.id = "scan-css"; s.textContent = css; document.head.appendChild(s); }
 
@@ -185,16 +188,118 @@
     return '<div class="f"><label for="' + id + '">' + label + '</label><select id="' + id + '" data-p="' + p + '" class="' + m.cls.trim() + '"><option value="">' + esc(allLabel || "\u2013") + '</option>' +
       opts.map(function (n) { return '<option' + (n === val ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>' + m.note + '</div>';
   }
+  /* ---------- card math checks (job cards and the P-310 rows) ----------
+     A job card has the CARD TOTAL WEIGHT in its upper right corner: it is the sum of the coil weights, and the
+     average is that total / coils on the card. The reader sometimes returns that total as one more coil row, so it
+     got added to the coils (a 5-coil card came out as 105,070 lbs). Here: a row whose weight equals the sum of the
+     other rows (or equals the printed total) is the card total, never a coil. Coil weights only check the total.
+     Every per-coil weight and the average must sit in the plausible range (Fields.COIL_LBS), or the review warns. */
+  function coilRange() { return window.Fields && Fields.COIL_LBS ? Fields.COIL_LBS : { min: 3000, max: 6000 }; }
+  function near(a, b) { return Math.abs(a - b) <= Math.max(2, Math.abs(b) * 0.005); }
+  function rowInfo(r) {
+    var cp = coilsParse(r.coils_text), cin = num(r.coils_in) !== null ? num(r.coils_in) : cp.in;
+    return { w: num(r.weight), a: num(r.avg_wgt), cin: cin !== null && cin > 0 ? cin : null };
+  }
+  function findTotalRow(s) {
+    var rows = (s.coils || []).map(rowInfo), printed = num((s.totals || {}).total_weight);
+    var withW = rows.map(function (x, i) { return x.w !== null && x.w > 0 ? i : -1; }).filter(function (i) { return i >= 0; });
+    if (withW.length < 2) return -1;
+    for (var k = 0; k < withW.length; k++) {
+      var i = withW[k], others = withW.filter(function (j) { return j !== i; });
+      var sumO = others.reduce(function (t, j) { return t + rows[j].w; }, 0);
+      if (others.length >= 1 && near(rows[i].w, sumO) && (others.length >= 2 || rows[i].cin === null || rows[i].cin === 1)) return i;
+      if (printed !== null && near(rows[i].w, printed) && others.length >= 1) return i;
+    }
+    return -1;
+  }
+  function cardMath(s) {
+    var rng = coilRange(), rows = (s.coils || []).map(rowInfo), issues = [];
+    var printed = num((s.totals || {}).total_weight);
+    var n = 0, sum = 0, sumN = 0, allW = rows.length > 0;
+    rows.forEach(function (x, i) {
+      var c = x.cin !== null ? x.cin : (x.w !== null || x.a !== null ? 1 : 0);
+      n += c;
+      var w = x.w !== null && x.w > 0 ? x.w : (x.a !== null && x.a > 0 && c ? x.a * c : null);
+      if (w === null) { allW = false; return; }
+      sum += w; sumN += c;
+      var per = c ? w / c : null;
+      if (per !== null && (per < rng.min || per > rng.max))
+        issues.push({ p: "coils." + i + (x.w !== null ? ".weight" : ".avg_wgt"), msg: fmtW(per) + " lbs a coil looks off" });
+    });
+    (s.coils || []).forEach(function (r, i) {
+      var f = num(r.finish);
+      if (f !== null && f > 0 && f < 10 && (f < 0.02 || f > 3)) issues.push({ p: "coils." + i + ".finish", soft: true, msg: f + " in looks off for a finish size" });
+    });
+    var total = printed !== null && printed > 0 ? printed : (sum > 0 ? sum : null);
+    var avg = total !== null && n > 0 ? total / n : null, warn = "";
+    if (avg !== null && (avg < rng.min || avg > rng.max)) warn = "That looks off: " + fmtW(avg) + " lbs a coil. Check the numbers below.";
+    if (printed !== null && printed > 0 && allW && sum > 0 && !near(sum, printed)) {
+      issues.push({ p: "coils.0.weight", msg: "The card total says " + fmtW(printed) + " lbs, the weights add up to " + fmtW(sum) + " lbs" });
+      if (!warn) warn = "The card total says " + fmtW(printed) + " lbs, but the coil weights add up to " + fmtW(sum) + " lbs. Check the numbers below.";
+    }
+    var hard = issues.filter(function (x) { return !x.soft; });
+    if (!warn && hard.length) warn = "That looks off: " + hard[0].msg + ". Check the numbers below.";
+    return { total: total, printed: printed, sum: sum, coils: n, avg: avg, issues: issues, warn: warn, matched: printed !== null && allW && sum > 0 && near(sum, printed) };
+  }
+  function fmtW(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  // Avg. Wgt. is never typed or read: it is worked out live as Weight / Coils Drawn
+  function avgbox(i, r) {
+    var x = rowInfo(r), a = x.w !== null && x.cin ? fmtW(x.w / x.cin) : "";
+    return '<div class="f"><label>Avg. Wgt. (lbs)</label><output class="in scan-avg" id="sc-avg-' + i + '" data-avg="' + i + '" aria-live="polite">' + (a || '<span class="muted">weight \u00f7 coils</span>') + '</output></div>';
+  }
   function xbtn(kind, i, what) { return '<button class="xbtn" type="button" data-scdel="' + kind + '-' + i + '" aria-label="Remove ' + what + '">&times;</button>'; }
   function v(x) { return x === null || x === undefined ? "" : x; }
 
+  // take the card total out of the coil rows (it is never a coil) and run the checks
+  function prep(c) {
+    var s = c.data.scan, notes = [];
+    if (!c.movedAvg) {
+      c.movedAvg = true;
+      (s.coils || []).forEach(function (r, i) {
+        var x = rowInfo(r), w;
+        if (x.w !== null || x.a === null || x.a <= 0) return;
+        // A job card has no per-coil average on it: the number the reader called Avg. Wgt. is the card total
+        // (upper right). On a P-310 row a real average is only kept when it is a plausible coil weight.
+        if (c.opts.coilsOnly || x.a > coilRange().max || !x.cin) w = x.a;
+        else w = x.a * x.cin;
+        r.weight = Math.round(w * 10) / 10;
+        var f = c.data.flags || {}; delete f["coils." + i + ".weight"];
+        if (w === x.a) notes.push(fmtW(w) + " lbs (upper right) is the card total, so it went in Weight for card " + (i + 1) + ".");
+      });
+    }
+    var pt = num((s.totals || {}).total_weight), noW = (s.coils || []).every(function (r) { return num(r.weight) === null; });
+    if (c.opts.coilsOnly && pt !== null && pt > 0 && noW && (s.coils || []).length <= 1) {
+      if (!s.coils.length) s.coils.push({ card: "", finish: "", grade: "", compound: "", package: "", avg_wgt: null, coils_text: "", coils_in: null, coils_out: null, weight: null, machine: "" });
+      s.coils[0].weight = pt; s.totals.total_weight = "";
+      var f0 = c.data.flags || {}; delete f0["coils.0.weight"];
+      notes.push(fmtW(pt) + " lbs (upper right) is the card total, so it went in Weight.");
+    }
+    (s.coils || []).forEach(function (r) { var x = rowInfo(r); r.avg_wgt = x.w !== null && x.cin ? Math.round(x.w / x.cin) : null; });
+    var ti = findTotalRow(s);
+    if (ti >= 0) {
+      var tr = rowInfo(s.coils[ti]);
+      s.totals = s.totals || {};
+      if (num(s.totals.total_weight) === null) s.totals.total_weight = tr.w;
+      s.coils.splice(ti, 1); shiftFlags(c, "coils", ti);
+      notes.push(fmtW(tr.w) + " lbs is the card total (upper right), not a coil, so it was taken out of the coil list" + (c.opts.coilsOnly ? " and kept to check the weights." : "."));
+    }
+    if (notes.length) c.totalNote = notes.join(" ");
+    var cm = cardMath(s);
+    c.issues = cm.issues; c.warn = cm.warn;
+  }
+
   function review(c) {
+    if (!c.prepped) { c.prepped = true; prep(c); }
     var d = c.data, s = d.scan, o = c.opts, h = '<div class="scan-review" id="scan-review">';
     h += '<h2 style="margin-top:6px">Check what was read</h2><p class="muted" style="margin-top:0">Fix anything that\u2019s wrong. Nothing is filled in until you tap ' + esc(o.applyLabel || "REPLACE or ADD") + '. Blank = not on the sheet yet.</p>';
     var nf = Object.keys(d.flags || {}).length;
     if (nf) h += '<div class="scan-legend"><span><i></i>hard to read</span><span><i class="c"></i>math doesn\u2019t add up</span></div>';
     if (d.checks && d.checks.length) h += '<ul class="warnbox">' + d.checks.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ul>';
     if (o.intro) h += o.intro;
+    if (c.totalNote) h += '<p class="scan-note" id="scan-total-note">' + esc(c.totalNote) + '</p>';
+    if (c.warn) h += '<div class="scan-warn" id="scan-warn" role="alert"><b>' + esc(c.warn) + '</b>' +
+      '<span>Fix any box, then tap ' + esc(o.applyLabel || "REPLACE or ADD") + ' again.</span>' +
+      '<button id="scan-anyway" type="button" class="big" style="margin-top:10px">USE THESE NUMBERS ANYWAY</button></div>';
 
     var full = !o.coilsOnly;   // coilsOnly: just the cards (the average coil weight tool)
     if (full) h += '<h3>Top of the sheet</h3><div class="panel">' + tbox("name", "Name", s.name, "your name") +
@@ -220,9 +325,9 @@
     s.coils.forEach(function (r, i) {
       var p = "coils." + i;
       h += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + xbtn("c", i, "card " + (i + 1)) + '</div>' +
-        tbox(p + ".card", "Card #", r.card, "card number", "numeric") +
-        '<div class="grid2">' + tbox(p + ".avg_wgt", "Avg. Wgt. (lbs)", v(r.avg_wgt), "avg weight", "decimal") + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
-        '<div class="grid2">' + tbox(p + ".weight", "Weight (lbs)", v(r.weight), "weight", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
+        tbox(p + ".card", "Card #", r.card, "card number", "text") +
+        '<div class="grid2">' + avgbox(i, r) + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".weight", full ? "Weight (lbs)" : "Weight (lbs, card total)", v(r.weight), full ? "weight" : "upper right", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
         '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
         '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound", "text", ' data-compound="1"') + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
     });
@@ -248,14 +353,14 @@
 
     if (full) h += '<h3>Maintenance</h3><div class="f"><label for="sc-maintenance">Maintenance issues to follow up on</label><textarea id="sc-maintenance" data-p="maintenance" placeholder="maintenance issues">' + esc(s.maintenance) + '</textarea></div>';
     var t = s.totals || {}, said = [];
-    if (t.total_weight !== "") said.push("Total Weight " + t.total_weight);
-    if (t.hours !== "") said.push("Hours " + t.hours);
-    if (t.goal_lbhr !== "") said.push("Goal " + t.goal_lbhr + " lbs/hr");
-    if (t.avg_lbhr !== "") said.push("Average " + t.avg_lbhr + " lbs/hr");
+    if (v(t.total_weight) !== "") said.push("Total Weight " + t.total_weight);
+    if (v(t.hours) !== "") said.push("Hours " + t.hours);
+    if (v(t.goal_lbhr) !== "") said.push("Goal " + t.goal_lbhr + " lbs/hr");
+    if (v(t.avg_lbhr) !== "") said.push("Average " + t.avg_lbhr + " lbs/hr");
     if (full && (said.length || s.problems)) h += '<div class="panel"><b style="color:var(--white)">Also written on the sheet (for checking, not filled in):</b>' +
       (said.length ? '<p class="muted' + (flagOf("totals.total_weight") ? '" style="color:var(--amber)' : "") + '">' + esc(said.join(" \u00b7 ")) + '</p>' : "") +
       (s.problems ? '<p class="muted" style="white-space:pre-wrap">' + esc(s.problems) + '</p>' : "") + '</div>';
-    h += '<p class="muted" style="font-size:12px">Read by ' + esc(String(d.model || "").split("/").pop()) + ' in ' + Math.round((d.ms || 0) / 1000) + ' s. The photo is not saved.</p>';
+    h += '<p class="muted" style="font-size:12px">Read in ' + Math.max(1, Math.round((d.ms || 0) / 1000)) + ' s. The photo is not saved.</p>';
 
     h += (o.actionNote ? '<p class="muted" style="margin:14px 0 0;font-size:13px">' + o.actionNote + '</p>' : "") +
       (o.applyLabel ? '<div class="scan-actions"><button id="scan-replace" type="button" class="solid big">' + esc(o.applyLabel) + '</button></div>'
@@ -267,6 +372,20 @@
     host.querySelectorAll("[data-p]").forEach(function (el) {
       var clear = function () { el.classList.remove("scan-unclear", "scan-check"); var n = el.parentNode.querySelector(".scan-hint"); if (n) n.remove(); };
       el.addEventListener("input", clear); el.addEventListener("change", clear);
+    });
+    var liveAvg = function (i) {
+      var w = host.querySelector('[data-p="coils.' + i + '.weight"]'), cd = host.querySelector('[data-p="coils.' + i + '.coils_drawn"]'), o = host.querySelector("#sc-avg-" + i);
+      if (!w || !cd || !o) return;
+      var ww = num(w.value), n = coilsParse(cd.value).in;
+      o.innerHTML = ww !== null && ww > 0 && n ? esc(fmtW(ww / n)) : '<span class="muted">weight \u00f7 coils</span>';
+    };
+    host.querySelectorAll('[data-p$=".weight"],[data-p$=".coils_drawn"]').forEach(function (el) {
+      var m = /^coils\.(\d+)\./.exec(el.getAttribute("data-p")); if (m) el.addEventListener("input", function () { liveAvg(+m[1]); });
+    });
+    (c.issues || []).forEach(function (x) {
+      var el = host.querySelector('[data-p="' + x.p + '"]'); if (!el) return;
+      el.classList.add("scan-check");
+      if (!el.parentNode.querySelector(".scan-hint")) { var sp = document.createElement("span"); sp.className = "scan-hint"; sp.textContent = x.msg + ". Check it."; el.parentNode.appendChild(sp); }
     });
     host.querySelectorAll("[data-scdel]").forEach(function (b) {
       b.onclick = function () {
@@ -285,11 +404,18 @@
       var fins = Array.prototype.slice.call(host.querySelectorAll('input[data-p$=".finish"]'));
       var need = window.Fields ? Fields.sizeNeedsPick(fins) : null;
       if (need) { Fields.sizePick(need, "Card " + (+need.getAttribute("data-p").split(".")[1] + 1) + " finish size", function () { apply(replace); }); return; }
+      if (!c.forced) {
+        prep(c);
+        if (c.warn) { review(c); var wb = host.querySelector("#scan-warn"); if (wb) wb.scrollIntoView({ block: "center" }); return; }
+      }
+      c.forced = false;
+      if (o.coilsOnly) s.card_check = cardMath(s);
       document.body.classList.remove("scan-open");
       var ok = o.onApply(JSON.parse(JSON.stringify(s)), replace);
       if (ok !== false) { host.innerHTML = ""; cur = null; } else document.body.classList.add("scan-open");
     };
     host.querySelector("#scan-replace").onclick = function () { apply(true); };
+    if (host.querySelector("#scan-anyway")) host.querySelector("#scan-anyway").onclick = function () { c.forced = true; c.warn = ""; apply(true); };
     if (host.querySelector("#scan-add")) host.querySelector("#scan-add").onclick = function () { apply(false); };
     host.scrollIntoView({ block: "start" });
   }
@@ -310,11 +436,13 @@
       var p = el.dataset.p.split("."), val = el.value.trim(), o = s;
       for (var i = 0; i < p.length - 1; i++) { o = o[isNaN(+p[i]) ? p[i] : +p[i]]; if (!o) return; }
       var k = p[p.length - 1];
+      if (k === "avg_wgt") return;
       if (k === "coils_drawn") { var cd = coilsParse(val); o.coils_text = val; o.coils_in = cd.in; o.coils_out = cd.out; return; }
       if (el.type === "time") { o[k] = val; return; }
       if (["goal", "avg_wgt", "weight", "minutes"].indexOf(k) >= 0) { var n = num(val); o[k] = n === null ? val : n; return; }
       o[k] = val;
     });
+    (s.coils || []).forEach(function (r) { var x = rowInfo(r); r.avg_wgt = x.w !== null && x.cin ? Math.round(x.w / x.cin) : null; });
     return s;
   }
   function toast(msg) {
@@ -323,5 +451,5 @@
     else alert(msg);
   }
 
-  window.SheetScan = { start: start, shrink: shrink, num: num, drawName: drawName, isClock: isClock, coilsParse: coilsParse, DRAWS: DRAWS };
+  window.SheetScan = { cardMath: cardMath, findTotalRow: findTotalRow, start: start, shrink: shrink, num: num, drawName: drawName, isClock: isClock, coilsParse: coilsParse, DRAWS: DRAWS };
 })();
