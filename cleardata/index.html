@@ -128,7 +128,7 @@
                     
                     <div class="z-10">
                         <h2 class="text-2xl font-bold text-white mb-2">Check data broker sites</h2>
-                        <p class="text-dark-text mb-4 max-w-lg">This tool does not scan the internet or find your information. Open each broker's public site, check it yourself, then send a removal request if you find a listing.</p>
+                        <p class="text-dark-text mb-4 max-w-lg">This tool does not scan the internet or find your information. Open each site, check it yourself, then send a removal request if you find a listing. The Action Center also lists official Google, Bing, and social-account tools.</p>
                         <button id="run-scan-btn" onclick="switchTab('directory')" class="bg-brand hover:bg-brand-hover text-white px-6 py-3 rounded-lg font-medium shadow-lg shadow-brand/20 transition-all flex items-center group">
                             <i id="scan-icon" class="fa-solid fa-arrow-right mr-2"></i>
                             <span id="scan-btn-text">Open Action Center</span>
@@ -153,7 +153,7 @@
                     <div class="glass-card rounded-xl p-6">
                         <div class="flex items-center text-dark-text mb-4">
                             <i class="fa-solid fa-server w-6 text-blue-400"></i>
-                            <h3 class="font-medium">Brokers listed</h3>
+                            <h3 class="font-medium">Sites listed</h3>
                         </div>
                         <p class="text-3xl font-bold text-white" id="stat-total-brokers">0</p>
                     </div>
@@ -243,7 +243,7 @@
                 <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                     <div>
                         <h2 class="text-2xl font-bold text-white mb-2">Action Center</h2>
-                        <p class="text-dark-text">Check each broker yourself, then send a removal request. Statuses are only what you mark — this page does not claim to have found or removed anything.</p>
+                        <p class="text-dark-text">Check each site yourself, then send a removal request. Statuses are only what you mark — this page does not claim to have found or removed anything.</p>
                     </div>
                     <div class="flex items-center gap-2 flex-wrap">
                         <div class="px-3 py-1.5 rounded-md bg-dark-border/50 border border-dark-border text-xs flex items-center">
@@ -258,7 +258,11 @@
                     </div>
                 </div>
 
-                <div class="glass-card rounded-2xl overflow-hidden border border-dark-border">
+                <div class="mb-3">
+                    <h3 class="text-lg font-semibold text-white">Data brokers</h3>
+                    <p class="text-dark-text text-xs mt-1" id="broker-section-count"></p>
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden border border-dark-border mb-10">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
                             <thead class="bg-dark-surface border-b border-dark-border">
@@ -270,6 +274,29 @@
                                 </tr>
                             </thead>
                             <tbody id="broker-table-body" class="divide-y divide-dark-border bg-dark-bg/50">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="text-lg font-semibold text-white">Social media &amp; search results</h3>
+                    <p class="text-dark-text text-sm mt-1">Official tools from Google, Bing, and major platforms. This page does not check or delete anything for you.</p>
+                    <p class="text-dark-text text-xs mt-1" id="social-section-count"></p>
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden border border-dark-border">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-dark-surface border-b border-dark-border">
+                                <tr>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider">Site</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider">Category</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider text-right">Action Required</th>
+                                </tr>
+                            </thead>
+                            <tbody id="social-table-body" class="divide-y divide-dark-border bg-dark-bg/50">
                                 <!-- Populated by JS -->
                             </tbody>
                         </table>
@@ -293,12 +320,58 @@
             { id: 3, name: "Radaris", type: "Background Check", checkUrl: "https://radaris.com/", method: null, target: null, note: "This site is no longer operating. The domain was transferred by court order.", status: "unchecked" },
             { id: 4, name: "Acxiom", type: "Marketing Data", checkUrl: "https://www.acxiom.com/optout/", method: "url", target: "https://www.acxiom.com/optout/", status: "unchecked" },
             { id: 5, name: "MyLife", type: "Reputation Platform", checkUrl: "https://www.mylife.com/", method: "url", target: "https://www.mylife.com/privacyrequest", status: "unchecked" },
-            { id: 6, name: "BeenVerified", type: "Background Check", checkUrl: "https://www.beenverified.com/", method: "url", target: "https://www.beenverified.com/app/optout/search", status: "unchecked" },
-            { id: 7, name: "Intelius", type: "People Search", checkUrl: "https://www.intelius.com/", method: "url", target: "https://www.intelius.com/opt-out/", status: "unchecked" },
+            { id: 6, name: "BeenVerified", type: "Background Check", checkUrl: "https://www.beenverified.com/", method: "url", target: "https://www.beenverified.com/app/optout/search", note: "BeenVerified family. Each brand has its own opt-out form; a request on one site does not automatically cover the others.", status: "unchecked" },
+            { id: 7, name: "Intelius", type: "People Search", checkUrl: "https://www.intelius.com/", method: "url", target: "https://www.intelius.com/opt-out/", note: "PeopleConnect family. One request at suppression.peopleconnect.us can cover Intelius, TruthFinder, Instant Checkmate, and US Search.", status: "unchecked" },
             { id: 8, name: "Nuwber", type: "Data Aggregator", checkUrl: "https://nuwber.com/", method: "url", target: "https://nuwber.com/removal/link", status: "unchecked" },
-            { id: 9, name: "TruthFinder", type: "Background Check", checkUrl: "https://www.truthfinder.com/", method: "url", target: "https://www.truthfinder.com/opt-out/", status: "unchecked" },
-            { id: 10, name: "PeekYou", type: "People Search", checkUrl: "https://www.peekyou.com/", method: null, target: null, note: "This site is no longer operating. The domain was transferred by court order.", status: "unchecked" }
+            { id: 9, name: "TruthFinder", type: "Background Check", checkUrl: "https://www.truthfinder.com/", method: "url", target: "https://www.truthfinder.com/opt-out/", note: "PeopleConnect family. One request at suppression.peopleconnect.us can cover Intelius, TruthFinder, Instant Checkmate, and US Search.", status: "unchecked" },
+            { id: 10, name: "PeekYou", type: "People Search", checkUrl: "https://www.peekyou.com/", method: null, target: null, note: "This site is no longer operating. The domain was transferred by court order.", status: "unchecked" },
+            { id: 11, name: "FastPeopleSearch", type: "People Search", checkUrl: "https://www.fastpeoplesearch.com/", method: "url", target: "https://www.fastpeoplesearch.com/removal", note: "Often operated with TruePeopleSearch. Submit a request on each site.", status: "unchecked" },
+            { id: 12, name: "TruePeopleSearch", type: "People Search", checkUrl: "https://www.truepeoplesearch.com/", method: "url", target: "https://www.truepeoplesearch.com/removal", note: "Often operated with FastPeopleSearch. Submit a request on each site.", status: "unchecked" },
+            { id: 13, name: "ThatsThem", type: "People Search", checkUrl: "https://thatsthem.com/", method: "url", target: "https://thatsthem.com/optout", status: "unchecked" },
+            { id: 14, name: "USPhonebook", type: "People Search", checkUrl: "https://www.usphonebook.com/", method: "url", target: "https://www.usphonebook.com/opt-out", status: "unchecked" },
+            { id: 15, name: "PeopleFinders", type: "People Search", checkUrl: "https://www.peoplefinders.com/", method: "url", target: "https://www.peoplefinders.com/opt-out", status: "unchecked" },
+            { id: 16, name: "Instant Checkmate", type: "Background Check", checkUrl: "https://www.instantcheckmate.com/", method: "url", target: "https://www.instantcheckmate.com/opt-out/", note: "PeopleConnect family. One request at suppression.peopleconnect.us can cover Intelius, TruthFinder, Instant Checkmate, and US Search.", status: "unchecked" },
+            { id: 17, name: "US Search", type: "People Search", checkUrl: "https://www.ussearch.com/", method: "url", target: "https://www.ussearch.com/opt-out/", note: "PeopleConnect family. One request at suppression.peopleconnect.us can cover Intelius, TruthFinder, Instant Checkmate, and US Search.", status: "unchecked" },
+            { id: 18, name: "ZabaSearch", type: "People Search", checkUrl: "https://www.zabasearch.com/", method: "url", target: "https://www.zabasearch.com/optout", note: "Related to the PeopleConnect family. Use this site's own opt-out page; do not assume a request for Intelius or TruthFinder also covers ZabaSearch.", status: "unchecked" },
+            { id: 19, name: "PeopleLooker", type: "People Search", checkUrl: "https://www.peoplelooker.com/", method: "url", target: "https://www.peoplelooker.com/optout", note: "BeenVerified family. Each brand has its own opt-out form; a request on one site does not automatically cover the others.", status: "unchecked" },
+            { id: 20, name: "CheckPeople", type: "Background Check", checkUrl: "https://checkpeople.com/", method: "url", target: "https://checkpeople.com/opt-out", status: "unchecked" },
+            { id: 21, name: "SearchPeopleFree", type: "People Search", checkUrl: "https://www.searchpeoplefree.com/", method: "url", target: "https://www.searchpeoplefree.com/opt-out", status: "unchecked" },
+            { id: 22, name: "Advanced Background Checks", type: "Background Check", checkUrl: "https://www.advancedbackgroundchecks.com/", method: "url", target: "https://www.advancedbackgroundchecks.com/opt-out", status: "unchecked" },
+            { id: 23, name: "Locate Family", type: "People Search", checkUrl: "https://www.locatefamily.com/", method: "url", target: "https://www.locatefamily.com/removal.html", status: "unchecked" },
+            { id: 24, name: "FamilyTreeNow", type: "People Search", checkUrl: "https://www.familytreenow.com/", method: "url", target: "https://www.familytreenow.com/optout", status: "unchecked" },
+            { id: 25, name: "SmartBackgroundChecks", type: "Background Check", checkUrl: "https://www.smartbackgroundchecks.com/", method: "url", target: "https://www.smartbackgroundchecks.com/remove", status: "unchecked" },
+            { id: 26, name: "CyberBackgroundChecks", type: "Background Check", checkUrl: "https://www.cyberbackgroundchecks.com/", method: "url", target: "https://www.cyberbackgroundchecks.com/removal", status: "unchecked" },
+            { id: 27, name: "InfoTracer", type: "Public Records", checkUrl: "https://infotracer.com/", method: "url", target: "https://infotracer.com/optout/", status: "unchecked" },
+            { id: 28, name: "SpyDialer", type: "People Search", checkUrl: "https://www.spydialer.com/", method: "url", target: "https://www.spydialer.com/optout", status: "unchecked" },
+            { id: 29, name: "Persopo", type: "People Search", checkUrl: "https://persopo.com/", method: "url", target: "https://persopo.com/opt-out.html", status: "unchecked" },
+            { id: 30, name: "Pipl", type: "Data Aggregator", checkUrl: "https://pipl.com/", method: "url", target: "https://pipl.com/personal-information-removal-request", status: "unchecked" },
+            { id: 31, name: "LexisNexis", type: "Marketing Data", checkUrl: "https://risk.lexisnexis.com/", method: "url", target: "https://consumer.risk.lexisnexis.com/opt", note: "Consumer opt-out for marketing, prescreen lists, and eligible safety suppressions. This is not a public people-search site.", status: "unchecked" },
+            { id: 32, name: "Epsilon", type: "Marketing Data", checkUrl: "https://www.epsilon.com/", method: "url", target: "https://www.epsilon.com/consumer-knowledge-center/marketing-data-summary-request", status: "unchecked" },
+            { id: 33, name: "FastBackgroundCheck", type: "Background Check", checkUrl: "https://www.fastbackgroundcheck.com/", method: "url", target: "https://www.fastbackgroundcheck.com/removal", status: "unchecked" },
+            { id: 34, name: "Ownerly", type: "Property Search", checkUrl: "https://www.ownerly.com/", method: "url", target: "https://www.ownerly.com/optout", note: "BeenVerified family. Each brand has its own opt-out form; a request on one site does not automatically cover the others.", status: "unchecked" },
+            { id: 35, name: "NeighborWho", type: "Property Search", checkUrl: "https://www.neighborwho.com/", method: "url", target: "https://www.neighborwho.com/optout", note: "BeenVerified family. Each brand has its own opt-out form; a request on one site does not automatically cover the others.", status: "unchecked" }
         ];
+
+
+        const socialItems = [
+            { id: 101, name: "Google Refresh Outdated Content", type: "Search results", checkUrl: "https://search.google.com/search-console/remove-outdated-content", method: "url", target: "https://search.google.com/search-console/remove-outdated-content", note: "For deleted posts still showing in Google, paste the URL.", status: "unchecked" },
+            { id: 102, name: "Google Results about you", type: "Search results", checkUrl: "https://myactivity.google.com/results-about-you", method: "url", target: "https://myactivity.google.com/results-about-you", status: "unchecked" },
+            { id: 103, name: "Bing Content Removal", type: "Search results", checkUrl: "https://www.bing.com/webmasters/tools/contentremoval", method: "url", target: "https://www.bing.com/webmasters/tools/contentremoval", note: "Sign in with a Microsoft account. Use this for dead or outdated pages still showing in Bing.", status: "unchecked" },
+            { id: 104, name: "Reddit", type: "Social media", checkUrl: "https://support.reddithelp.com/hc/en-us/articles/360043483071-How-do-I-delete-a-post", method: "url", target: "https://support.reddithelp.com/hc/en-us/articles/360043483071-How-do-I-delete-a-post", note: "Editing a post is not deleting it. Delete the post itself. Deleting your account does not remove existing posts or comments, so delete those first. Mirror and archive sites need separate requests. Account deletion: https://support.reddithelp.com/hc/en-us/articles/204579509-How-do-I-delete-my-account Data request: https://www.reddit.com/settings/data-request", status: "unchecked" },
+            { id: 105, name: "Facebook", type: "Social media", checkUrl: "https://www.facebook.com/help/302796099745838", method: "url", target: "https://www.facebook.com/help/224562897555674", note: "Download a copy of your information first if you want to keep it. Account deletion is handled in Accounts Center.", status: "unchecked" },
+            { id: 106, name: "Instagram", type: "Social media", checkUrl: "https://help.instagram.com/181231772500920", method: "url", target: "https://help.instagram.com/139886812848894", note: "You can export a copy of your information from Accounts Center before deleting your profile.", status: "unchecked" },
+            { id: 107, name: "X", type: "Social media", checkUrl: "https://help.x.com/en/managing-your-account/accessing-your-x-data", method: "url", target: "https://help.x.com/en/managing-your-account/how-to-deactivate-x-account", note: "You can download your data first from X settings.", status: "unchecked" },
+            { id: 108, name: "TikTok", type: "Social media", checkUrl: "https://support.tiktok.com/en/account-and-privacy/personalized-ads-and-data/requesting-your-data", method: "url", target: "https://support.tiktok.com/en/account-and-privacy/account-information/deactivating-and-deleting", note: "Download your data first if you want a copy, then follow TikTok's deactivate or delete steps.", status: "unchecked" },
+            { id: 109, name: "LinkedIn", type: "Social media", checkUrl: "https://www.linkedin.com/help/linkedin/answer/a1339364", method: "url", target: "https://www.linkedin.com/help/linkedin/answer/a1379064", note: "Download a copy of your data first if you want to keep it, then use the close-account steps.", status: "unchecked" }
+        ];
+
+        function allItems() {
+            return brokers.concat(socialItems);
+        }
+
+        function findItem(id) {
+            return allItems().find(item => item.id === id);
+        }
 
         function migrateStatus(saved) {
             if (saved === 'requested' || saved === 'confirmed' || saved === 'unchecked') return saved;
@@ -307,8 +380,8 @@
         }
 
         const savedStatuses = JSON.parse(localStorage.getItem('cleardata_statuses') || '{}');
-        brokers.forEach(b => {
-            if (savedStatuses[b.id]) b.status = migrateStatus(savedStatuses[b.id]);
+        allItems().forEach(item => {
+            if (savedStatuses[item.id]) item.status = migrateStatus(savedStatuses[item.id]);
         });
 
         // --- Initialization ---
@@ -317,6 +390,7 @@
             updateProfileIndicator();
             updateStats();
             renderBrokerTable();
+            renderSocialTable();
         }
 
         // --- Tab Switching ---
@@ -386,32 +460,43 @@
 
         function persistStatuses() {
             const statuses = {};
-            brokers.forEach(b => statuses[b.id] = b.status);
+            allItems().forEach(item => statuses[item.id] = item.status);
             localStorage.setItem('cleardata_statuses', JSON.stringify(statuses));
         }
 
-        function setBrokerStatus(broker, status) {
-            broker.status = status;
+        function setBrokerStatus(item, status) {
+            item.status = status;
             persistStatuses();
             updateStats();
             renderBrokerTable();
+            renderSocialTable();
+        }
+
+        function countRequested(list) {
+            return list.filter(item => item.status === 'requested' || item.status === 'confirmed').length;
         }
 
         // --- Stats ---
         function updateStats() {
-            const requested = brokers.filter(b => b.status === 'requested' || b.status === 'confirmed').length;
-            const confirmed = brokers.filter(b => b.status === 'confirmed').length;
-            document.getElementById('stat-total-brokers').textContent = brokers.length;
+            const items = allItems();
+            const requested = countRequested(items);
+            const confirmed = items.filter(item => item.status === 'confirmed').length;
+            document.getElementById('stat-total-brokers').textContent = items.length;
             document.getElementById('stat-requested').textContent = requested;
             document.getElementById('stat-confirmed').textContent = confirmed;
 
-            const percent = brokers.length ? Math.round((requested / brokers.length) * 100) : 0;
+            const percent = items.length ? Math.round((requested / items.length) * 100) : 0;
             document.getElementById('scan-percentage').textContent = percent + '%';
             document.getElementById('scan-progress-ring').style.strokeDashoffset = String(100 - percent);
             const status = document.getElementById('scan-status-text');
             if (requested === 0) status.textContent = 'No requests sent';
-            else if (requested === brokers.length) status.textContent = 'All requests sent';
-            else status.textContent = requested + ' of ' + brokers.length + ' requests sent';
+            else if (requested === items.length) status.textContent = 'All requests sent';
+            else status.textContent = requested + ' of ' + items.length + ' requests sent';
+
+            const brokerCount = document.getElementById('broker-section-count');
+            const socialCount = document.getElementById('social-section-count');
+            if (brokerCount) brokerCount.textContent = countRequested(brokers) + ' of ' + brokers.length + ' broker requests sent';
+            if (socialCount) socialCount.textContent = countRequested(socialItems) + ' of ' + socialItems.length + ' social and search requests sent';
         }
 
         function escapeHtml(value) {
@@ -422,12 +507,21 @@
                 .replace(/"/g, '&quot;');
         }
 
-        // --- Broker Table ---
+        // --- Tables ---
         function renderBrokerTable() {
-            const tbody = document.getElementById('broker-table-body');
+            renderItemTable(brokers, 'broker-table-body');
+        }
+
+        function renderSocialTable() {
+            renderItemTable(socialItems, 'social-table-body');
+        }
+
+        function renderItemTable(list, tbodyId) {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
             tbody.innerHTML = '';
 
-            brokers.forEach(broker => {
+            list.forEach(broker => {
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-dark-border/20 transition-colors';
 
@@ -468,7 +562,7 @@
 
         // --- Action Handler ---
         function handleAction(id) {
-            const broker = brokers.find(b => b.id === id);
+            const broker = findItem(id);
             if (!broker || !broker.method || !broker.target) return;
 
             if (broker.method === 'url') {
@@ -500,7 +594,7 @@
         }
 
         function markConfirmed(id) {
-            const broker = brokers.find(b => b.id === id);
+            const broker = findItem(id);
             if (!broker) return;
             setBrokerStatus(broker, 'confirmed');
             showToast(broker.name + ' marked as Confirmed removed. This is your own confirmation, not a check by this tool.', 'success');
