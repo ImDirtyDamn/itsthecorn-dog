@@ -570,7 +570,7 @@
   .det-row #dock-det { flex: 1 1 auto; }
   .det-row .notes { flex: 0 0 auto; width: auto; }
   .det-row .notes[hidden] { display: none; }
-  /* LOG COIL is one tap: the card's average weight, else the last coil's weight (asks once when neither is known) */
+  /* LOG COIL is one tap at the job card's average weight; card blank = a popup asks (this coil's weight, or fill out the job card) */
   .dock-row.one, .dock .dock-row.one { grid-template-columns: minmax(0, 1fr); }
   .dock-row.one .btn, .dock .dock-row.one .btn { width: 100%; min-height: 4rem; height: auto; font-size: 1.3rem; letter-spacing: 0.08em; }
   .dock-row.one .btn.has-prog { max-width: none; }
@@ -584,6 +584,8 @@
   .wt-box h3 { margin: 0 0 0.4rem; color: var(--white); letter-spacing: 0.06em; font-size: 1.05rem; }
   .wt-box .in { width: 100%; height: 3.5rem; font-size: 1.5rem; }
   .wt-box .row2 { margin-top: 0.75rem; }
+  .wt-col { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
+  .wt-col .btn { width: 100%; min-height: 3.5rem; font-size: 1.05rem; letter-spacing: 0.05em; }
   .card-avg { color: var(--fg-dim); font-size: 0.9rem; margin: -0.3rem 0 0.8rem; min-height: 1em; }
   .card-avg.amber { color: var(--amber); }
   .det-row .det-btn { margin: 0; }
@@ -3196,7 +3198,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     ["dock-log", "s-log-btn"].forEach(function (id) {
       var b = $(id); if (!b) return;
       var wf = id === "dock-log" && m ? weightFor(m.id) : null;
-      var wt = wf ? fmtLb(wf.w) + " lbs" + (wf.src === "card" ? " (card avg)" : " (last coil)") : id === "dock-log" ? "tap to enter the weight" : "";
+      var wt = wf ? fmtLb(wf.w) + " lbs (card avg)" : id === "dock-log" ? "job card is blank" : "";
       var key = (pr ? pr.t + (pr.over ? "!" : "") : "") + "|" + wt;
       if (b._prog === key) return;
       b._prog = key; b.textContent = "LOG COIL";
@@ -3207,18 +3209,17 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       else b.removeAttribute("aria-label");
     });
   }
-  // the weight LOG COIL logs on a machine: the card's average (card total ÷ coils, or the avg typed on the card),
-  // else the last coil logged on that machine, else the last coil logged this shift. null = not known yet (ask once).
+  // the weight LOG COIL logs in one tap: the job card's average (card total ÷ coils, or the avg typed on the card).
+  // null = the job card is blank: LOG COIL asks (enter this coil's weight, or fill out the job card)
   function weightFor(mid) {
     var d = (state.shift.details || {})[mid];
-    if (d && d.avg > 0) return { w: d.avg, src: "card" };
-    var last = null, any = null;
-    state.coils.forEach(function (c) {
-      if (!any || Date.parse(c.loggedAt) >= Date.parse(any.loggedAt)) any = c;
-      if (c.machineId === mid && (!last || Date.parse(c.loggedAt) >= Date.parse(last.loggedAt))) last = c;
-    });
-    var c = last || any;
-    return c ? { w: c.weight, src: "last" } : null;
+    return d && d.avg > 0 ? { w: d.avg, src: "card" } : null;
+  }
+  // the last coil logged on this draw (only used to prefill the weight box)
+  function lastCoilOn(mid) {
+    var last = null;
+    state.coils.forEach(function (c) { if (c.machineId === mid && (!last || Date.parse(c.loggedAt) >= Date.parse(last.loggedAt))) last = c; });
+    return last;
   }
   // NEW CARD: the card screen opens empty; the old card stays until something is typed
   function openNewCard() { var m = detMachine(); if (!m) return; if (sheetKind) closeSheet(); sheetFresh = true; openSheet("details", m.id); }
@@ -3368,24 +3369,47 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }
     sizeDock();
   }
-  // LOG COIL: one tap at the weight already known (see weightFor). Nothing known yet: ask once for the weight.
+  // LOG COIL: one tap at the job card's average weight. Card blank: ask every tap (enter this coil's weight, or fill out the job card).
   function dockLog() {
     var m = machineById(dockSel) || state.machines[0];
     if (!m) return;
     var wf = weightFor(m.id);
-    if (!wf) { askWeight(m); return; }
+    if (!wf) { askBlankCard(m); return; }
     guardEnded(function () { dockMsg(""); addCoil(m.id, wf.w, null, wf.src); });   // big LOGGED readback + 12 s UNDO on top of the dock
   }
-  // first coil with no card weight: a small popup asks for the weight (the 3,000 to 6,000 lbs check applies),
-  // logs the coil, and from then on LOG COIL reuses it
-  function askWeight(m) {
+  function wtBox() {
     var box = $("wt-ask");
     if (!box) { box = el("div", "wt-ask"); box.id = "wt-ask"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-labelledby", "wt-title"); document.body.appendChild(box); }
-    box.textContent = "";
+    box.textContent = ""; box.hidden = false;
+    return box;
+  }
+  function wtClose() { var box = $("wt-ask"); if (box) { box.hidden = true; box.textContent = ""; } try { $("dock-log").focus(); } catch (e) {} }
+  // job card blank: say so, then ENTER THIS COIL'S WEIGHT, FILL OUT JOB CARD, or CANCEL
+  function askBlankCard(m) {
+    var box = wtBox(), inner = el("div", "wt-box");
+    var h = el("h3", null, "YOUR JOB CARD IS BLANK" + (state.machines.length > 1 ? " · " + m.name.toUpperCase() : "")); h.id = "wt-title"; inner.appendChild(h);
+    inner.appendChild(el("p", "sub", "There is no card weight to log this coil with. Enter this coil's weight, or fill out the job card so every LOG COIL uses card total ÷ coils."));
+    var col = el("div", "wt-col");
+    var bw = el("button", "btn solid", "ENTER THIS COIL'S WEIGHT"); bw.type = "button"; bw.id = "bc-weight";
+    var bc = el("button", "btn", "FILL OUT JOB CARD"); bc.type = "button"; bc.id = "bc-card";
+    var bx = el("button", "btn", "CANCEL"); bx.type = "button"; bx.id = "bc-cancel";
+    col.appendChild(bw); col.appendChild(bc); col.appendChild(bx); inner.appendChild(col);
+    box.appendChild(inner);
+    bw.addEventListener("click", function () { askWeight(m); });
+    bc.addEventListener("click", function () { wtClose(); if (sheetKind) closeSheet(); openSheet("details", m.id); });
+    bx.addEventListener("click", wtClose);
+    box.addEventListener("click", function (e) { if (e.target === box) wtClose(); });
+    box.addEventListener("keydown", function (e) { if (e.key === "Escape") wtClose(); });
+    setTimeout(function () { try { bw.focus(); } catch (e) {} }, 50);
+  }
+  // weight for this coil only (the 3,000 to 6,000 lbs check applies); prefilled with the last coil on this draw
+  function askWeight(m) {
+    var box = wtBox();
     var inner = el("div", "wt-box");
     var h = el("h3", null, "COIL WEIGHT (LBS)" + (state.machines.length > 1 ? " · " + m.name.toUpperCase() : "")); h.id = "wt-title"; inner.appendChild(h);
-    inner.appendChild(el("p", "sub", "No weight yet. Type this coil's weight once; LOG COIL uses it after that. A card's average weight (MORE OPTIONS, THIS CARD) takes over when set."));
-    var inp = input("text", "wt-in", "", { inputmode: "decimal", placeholder: "Weight (lbs)", autocomplete: "off", enterkeyhint: "done", "aria-label": "Coil weight in lbs" });
+    var lc = lastCoilOn(m.id);
+    inner.appendChild(el("p", "sub", "Logs this coil only." + (lc ? " Filled in with your last coil on " + m.name + "; change it if this one is different." : "")));
+    var inp = input("text", "wt-in", lc ? String(lc.weight) : "", { inputmode: "decimal", placeholder: "Weight (lbs)", autocomplete: "off", enterkeyhint: "done", "aria-label": "Coil weight in lbs" });
     inner.appendChild(inp);
     var err = el("p", "err"); err.id = "wt-err"; inner.appendChild(err);
     var row = el("div", "row2");
@@ -3393,7 +3417,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var go = el("button", "btn solid", "LOG COIL"); go.type = "button"; go.id = "wt-go";
     row.appendChild(cancel); row.appendChild(go); inner.appendChild(row);
     box.appendChild(inner); box.hidden = false;
-    var close = function () { box.hidden = true; box.textContent = ""; try { $("dock-log").focus(); } catch (e) {} };
+    var close = wtClose;
     var submit = function () {
       checkCoilWeight(inp.value, inp, function (msg) { setText(err, msg); }, function (w) {
         close(); guardEnded(function () { dockMsg(""); addCoil(m.id, w); });
@@ -3404,7 +3428,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); submit(); } if (e.key === "Escape") close(); });
     inp.addEventListener("input", function () { setText(err, ""); });
     box.addEventListener("click", function (e) { if (e.target === box) close(); });
-    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 50);
+    setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 50);
   }
   // the readback lives in the dock on the phone, right above the weight box
   (function () { var rb = $("readback"), di = document.querySelector("#dock .dock-inner"); if (rb && di) di.insertBefore(rb, di.firstChild); })();
