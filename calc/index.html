@@ -552,7 +552,7 @@ var ProdCalc = (function () {
       if (m.mode === "half") { base = rhu(avail / 2); label = "half shift"; }
       else if (m.mode === "custom" && m.customMin !== null && m.customMin > 0) { base = rhu(m.customMin); label = "set to"; }
       else {
-        if (m.mode === "custom") warnings.push(m.name + ": type how long it ran (like 5:30). Using the full shift for now.");
+        if (m.mode === "custom") warnings.push(m.name + ": type how long it ran (5:30, for example). Using the full shift for now.");
         base = avail; label = "full shift";
       }
       var dm = downFor(dts.filter(function (x) { return x.key === "" || x.key === m.key; }));
@@ -925,7 +925,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var sumOf = function (a) { return a.reduce(function (x, t) { return x + t.v; }, 0); };
     if (cnt.length > 1) return { ok: false, error: "Type the number of coils once." };
     if (cnt.length === 1) {
-      if (!wts.length) return { ok: false, error: "Add the total lbs too, like 12000 lbs 3 coils." };
+      if (!wts.length) return { ok: false, error: "Add the total lbs too, for example 12000 lbs 3 coils." };
       return { ok: true, mode: "total", total: sumOf(wts), count: cnt[0].v, weights: wts.length > 1 ? wts.map(function (t) { return t.v; }) : null };
     }
     if (toks.length === 2 && (div || (Number.isInteger(toks[1].v) && toks[1].v <= 60 && toks[0].v >= toks[1].v * 10)))
@@ -941,10 +941,10 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (!tT && !cT && !rT) return { ok: false, error: "" };
     var t = plainNum(tT), c = plainNum(cT), rn = rT ? plainNum(rT) : null;
     if (!tT) return { ok: false, error: "Enter the card total weight in lbs." };
-    if (t === null || !(t > 0)) return { ok: false, error: "Card total weight: enter the weight in lbs as a plain number over 0, like 22895." };
+    if (t === null || !(t > 0)) return { ok: false, error: "Card total weight: enter the weight in lbs as a plain number over 0, for example 22895." };
     if (t >= 1e7) return { ok: false, error: "Card total weight: " + P.fmtInt(t) + " lbs is too big for one card. Check the number." };
     if (!cT) return { ok: false, error: "Enter how many coils are on the card." };
-    if (c === null || !(c > 0) || c % 1) return { ok: false, error: "Coils on card: enter a whole number over 0, like 5." };
+    if (c === null || !(c > 0) || c % 1) return { ok: false, error: "Coils on card: enter a whole number over 0, for example 5." };
     if (c > 200) return { ok: false, error: "Coils on card: " + P.fmtNum(c) + " is more than one card holds. Check the number." };
     if (rT && (rn === null || !(rn > 0) || rn % 1)) return { ok: false, error: "Coils ran: enter a whole number over 0, or leave it blank for just the average." };
     return { ok: true, total: t, count: c, ran: rT ? rn : null };
@@ -966,8 +966,8 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   }
   function renderAvg() {
     app.innerHTML = '<h2>Average coil weight</h2><p class="muted">Type the card total weight and how many coils are on the card. Add how many you ran for the weight off a partial card, and to send them to your tracker.</p>' +
-      '<div class="panel">' + qfield("Card total weight (lbs)", "a-tot", Q.tot, "like 22895", "decimal") +
-      '<div class="row2">' + qfield("Coils on card", "a-coils", Q.coils, "like 5", "numeric") +
+      '<div class="panel">' + qfield("Card total weight (lbs)", "a-tot", Q.tot, "22895", "decimal") +
+      '<div class="row2">' + qfield("Coils on card", "a-coils", Q.coils, "5", "numeric") +
       qfield("Coils ran", "a-ran", Q.ran, "optional", "numeric") + '</div>' +
       '<p class="sub">Leave coils ran blank for just the average.</p>' +
       '<p class="calc-note" id="a-note" aria-live="polite"></p></div>' +
@@ -1113,7 +1113,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function rateResult() {
     var lbs = readLbs(Q.lbs), mins = readLbs(Q.min), hm = P.parseHm(Q.hrs);
     if (!Q.hrs.trim() && !Q.lbs.trim()) return { ok: false, error: "" };
-    if (hm === null || !(hm > 0)) return { ok: false, error: "Type the hours worked, like 8 or 7:30." };
+    if (hm === null || !(hm > 0)) return { ok: false, error: "Type the hours worked, for example 8 or 7:30." };
     if (hm > 24 * 60) return { ok: false, error: "Hours worked is more than 24. Check it." };
     if (!lbs.length) return { ok: false, error: "Type the lbs you produced." };
     var total = lbs.reduce(function (a, b) { return a + b; }, 0);
@@ -1130,7 +1130,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
   function renderRate() {
     app.innerHTML = '<h2>Production rate</h2><p class="muted">Your lbs per hour for the time you worked.</p>' +
       '<div class="panel">' + qfield("Hours worked", "r-hrs", Q.hrs, "8 or 7:30", "numeric", "", "hm") + qfield("Lbs produced", "r-lbs", Q.lbs, "lbs") +
-      qfield("Downtime / breaks", "r-min", Q.min, "optional, like 30 or 15 30", "numeric", "Time not running, all added up. Leave it blank if the hours above are already run time.", "min") +
+      qfield("Downtime / breaks", "r-min", Q.min, "optional, 30 or 15 30", "numeric", "Time not running, all added up. Leave it blank if the hours above are already run time.", "min") +
       '<p class="calc-note" id="r-note" aria-live="polite"></p></div><div id="r-out"></div>' +
       '<button id="q-home" type="button" class="big ghost" style="margin-top:12px">&larr; HOME</button>';
     [["r-hrs", "hrs"], ["r-lbs", "lbs"], ["r-min", "min"]].forEach(function (x) { $(x[0]).addEventListener("input", function (e) { Q[x[1]] = e.target.value; rateOut(); }); });
@@ -1214,7 +1214,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     html += '<button class="big" id="add-row" type="button">+ ADD CARD</button>';
     html += '<details style="margin-top:14px"><summary>+ Top of the sheet (name, date, shift)</summary><div class="panel">' +
       field("Name", "h-name", S.name, "your name", 'inputmode="text"') + '<div class="grid2">' +
-      field("Date", "h-date", S.date, "date", 'inputmode="text"') + field("Shift", "h-shift", S.shift, "shift, like 6a-4p", 'inputmode="text"') + '</div></div></details>';
+      field("Date", "h-date", S.date, "date", 'inputmode="text"') + field("Shift", "h-shift", S.shift, "6a-4p", 'inputmode="text"') + '</div></div></details>';
     return html;
   }
   function rowLive(i) {
@@ -1394,7 +1394,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         '<div class="grid2">' + field("Time down", "d" + i + "-min", d.minutes, "minutes down", 'inputmode="numeric" data-hm="min"' + (timed ? " readonly" : "")) +
         '<div class="f"><label for="d' + i + '-mach">Machine</label><select id="d' + i + '-mach">' + (d.machine ? "" : '<option value="">Pick a draw</option>') +
         dChoices.concat(d.machine && dChoices.indexOf(d.machine) < 0 ? [d.machine] : []).map(function (n) { return '<option' + (d.machine === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>' + (d.machine ? "" : '<span class="calc-note" id="d' + i + '-mpick" style="color:var(--amber)">Pick which draw was down.</span>') + '</div></div>' +
-        field("Reason", "d" + i + "-reason", d.reason, "what happened, like die change", 'inputmode="text" list="reasons"') +
+        field("Reason", "d" + i + "-reason", d.reason, "die change", 'inputmode="text" list="reasons"') +
         '<button type="button" class="warn" style="width:100%" data-deldown="' + i + '">REMOVE DOWNTIME</button></div>';
     });
     html += '<button class="big" id="add-down" type="button">+ ADD DOWNTIME</button>';
@@ -1474,7 +1474,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         html += '<span class="lbl">How long it ran</span><div class="runchoice">' + [["all", "Full shift"], ["half", "Half shift"], ["custom", "Set hours"]].map(function (m) {
           return '<button type="button" data-mode="' + si + '" data-m="' + m[0] + '" class="' + (sl.mode === m[0] ? "on" : "") + '">' + m[1] + '</button>';
         }).join("") + '</div>';
-        if (sl.mode === "custom") html += field("Hours it ran", "s" + si + "-min", sl.minutes, "hours, like 5:30", 'inputmode="numeric" data-hm="hm"');
+        if (sl.mode === "custom") html += field("Hours it ran", "s" + si + "-min", sl.minutes, "5:30", 'inputmode="numeric" data-hm="hm"');
       }
       if (moved) {
         html += timeline(sl, si);
@@ -1584,7 +1584,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     if (r.warnings.length) html += '<b style="color:var(--amber);display:block;margin-top:12px">Still to fix:</b><ul class="warnbox">' + r.warnings.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") + '</ul>';
     html += '<h2' + (r.status === "notmet" ? ' style="color:var(--red)"' : "") + '>Problems and downtime</h2><div class="panel">' +
       (r.problems.length ? '<ul style="padding-left:20px;margin:0;color:var(--white);line-height:1.45">' + r.problems.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : '<p class="muted" style="margin:0">None entered. Add downtime on the Time screen.</p>') +
-      '<div class="f" style="margin-top:12px"><label for="maint">Maintenance issues to follow up on</label><textarea id="maint" placeholder="maintenance issues, like leaking hose">' + esc(S.maintenance) + '</textarea></div></div>';
+      '<div class="f" style="margin-top:12px"><label for="maint">Maintenance issues to follow up on</label><textarea id="maint" placeholder="leaking hose">' + esc(S.maintenance) + '</textarea></div></div>';
     html += '<button class="big solid" id="to-sheet" type="button" style="margin-top:8px">COPY TO SHEET VIEW (BIG TEXT)</button>';
     html += '<button class="big warn" id="new-shift" type="button" style="margin-top:22px">START A NEW SHIFT (CLEAR ALL)</button>';
     return html;

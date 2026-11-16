@@ -432,7 +432,7 @@
 
     var full = !o.coilsOnly;   // coilsOnly: just the cards (the average coil weight tool)
     if (full) h += '<h3>Top of the sheet</h3><div class="panel">' + tbox("name", "Name", s.name, "your name") +
-      '<div class="grid2">' + tbox("date", "Date", s.date, "date") + tbox("shift", "Shift", s.shift, "shift, like 1st") + '</div>' +
+      '<div class="grid2">' + tbox("date", "Date", s.date, "date") + tbox("shift", "Shift", s.shift, "1st") + '</div>' +
       '<div class="row2">' + clockbox("shift_start", "Shift start", s.shift_start) + clockbox("shift_end", "Shift end", s.shift_end) + '</div>' +
       (o.endNote ? '<p class="sub" style="margin-top:-8px">' + o.endNote + '</p>' : "") + '</div>';
 
@@ -455,7 +455,7 @@
       var p = "coils." + i;
       h += '<div class="card"><div class="cardhead"><b>CARD ' + (i + 1) + '</b>' + xbtn("c", i, "card " + (i + 1)) + '</div>' +
         tbox(p + ".card", "Card #", r.card, "card number", "text") +
-        '<div class="grid2">' + avgbox(i, r) + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "like 3 or 3=6", "text") + '</div>' +
+        '<div class="grid2">' + avgbox(i, r) + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "3 or 3=6", "text") + '</div>' +
         '<div class="grid2">' + tbox(p + ".weight", full ? "Weight (lbs)" : "Weight (lbs, card total)", v(r.weight), full ? "weight" : "upper right", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
         '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
         '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound", "text", ' data-compound="1"') + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
@@ -468,7 +468,7 @@
       h += '<div class="card"><div class="cardhead"><b>DOWNTIME ' + (i + 1) + '</b>' + xbtn("d", i, "downtime " + (i + 1)) + '</div>' +
         '<div class="row2">' + clockbox(p + ".start", "Started at", x.start) + clockbox(p + ".end", "Ended at", x.end) + '</div>' +
         '<div class="grid2">' + tbox(p + ".minutes", "Time down", v(x.minutes), "minutes down", "numeric", ' data-hm="min"') + machbox(p + ".machine", "Machine", x.machine, "Pick a draw") + '</div>' +
-        tbox(p + ".reason", "Reason", x.reason, "what happened, like die change") + '</div>';
+        tbox(p + ".reason", "Reason", x.reason, "die change") + '</div>';
     });
 
     if (full) h += '<h3>Breaks</h3>';

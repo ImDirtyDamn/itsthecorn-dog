@@ -1773,12 +1773,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var ask = "Enter the coil weight in lbs";
     if (!t) { showErr(ask + "."); return; }
     if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^\.\d+$/.test(t)) {
-      showErr(/^\s*[-\u2212]/.test(t) ? "A coil weight can't be negative. " + ask + ", like 4500." :
-        /\d,\d/.test(t) && !/[^\d,.]/.test(t) ? "Check the commas. " + ask + ", like 4,500 or 4500." :
-        ask + " as a plain number, like 4500 or 4,500.5 (no letters, signs or e).");
+      showErr(/^\s*[-\u2212]/.test(t) ? "A coil weight can't be negative. " + ask + ", for example 4500." :
+        /\d,\d/.test(t) && !/[^\d,.]/.test(t) ? "Check the commas. " + ask + ", for example 4,500 or 4500." :
+        ask + " as a plain number, for example 4500 or 4,500.5 (no letters, signs or e).");
       return;
     }
-    if (/\.\d{2,}$/.test(t)) { showErr("Use one decimal place at most, like 4500.5. " + ask + "."); return; }
+    if (/\.\d{2,}$/.test(t)) { showErr("Use one decimal place at most, for example 4500.5. " + ask + "."); return; }
     var clean = t.replace(/,/g, ""), w = parseFloat(clean);
     if (!(w > 0)) { showErr("A coil weight has to be more than 0. " + ask + "."); return; }
     if (w > MAX_COIL_LB) { showErr(fmtLb(w) + " lbs is more than any coil (the limit is " + fmtInt(MAX_COIL_LB) + " lbs). Is that the coil ID? " + ask + "."); return; }
