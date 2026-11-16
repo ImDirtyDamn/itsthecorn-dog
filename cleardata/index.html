@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClearData | Automated Privacy Removal</title>
+    <title>ClearData | Data Broker Opt-Out Helper</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -127,11 +127,11 @@
                     <div class="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
                     
                     <div class="z-10">
-                        <h2 class="text-2xl font-bold text-white mb-2">Automated Privacy Scan</h2>
-                        <p class="text-dark-text mb-4 max-w-lg">We'll scan our database of known data brokers against your profile to find exposed personal information.</p>
-                        <button id="run-scan-btn" onclick="runSimulation()" class="bg-brand hover:bg-brand-hover text-white px-6 py-3 rounded-lg font-medium shadow-lg shadow-brand/20 transition-all flex items-center group">
-                            <i id="scan-icon" class="fa-solid fa-radar mr-2 group-hover:animate-pulse"></i>
-                            <span id="scan-btn-text">Run Deep Scan</span>
+                        <h2 class="text-2xl font-bold text-white mb-2">Check data broker sites</h2>
+                        <p class="text-dark-text mb-4 max-w-lg">This tool does not scan the internet or find your information. Open each broker's public site, check it yourself, then send a removal request if you find a listing.</p>
+                        <button id="run-scan-btn" onclick="switchTab('directory')" class="bg-brand hover:bg-brand-hover text-white px-6 py-3 rounded-lg font-medium shadow-lg shadow-brand/20 transition-all flex items-center group">
+                            <i id="scan-icon" class="fa-solid fa-arrow-right mr-2"></i>
+                            <span id="scan-btn-text">Open Action Center</span>
                         </button>
                     </div>
 
@@ -145,7 +145,7 @@
                                 <span id="scan-percentage" class="text-2xl font-bold text-white">0%</span>
                             </div>
                         </div>
-                        <span id="scan-status-text" class="text-xs text-brand font-medium uppercase tracking-wider">Awaiting Scan</span>
+                        <span id="scan-status-text" class="text-xs text-brand font-medium uppercase tracking-wider">No requests sent</span>
                     </div>
                 </div>
 
@@ -153,23 +153,23 @@
                     <div class="glass-card rounded-xl p-6">
                         <div class="flex items-center text-dark-text mb-4">
                             <i class="fa-solid fa-server w-6 text-blue-400"></i>
-                            <h3 class="font-medium">Brokers Monitored</h3>
+                            <h3 class="font-medium">Brokers listed</h3>
                         </div>
                         <p class="text-3xl font-bold text-white" id="stat-total-brokers">0</p>
                     </div>
-                    <div class="glass-card rounded-xl p-6">
-                        <div class="flex items-center text-dark-text mb-4">
-                            <i class="fa-solid fa-triangle-exclamation w-6 text-red-400"></i>
-                            <h3 class="font-medium">Data Profiles Found</h3>
-                        </div>
-                        <p class="text-3xl font-bold text-white" id="stat-found">0</p>
-                    </div>
                     <div class="glass-card rounded-xl p-6 border-brand/20">
                         <div class="flex items-center text-dark-text mb-4">
-                            <i class="fa-solid fa-shield-check w-6 text-brand"></i>
+                            <i class="fa-solid fa-paper-plane w-6 text-brand"></i>
                             <h3 class="font-medium">Removal Requests Sent</h3>
                         </div>
-                        <p class="text-3xl font-bold text-white" id="stat-removed">0</p>
+                        <p class="text-3xl font-bold text-white" id="stat-requested">0</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-6">
+                        <div class="flex items-center text-dark-text mb-4">
+                            <i class="fa-solid fa-shield-check w-6 text-green-400"></i>
+                            <h3 class="font-medium">Confirmed Removed</h3>
+                        </div>
+                        <p class="text-3xl font-bold text-white" id="stat-confirmed">0</p>
                     </div>
                 </div>
                 
@@ -184,7 +184,7 @@
             <div id="profile" class="tab-content max-w-3xl">
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-white mb-2">Your Privacy Profile</h2>
-                    <p class="text-dark-text">This information is required to format legal removal requests (CCPA/CPRA). It is <strong class="text-white">only saved locally on your device</strong> via localStorage and never sent to our servers.</p>
+                    <p class="text-dark-text">You can save this on your device if you want it handy for opt-out forms. It is <strong class="text-white">only saved locally on your device</strong> via localStorage and never sent to our servers.</p>
                 </div>
 
                 <form id="profile-form" class="glass-card rounded-2xl p-8 space-y-6" onsubmit="saveProfile(event)">
@@ -243,14 +243,17 @@
                 <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                     <div>
                         <h2 class="text-2xl font-bold text-white mb-2">Action Center</h2>
-                        <p class="text-dark-text">Manually request removals or follow direct URL opt-out processes.</p>
+                        <p class="text-dark-text">Check each broker yourself, then send a removal request. Statuses are only what you mark — this page does not claim to have found or removed anything.</p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                         <div class="px-3 py-1.5 rounded-md bg-dark-border/50 border border-dark-border text-xs flex items-center">
-                            <span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span> Data Found
+                            <span class="w-2 h-2 rounded-full bg-gray-500 mr-2"></span> Not checked
                         </div>
                         <div class="px-3 py-1.5 rounded-md bg-dark-border/50 border border-dark-border text-xs flex items-center">
-                            <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Removed
+                            <span class="w-2 h-2 rounded-full bg-amber-400 mr-2"></span> Request sent
+                        </div>
+                        <div class="px-3 py-1.5 rounded-md bg-dark-border/50 border border-dark-border text-xs flex items-center">
+                            <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Confirmed removed
                         </div>
                     </div>
                 </div>
@@ -283,30 +286,30 @@
     <script>
         // --- State & Data Models ---
         let userProfile = {};
-        let hasScanned = localStorage.getItem('cleardata_scanned') === 'true';
-        let removedCount = parseInt(localStorage.getItem('cleardata_removed') || '0');
 
         const brokers = [
-            { id: 1, name: "Whitepages", type: "People Search", method: "url", target: "https://www.whitepages.com/suppression-requests", status: "unscanned", requiresProfile: false },
-            { id: 2, name: "Spokeo", type: "Data Aggregator", method: "url", target: "https://www.spokeo.com/optout", status: "unscanned", requiresProfile: false },
-            { id: 3, name: "Radaris", type: "Background Check", method: "email", target: "customer-service@radaris.com", status: "unscanned", requiresProfile: true },
-            { id: 4, name: "Acxiom", type: "Marketing Data", method: "url", target: "https://isapps.acxiom.com/optout/optout.aspx", status: "unscanned", requiresProfile: false },
-            { id: 5, name: "MyLife", type: "Reputation Platform", method: "email", target: "privacy@mylife.com", status: "unscanned", requiresProfile: true },
-            { id: 6, name: "BeenVerified", type: "Background Check", method: "url", target: "https://www.beenverified.com/app/optout/search", status: "unscanned", requiresProfile: false },
-            { id: 7, name: "Intelius", type: "People Search", method: "url", target: "https://www.intelius.com/opt-out/", status: "unscanned", requiresProfile: false },
-            { id: 8, name: "Nuveber", type: "Data Aggregator", method: "email", target: "opt-out@nuveber.com", status: "unscanned", requiresProfile: true },
-            { id: 9, name: "TruthFinder", type: "Background Check", method: "url", target: "https://www.truthfinder.com/opt-out/", status: "unscanned", requiresProfile: false },
-            { id: 10, name: "PeekYou", type: "People Search", method: "url", target: "https://www.peekyou.com/about/contact/optout/index.php", status: "unscanned", requiresProfile: false }
+            { id: 1, name: "Whitepages", type: "People Search", checkUrl: "https://www.whitepages.com/", method: "url", target: "https://www.whitepages.com/suppression-requests", status: "unchecked" },
+            { id: 2, name: "Spokeo", type: "Data Aggregator", checkUrl: "https://www.spokeo.com/", method: "url", target: "https://www.spokeo.com/optout", status: "unchecked" },
+            { id: 3, name: "Radaris", type: "Background Check", checkUrl: "https://radaris.com/", method: null, target: null, note: "This site is no longer operating. The domain was transferred by court order.", status: "unchecked" },
+            { id: 4, name: "Acxiom", type: "Marketing Data", checkUrl: "https://www.acxiom.com/optout/", method: "url", target: "https://www.acxiom.com/optout/", status: "unchecked" },
+            { id: 5, name: "MyLife", type: "Reputation Platform", checkUrl: "https://www.mylife.com/", method: "url", target: "https://www.mylife.com/privacyrequest", status: "unchecked" },
+            { id: 6, name: "BeenVerified", type: "Background Check", checkUrl: "https://www.beenverified.com/", method: "url", target: "https://www.beenverified.com/app/optout/search", status: "unchecked" },
+            { id: 7, name: "Intelius", type: "People Search", checkUrl: "https://www.intelius.com/", method: "url", target: "https://www.intelius.com/opt-out/", status: "unchecked" },
+            { id: 8, name: "Nuwber", type: "Data Aggregator", checkUrl: "https://nuwber.com/", method: "url", target: "https://nuwber.com/removal/link", status: "unchecked" },
+            { id: 9, name: "TruthFinder", type: "Background Check", checkUrl: "https://www.truthfinder.com/", method: "url", target: "https://www.truthfinder.com/opt-out/", status: "unchecked" },
+            { id: 10, name: "PeekYou", type: "People Search", checkUrl: "https://www.peekyou.com/", method: null, target: null, note: "This site is no longer operating. The domain was transferred by court order.", status: "unchecked" }
         ];
 
-        // Load persisted statuses
-        if (hasScanned) {
-            const savedStatuses = JSON.parse(localStorage.getItem('cleardata_statuses') || '{}');
-            brokers.forEach(b => {
-                if (savedStatuses[b.id]) b.status = savedStatuses[b.id];
-                else b.status = (Math.random() > 0.35) ? 'found' : 'clear';
-            });
+        function migrateStatus(saved) {
+            if (saved === 'requested' || saved === 'confirmed' || saved === 'unchecked') return saved;
+            if (saved === 'removed') return 'requested';
+            return 'unchecked';
         }
+
+        const savedStatuses = JSON.parse(localStorage.getItem('cleardata_statuses') || '{}');
+        brokers.forEach(b => {
+            if (savedStatuses[b.id]) b.status = migrateStatus(savedStatuses[b.id]);
+        });
 
         // --- Initialization ---
         function init() {
@@ -314,19 +317,13 @@
             updateProfileIndicator();
             updateStats();
             renderBrokerTable();
-            if (hasScanned) {
-                document.getElementById('scan-percentage').textContent = '100%';
-                document.getElementById('scan-progress-ring').style.strokeDashoffset = '0';
-                document.getElementById('scan-status-text').textContent = 'Scan Complete';
-                document.getElementById('scan-btn-text').textContent = 'Rescan';
-            }
         }
 
         // --- Tab Switching ---
         function switchTab(tab) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            
+
             document.getElementById(tab).classList.add('active');
             document.getElementById('nav-' + tab).classList.add('active');
 
@@ -387,70 +384,42 @@
             }
         }
 
-        // --- Scan Simulation ---
-        function runSimulation() {
-            if (!isProfileComplete()) {
-                showToast('Please complete your profile first', 'error');
-                switchTab('profile');
-                return;
-            }
+        function persistStatuses() {
+            const statuses = {};
+            brokers.forEach(b => statuses[b.id] = b.status);
+            localStorage.setItem('cleardata_statuses', JSON.stringify(statuses));
+        }
 
-            const btn = document.getElementById('run-scan-btn');
-            const icon = document.getElementById('scan-icon');
-            const text = document.getElementById('scan-btn-text');
-            const ring = document.getElementById('scan-progress-ring');
-            const percent = document.getElementById('scan-percentage');
-            const status = document.getElementById('scan-status-text');
-
-            btn.disabled = true;
-            icon.classList.add('fa-spin');
-            text.textContent = 'Scanning...';
-            status.textContent = 'Scanning Brokers';
-
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += Math.floor(Math.random() * 12) + 4;
-                if (progress >= 100) {
-                    progress = 100;
-                    clearInterval(interval);
-                    finishScan();
-                }
-                percent.textContent = progress + '%';
-                ring.style.strokeDashoffset = 100 - progress;
-            }, 180);
-
-            function finishScan() {
-                // Simulate findings
-                brokers.forEach(b => {
-                    b.status = (Math.random() > 0.3) ? 'found' : 'clear';
-                });
-
-                // Persist
-                const statuses = {};
-                brokers.forEach(b => statuses[b.id] = b.status);
-                localStorage.setItem('cleardata_statuses', JSON.stringify(statuses));
-                localStorage.setItem('cleardata_scanned', 'true');
-                hasScanned = true;
-
-                updateStats();
-                renderBrokerTable();
-
-                icon.classList.remove('fa-spin');
-                text.textContent = 'Rescan';
-                status.textContent = 'Scan Complete';
-                btn.disabled = false;
-
-                const found = brokers.filter(b => b.status === 'found').length;
-                showToast(`Scan complete — ${found} profiles found`, 'success');
-            }
+        function setBrokerStatus(broker, status) {
+            broker.status = status;
+            persistStatuses();
+            updateStats();
+            renderBrokerTable();
         }
 
         // --- Stats ---
         function updateStats() {
+            const requested = brokers.filter(b => b.status === 'requested' || b.status === 'confirmed').length;
+            const confirmed = brokers.filter(b => b.status === 'confirmed').length;
             document.getElementById('stat-total-brokers').textContent = brokers.length;
-            const found = brokers.filter(b => b.status === 'found').length;
-            document.getElementById('stat-found').textContent = found;
-            document.getElementById('stat-removed').textContent = removedCount;
+            document.getElementById('stat-requested').textContent = requested;
+            document.getElementById('stat-confirmed').textContent = confirmed;
+
+            const percent = brokers.length ? Math.round((requested / brokers.length) * 100) : 0;
+            document.getElementById('scan-percentage').textContent = percent + '%';
+            document.getElementById('scan-progress-ring').style.strokeDashoffset = String(100 - percent);
+            const status = document.getElementById('scan-status-text');
+            if (requested === 0) status.textContent = 'No requests sent';
+            else if (requested === brokers.length) status.textContent = 'All requests sent';
+            else status.textContent = requested + ' of ' + brokers.length + ' requests sent';
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
 
         // --- Broker Table ---
@@ -463,27 +432,35 @@
                 tr.className = 'hover:bg-dark-border/20 transition-colors';
 
                 let statusHtml = '';
-                let actionHtml = '';
-
-                if (broker.status === 'unscanned') {
-                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-500/10 text-gray-400 border border-gray-500/20">Not Scanned</span>`;
-                    actionHtml = `<span class="text-dark-text text-xs">Run scan first</span>`;
-                } else if (broker.status === 'clear') {
-                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">Clear</span>`;
-                    actionHtml = `<span class="text-dark-text text-xs">No action needed</span>`;
-                } else if (broker.status === 'found') {
-                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">Data Found</span>`;
-                    actionHtml = `<button onclick="handleAction(${broker.id})" class="bg-brand hover:bg-brand-hover text-white text-xs px-3 py-1.5 rounded-md font-medium transition-colors">Request Removal</button>`;
-                } else if (broker.status === 'removed') {
-                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">Removed</span>`;
-                    actionHtml = `<span class="text-green-400 text-xs">Request sent</span>`;
+                if (broker.status === 'requested') {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">Request sent</span>`;
+                } else if (broker.status === 'confirmed') {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">Confirmed removed</span>`;
+                } else {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-500/10 text-gray-400 border border-gray-500/20">Not checked</span>`;
                 }
 
+                const actions = [];
+                if (broker.checkUrl) {
+                    actions.push(`<a href="${escapeHtml(broker.checkUrl)}" target="_blank" rel="noopener noreferrer" class="text-brand hover:text-brand-light text-xs font-medium">Check this site</a>`);
+                }
+                if (broker.method && broker.target && broker.status !== 'confirmed') {
+                    const label = broker.status === 'requested' ? 'Open request again' : 'Request Removal';
+                    actions.push(`<button onclick="handleAction(${broker.id})" class="bg-brand hover:bg-brand-hover text-white text-xs px-3 py-1.5 rounded-md font-medium transition-colors">${label}</button>`);
+                }
+                if (broker.status === 'requested' || (broker.status === 'unchecked' && !broker.method)) {
+                    actions.push(`<button onclick="markConfirmed(${broker.id})" class="border border-dark-border hover:border-green-500/40 text-dark-text hover:text-green-400 text-xs px-3 py-1.5 rounded-md font-medium transition-colors">Mark confirmed removed</button>`);
+                }
+
+                const noteHtml = broker.note
+                    ? `<div class="text-xs text-dark-text mt-1 max-w-xs">${escapeHtml(broker.note)}</div>`
+                    : '';
+
                 tr.innerHTML = `
-                    <td class="px-6 py-4 font-medium text-white">${broker.name}</td>
-                    <td class="px-6 py-4 text-dark-text">${broker.type}</td>
+                    <td class="px-6 py-4 font-medium text-white">${escapeHtml(broker.name)}${noteHtml}</td>
+                    <td class="px-6 py-4 text-dark-text">${escapeHtml(broker.type)}</td>
                     <td class="px-6 py-4">${statusHtml}</td>
-                    <td class="px-6 py-4 text-right">${actionHtml}</td>
+                    <td class="px-6 py-4 text-right"><div class="flex flex-col md:flex-row md:justify-end md:items-center gap-2">${actions.join('')}</div></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -492,48 +469,41 @@
         // --- Action Handler ---
         function handleAction(id) {
             const broker = brokers.find(b => b.id === id);
-            if (!broker) return;
-
-            if (broker.requiresProfile && !isProfileComplete()) {
-                showToast('Complete your profile to generate removal request', 'error');
-                switchTab('profile');
-                return;
-            }
+            if (!broker || !broker.method || !broker.target) return;
 
             if (broker.method === 'url') {
                 window.open(broker.target, '_blank', 'noopener');
-                markAsRemoved(broker);
-                showToast(`Opened ${broker.name} opt-out page`, 'success');
+                setBrokerStatus(broker, 'requested');
+                showToast('Opened ' + broker.name + ' opt-out page. Status set to Request sent — confirm on the site yourself.', 'success');
             } else if (broker.method === 'email') {
-                const subject = encodeURIComponent(`CCPA/CPRA Data Deletion Request - ${userProfile.name || 'User'}`);
+                if (!isProfileComplete()) {
+                    showToast('Complete your profile to generate a removal request email', 'error');
+                    switchTab('profile');
+                    return;
+                }
+                const subject = encodeURIComponent('CCPA/CPRA Data Deletion Request - ' + (userProfile.name || 'User'));
                 const body = encodeURIComponent(
-                    `To Whom It May Concern,\n\n` +
-                    `Pursuant to the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA), I am requesting the deletion of all personal information you have collected about me.\n\n` +
-                    `Name: ${userProfile.name || 'N/A'}\n` +
-                    `Email: ${userProfile.email || 'N/A'}\n` +
-                    `Phone: ${userProfile.phone || 'N/A'}\n` +
-                    `Date of Birth: ${userProfile.dob || 'N/A'}\n` +
-                    `Address: ${[userProfile.address, userProfile.city, userProfile.state, userProfile.zip].filter(Boolean).join(', ') || 'N/A'}\n\n` +
-                    `Please confirm deletion within the legally required timeframe.\n\n` +
-                    `Thank you.`
+                    'To Whom It May Concern,\n\n' +
+                    'Pursuant to the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA), I am requesting the deletion of all personal information you have collected about me.\n\n' +
+                    'Name: ' + (userProfile.name || 'N/A') + '\n' +
+                    'Email: ' + (userProfile.email || 'N/A') + '\n' +
+                    'Phone: ' + (userProfile.phone || 'N/A') + '\n' +
+                    'Date of Birth: ' + (userProfile.dob || 'N/A') + '\n' +
+                    'Address: ' + ([userProfile.address, userProfile.city, userProfile.state, userProfile.zip].filter(Boolean).join(', ') || 'N/A') + '\n\n' +
+                    'Please confirm deletion within the legally required timeframe.\n\n' +
+                    'Thank you.'
                 );
-                window.open(`mailto:${broker.target}?subject=${subject}&body=${body}`, '_blank');
-                markAsRemoved(broker);
-                showToast(`Email draft opened for ${broker.name}`, 'success');
+                window.open('mailto:' + broker.target + '?subject=' + subject + '&body=' + body, '_blank');
+                setBrokerStatus(broker, 'requested');
+                showToast('Email draft opened for ' + broker.name + '. Status set to Request sent.', 'success');
             }
         }
 
-        function markAsRemoved(broker) {
-            broker.status = 'removed';
-            removedCount++;
-            localStorage.setItem('cleardata_removed', removedCount.toString());
-
-            const statuses = {};
-            brokers.forEach(b => statuses[b.id] = b.status);
-            localStorage.setItem('cleardata_statuses', JSON.stringify(statuses));
-
-            updateStats();
-            renderBrokerTable();
+        function markConfirmed(id) {
+            const broker = brokers.find(b => b.id === id);
+            if (!broker) return;
+            setBrokerStatus(broker, 'confirmed');
+            showToast(broker.name + ' marked as Confirmed removed. This is your own confirmation, not a check by this tool.', 'success');
         }
 
         // --- Toast ---
