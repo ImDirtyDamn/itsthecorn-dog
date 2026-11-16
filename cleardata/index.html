@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClearData | Automated Privacy Removal</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0c',
+                            surface: '#121216',
+                            border: '#27272a',
+                            text: '#a1a1aa',
+                            heading: '#ffffff'
+                        },
+                        brand: {
+                            DEFAULT: '#6366f1',
+                            hover: '#4f46e5',
+                            light: '#818cf8',
+                            glow: 'rgba(99, 102, 241, 0.2)'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0a0a0c; color: #a1a1aa; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0c; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+        
+        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-content.active { display: block; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass-card {
+            background: linear-gradient(145deg, rgba(24, 24, 27, 0.7) 0%, rgba(18, 18, 22, 0.9) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid #27272a;
+        }
+
+        .progress-bar-fill {
+            transition: width 0.5s ease-out;
+        }
+
+        .nav-btn.active {
+            background: rgba(39, 39, 42, 0.5);
+            border: 1px solid #27272a;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex overflow-hidden text-sm selection:bg-brand selection:text-white">
+
+    <!-- Sidebar -->
+    <aside class="w-64 flex flex-col bg-dark-surface border-r border-dark-border z-20 flex-shrink-0">
+        <div class="h-16 flex items-center px-6 border-b border-dark-border">
+            <div class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.4)] mr-3">
+                <i class="fa-solid fa-shield-halved text-white"></i>
+            </div>
+            <span class="text-white text-lg font-bold tracking-tight">ClearData</span>
+        </div>
+
+        <nav class="flex-1 py-6 px-4 space-y-2">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn active w-full flex items-center px-4 py-3 rounded-lg text-left transition-all text-dark-heading">
+                <i class="fa-solid fa-chart-pie w-6 text-brand"></i>
+                <span class="font-medium">Dashboard</span>
+            </button>
+            <button onclick="switchTab('profile')" id="nav-profile" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg text-left transition-all text-dark-text hover:bg-dark-border/30 hover:text-dark-heading">
+                <i class="fa-solid fa-user-shield w-6"></i>
+                <span class="font-medium">My Profile</span>
+            </button>
+            <button onclick="switchTab('directory')" id="nav-directory" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg text-left transition-all text-dark-text hover:bg-dark-border/30 hover:text-dark-heading">
+                <i class="fa-solid fa-database w-6"></i>
+                <span class="font-medium">Action Center</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-dark-border">
+            <div class="flex items-center text-xs text-dark-text">
+                <i class="fa-solid fa-lock mr-2 text-green-400"></i>
+                Data stored locally on device.
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 h-full overflow-y-auto relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-dark-surface via-dark-bg to-dark-bg">
+        
+        <!-- Header -->
+        <header class="h-16 flex items-center justify-between px-8 border-b border-dark-border/50 sticky top-0 bg-dark-bg/80 backdrop-blur-md z-10">
+            <h1 id="header-title" class="text-xl font-semibold text-white">Privacy Dashboard</h1>
+            <div id="profile-indicator" class="flex items-center px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium cursor-pointer" onclick="switchTab('profile')">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Profile Incomplete
+            </div>
+        </header>
+
+        <div class="p-8 max-w-6xl mx-auto pb-24">
+            
+            <!-- 1. Dashboard View -->
+            <div id="dashboard" class="tab-content active space-y-6">
+                <div class="glass-card rounded-2xl p-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 border-brand/30 shadow-[0_0_30px_rgba(99,102,241,0.05)]">
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+                    
+                    <div class="z-10">
+                        <h2 class="text-2xl font-bold text-white mb-2">Automated Privacy Scan</h2>
+                        <p class="text-dark-text mb-4 max-w-lg">We'll scan our database of known data brokers against your profile to find exposed personal information.</p>
+                        <button id="run-scan-btn" onclick="runSimulation()" class="bg-brand hover:bg-brand-hover text-white px-6 py-3 rounded-lg font-medium shadow-lg shadow-brand/20 transition-all flex items-center group">
+                            <i id="scan-icon" class="fa-solid fa-radar mr-2 group-hover:animate-pulse"></i>
+                            <span id="scan-btn-text">Run Deep Scan</span>
+                        </button>
+                    </div>
+
+                    <div class="z-10 relative flex flex-col items-center">
+                        <div class="relative w-32 h-32 flex items-center justify-center mb-2">
+                            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                <circle class="text-dark-border" stroke-width="3" stroke="currentColor" fill="transparent" r="16" cx="18" cy="18"/>
+                                <circle id="scan-progress-ring" class="text-brand transition-all duration-1000 ease-out" stroke-width="3" stroke-dasharray="100, 100" stroke-dashoffset="100" stroke-linecap="round" stroke="currentColor" fill="transparent" r="16" cx="18" cy="18"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span id="scan-percentage" class="text-2xl font-bold text-white">0%</span>
+                            </div>
+                        </div>
+                        <span id="scan-status-text" class="text-xs text-brand font-medium uppercase tracking-wider">Awaiting Scan</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-card rounded-xl p-6">
+                        <div class="flex items-center text-dark-text mb-4">
+                            <i class="fa-solid fa-server w-6 text-blue-400"></i>
+                            <h3 class="font-medium">Brokers Monitored</h3>
+                        </div>
+                        <p class="text-3xl font-bold text-white" id="stat-total-brokers">0</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-6">
+                        <div class="flex items-center text-dark-text mb-4">
+                            <i class="fa-solid fa-triangle-exclamation w-6 text-red-400"></i>
+                            <h3 class="font-medium">Data Profiles Found</h3>
+                        </div>
+                        <p class="text-3xl font-bold text-white" id="stat-found">0</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-6 border-brand/20">
+                        <div class="flex items-center text-dark-text mb-4">
+                            <i class="fa-solid fa-shield-check w-6 text-brand"></i>
+                            <h3 class="font-medium">Removal Requests Sent</h3>
+                        </div>
+                        <p class="text-3xl font-bold text-white" id="stat-removed">0</p>
+                    </div>
+                </div>
+                
+                <div class="mt-8">
+                    <button onclick="switchTab('directory')" class="w-full bg-dark-border/30 hover:bg-dark-border border border-dark-border text-white py-3 rounded-xl transition-colors font-medium">
+                        View Action Center &rarr;
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. Profile View -->
+            <div id="profile" class="tab-content max-w-3xl">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-white mb-2">Your Privacy Profile</h2>
+                    <p class="text-dark-text">This information is required to format legal removal requests (CCPA/CPRA). It is <strong class="text-white">only saved locally on your device</strong> via localStorage and never sent to our servers.</p>
+                </div>
+
+                <form id="profile-form" class="glass-card rounded-2xl p-8 space-y-6" onsubmit="saveProfile(event)">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">Full Legal Name</label>
+                            <input type="text" id="p-name" required class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all placeholder-dark-border" placeholder="John Doe">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">Email Address</label>
+                            <input type="email" id="p-email" required class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all" placeholder="john.doe@example.com">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">Phone Number</label>
+                            <input type="tel" id="p-phone" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all" placeholder="(555) 123-4567">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">Date of Birth</label>
+                            <input type="date" id="p-dob" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all [color-scheme:dark]">
+                        </div>
+                    </div>
+
+                    <div class="border-t border-dark-border pt-6 mt-6 space-y-6">
+                        <h3 class="text-white font-medium">Home Address</h3>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">Street Address</label>
+                            <input type="text" id="p-address" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all" placeholder="123 Privacy St, Apt 4B">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">City</label>
+                                <input type="text" id="p-city" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all" placeholder="Seattle">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">State</label>
+                                <input type="text" id="p-state" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all" placeholder="WA">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-medium text-dark-text uppercase tracking-wider">ZIP Code</label>
+                                <input type="text" id="p-zip" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all" placeholder="98101">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 flex items-center justify-end">
+                        <button type="submit" class="bg-white text-black hover:bg-gray-200 px-6 py-2.5 rounded-lg font-semibold transition-colors flex items-center">
+                            <i class="fa-solid fa-floppy-disk mr-2"></i> Save Profile Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 3. Directory / Action Center View -->
+            <div id="directory" class="tab-content">
+                <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white mb-2">Action Center</h2>
+                        <p class="text-dark-text">Manually request removals or follow direct URL opt-out processes.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="px-3 py-1.5 rounded-md bg-dark-border/50 border border-dark-border text-xs flex items-center">
+                            <span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span> Data Found
+                        </div>
+                        <div class="px-3 py-1.5 rounded-md bg-dark-border/50 border border-dark-border text-xs flex items-center">
+                            <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Removed
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl overflow-hidden border border-dark-border">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-dark-surface border-b border-dark-border">
+                                <tr>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider">Broker Name</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider">Category</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-dark-text uppercase tracking-wider text-right">Action Required</th>
+                                </tr>
+                            </thead>
+                            <tbody id="broker-table-body" class="divide-y divide-dark-border bg-dark-bg/50">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Custom Toast Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3"></div>
+
+    <script>
+        // --- State & Data Models ---
+        let userProfile = {};
+        let hasScanned = localStorage.getItem('cleardata_scanned') === 'true';
+        let removedCount = parseInt(localStorage.getItem('cleardata_removed') || '0');
+
+        const brokers = [
+            { id: 1, name: "Whitepages", type: "People Search", method: "url", target: "https://www.whitepages.com/suppression-requests", status: "unscanned", requiresProfile: false },
+            { id: 2, name: "Spokeo", type: "Data Aggregator", method: "url", target: "https://www.spokeo.com/optout", status: "unscanned", requiresProfile: false },
+            { id: 3, name: "Radaris", type: "Background Check", method: "email", target: "customer-service@radaris.com", status: "unscanned", requiresProfile: true },
+            { id: 4, name: "Acxiom", type: "Marketing Data", method: "url", target: "https://isapps.acxiom.com/optout/optout.aspx", status: "unscanned", requiresProfile: false },
+            { id: 5, name: "MyLife", type: "Reputation Platform", method: "email", target: "privacy@mylife.com", status: "unscanned", requiresProfile: true },
+            { id: 6, name: "BeenVerified", type: "Background Check", method: "url", target: "https://www.beenverified.com/app/optout/search", status: "unscanned", requiresProfile: false },
+            { id: 7, name: "Intelius", type: "People Search", method: "url", target: "https://www.intelius.com/opt-out/", status: "unscanned", requiresProfile: false },
+            { id: 8, name: "Nuveber", type: "Data Aggregator", method: "email", target: "opt-out@nuveber.com", status: "unscanned", requiresProfile: true },
+            { id: 9, name: "TruthFinder", type: "Background Check", method: "url", target: "https://www.truthfinder.com/opt-out/", status: "unscanned", requiresProfile: false },
+            { id: 10, name: "PeekYou", type: "People Search", method: "url", target: "https://www.peekyou.com/about/contact/optout/index.php", status: "unscanned", requiresProfile: false }
+        ];
+
+        // Load persisted statuses
+        if (hasScanned) {
+            const savedStatuses = JSON.parse(localStorage.getItem('cleardata_statuses') || '{}');
+            brokers.forEach(b => {
+                if (savedStatuses[b.id]) b.status = savedStatuses[b.id];
+                else b.status = (Math.random() > 0.35) ? 'found' : 'clear';
+            });
+        }
+
+        // --- Initialization ---
+        function init() {
+            loadProfile();
+            updateProfileIndicator();
+            updateStats();
+            renderBrokerTable();
+            if (hasScanned) {
+                document.getElementById('scan-percentage').textContent = '100%';
+                document.getElementById('scan-progress-ring').style.strokeDashoffset = '0';
+                document.getElementById('scan-status-text').textContent = 'Scan Complete';
+                document.getElementById('scan-btn-text').textContent = 'Rescan';
+            }
+        }
+
+        // --- Tab Switching ---
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(tab).classList.add('active');
+            document.getElementById('nav-' + tab).classList.add('active');
+
+            const titles = {
+                dashboard: 'Privacy Dashboard',
+                profile: 'Your Privacy Profile',
+                directory: 'Action Center'
+            };
+            document.getElementById('header-title').textContent = titles[tab] || 'ClearData';
+        }
+
+        // --- Profile ---
+        function loadProfile() {
+            const saved = localStorage.getItem('cleardata_profile');
+            if (saved) {
+                userProfile = JSON.parse(saved);
+                document.getElementById('p-name').value = userProfile.name || '';
+                document.getElementById('p-email').value = userProfile.email || '';
+                document.getElementById('p-phone').value = userProfile.phone || '';
+                document.getElementById('p-dob').value = userProfile.dob || '';
+                document.getElementById('p-address').value = userProfile.address || '';
+                document.getElementById('p-city').value = userProfile.city || '';
+                document.getElementById('p-state').value = userProfile.state || '';
+                document.getElementById('p-zip').value = userProfile.zip || '';
+            }
+        }
+
+        function saveProfile(e) {
+            e.preventDefault();
+            userProfile = {
+                name: document.getElementById('p-name').value.trim(),
+                email: document.getElementById('p-email').value.trim(),
+                phone: document.getElementById('p-phone').value.trim(),
+                dob: document.getElementById('p-dob').value,
+                address: document.getElementById('p-address').value.trim(),
+                city: document.getElementById('p-city').value.trim(),
+                state: document.getElementById('p-state').value.trim(),
+                zip: document.getElementById('p-zip').value.trim()
+            };
+            localStorage.setItem('cleardata_profile', JSON.stringify(userProfile));
+            updateProfileIndicator();
+            showToast('Profile saved locally', 'success');
+            switchTab('dashboard');
+        }
+
+        function isProfileComplete() {
+            return userProfile.name && userProfile.email;
+        }
+
+        function updateProfileIndicator() {
+            const el = document.getElementById('profile-indicator');
+            if (isProfileComplete()) {
+                el.className = 'flex items-center px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-medium cursor-pointer';
+                el.innerHTML = '<i class="fa-solid fa-circle-check mr-1.5"></i> Profile Complete';
+            } else {
+                el.className = 'flex items-center px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium cursor-pointer';
+                el.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Profile Incomplete';
+            }
+        }
+
+        // --- Scan Simulation ---
+        function runSimulation() {
+            if (!isProfileComplete()) {
+                showToast('Please complete your profile first', 'error');
+                switchTab('profile');
+                return;
+            }
+
+            const btn = document.getElementById('run-scan-btn');
+            const icon = document.getElementById('scan-icon');
+            const text = document.getElementById('scan-btn-text');
+            const ring = document.getElementById('scan-progress-ring');
+            const percent = document.getElementById('scan-percentage');
+            const status = document.getElementById('scan-status-text');
+
+            btn.disabled = true;
+            icon.classList.add('fa-spin');
+            text.textContent = 'Scanning...';
+            status.textContent = 'Scanning Brokers';
+
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.floor(Math.random() * 12) + 4;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    finishScan();
+                }
+                percent.textContent = progress + '%';
+                ring.style.strokeDashoffset = 100 - progress;
+            }, 180);
+
+            function finishScan() {
+                // Simulate findings
+                brokers.forEach(b => {
+                    b.status = (Math.random() > 0.3) ? 'found' : 'clear';
+                });
+
+                // Persist
+                const statuses = {};
+                brokers.forEach(b => statuses[b.id] = b.status);
+                localStorage.setItem('cleardata_statuses', JSON.stringify(statuses));
+                localStorage.setItem('cleardata_scanned', 'true');
+                hasScanned = true;
+
+                updateStats();
+                renderBrokerTable();
+
+                icon.classList.remove('fa-spin');
+                text.textContent = 'Rescan';
+                status.textContent = 'Scan Complete';
+                btn.disabled = false;
+
+                const found = brokers.filter(b => b.status === 'found').length;
+                showToast(`Scan complete — ${found} profiles found`, 'success');
+            }
+        }
+
+        // --- Stats ---
+        function updateStats() {
+            document.getElementById('stat-total-brokers').textContent = brokers.length;
+            const found = brokers.filter(b => b.status === 'found').length;
+            document.getElementById('stat-found').textContent = found;
+            document.getElementById('stat-removed').textContent = removedCount;
+        }
+
+        // --- Broker Table ---
+        function renderBrokerTable() {
+            const tbody = document.getElementById('broker-table-body');
+            tbody.innerHTML = '';
+
+            brokers.forEach(broker => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-dark-border/20 transition-colors';
+
+                let statusHtml = '';
+                let actionHtml = '';
+
+                if (broker.status === 'unscanned') {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-500/10 text-gray-400 border border-gray-500/20">Not Scanned</span>`;
+                    actionHtml = `<span class="text-dark-text text-xs">Run scan first</span>`;
+                } else if (broker.status === 'clear') {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">Clear</span>`;
+                    actionHtml = `<span class="text-dark-text text-xs">No action needed</span>`;
+                } else if (broker.status === 'found') {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">Data Found</span>`;
+                    actionHtml = `<button onclick="handleAction(${broker.id})" class="bg-brand hover:bg-brand-hover text-white text-xs px-3 py-1.5 rounded-md font-medium transition-colors">Request Removal</button>`;
+                } else if (broker.status === 'removed') {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">Removed</span>`;
+                    actionHtml = `<span class="text-green-400 text-xs">Request sent</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-white">${broker.name}</td>
+                    <td class="px-6 py-4 text-dark-text">${broker.type}</td>
+                    <td class="px-6 py-4">${statusHtml}</td>
+                    <td class="px-6 py-4 text-right">${actionHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- Action Handler ---
+        function handleAction(id) {
+            const broker = brokers.find(b => b.id === id);
+            if (!broker) return;
+
+            if (broker.requiresProfile && !isProfileComplete()) {
+                showToast('Complete your profile to generate removal request', 'error');
+                switchTab('profile');
+                return;
+            }
+
+            if (broker.method === 'url') {
+                window.open(broker.target, '_blank', 'noopener');
+                markAsRemoved(broker);
+                showToast(`Opened ${broker.name} opt-out page`, 'success');
+            } else if (broker.method === 'email') {
+                const subject = encodeURIComponent(`CCPA/CPRA Data Deletion Request - ${userProfile.name || 'User'}`);
+                const body = encodeURIComponent(
+                    `To Whom It May Concern,\n\n` +
+                    `Pursuant to the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA), I am requesting the deletion of all personal information you have collected about me.\n\n` +
+                    `Name: ${userProfile.name || 'N/A'}\n` +
+                    `Email: ${userProfile.email || 'N/A'}\n` +
+                    `Phone: ${userProfile.phone || 'N/A'}\n` +
+                    `Date of Birth: ${userProfile.dob || 'N/A'}\n` +
+                    `Address: ${[userProfile.address, userProfile.city, userProfile.state, userProfile.zip].filter(Boolean).join(', ') || 'N/A'}\n\n` +
+                    `Please confirm deletion within the legally required timeframe.\n\n` +
+                    `Thank you.`
+                );
+                window.open(`mailto:${broker.target}?subject=${subject}&body=${body}`, '_blank');
+                markAsRemoved(broker);
+                showToast(`Email draft opened for ${broker.name}`, 'success');
+            }
+        }
+
+        function markAsRemoved(broker) {
+            broker.status = 'removed';
+            removedCount++;
+            localStorage.setItem('cleardata_removed', removedCount.toString());
+
+            const statuses = {};
+            brokers.forEach(b => statuses[b.id] = b.status);
+            localStorage.setItem('cleardata_statuses', JSON.stringify(statuses));
+
+            updateStats();
+            renderBrokerTable();
+        }
+
+        // --- Toast ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-green-500/10 border-green-500/30 text-green-400',
+                error: 'bg-red-500/10 border-red-500/30 text-red-400',
+                info: 'bg-brand/10 border-brand/30 text-brand'
+            };
+            toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg border backdrop-blur-md shadow-lg ${colors[type] || colors.info} animate-fadeIn`;
+            toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info'}"></i><span class="text-sm">${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        // --- Boot ---
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
