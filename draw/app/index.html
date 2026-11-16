@@ -3252,9 +3252,15 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var form = el("div", "det-form"); form.style.marginTop = "0.75rem";
     var ist = input("text", "det-start", cur.start || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var is = input("text", "det-size", cur.size || "", { maxlength: "40", placeholder: ".275", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
-    var ig = input("text", "det-grade", cur.grade || "", { maxlength: "40", placeholder: "1018", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
+    // Grade "4037 CHQ" = number box (number keypad) + optional letters box (letter keyboard): phones can't open one box
+    // on numbers and still switch to letters (iPhone's number pad has no ABC key), so the two parts get their own box
+    var gm = /^(\d+)\s*(.*)$/.exec(cur.grade || ""), gN = gm ? gm[1] : "", gL = gm ? gm[2] : (cur.grade || "");
+    var igN = input("text", "det-grade", gN, { maxlength: "12", placeholder: "4037", inputmode: "numeric", pattern: "[0-9]*", autocomplete: "off", enterkeyhint: "next" });
+    var igL = input("text", "det-grade-x", gL, { maxlength: "27", placeholder: "CHQ (if any)", autocomplete: "off", autocapitalize: "characters", autocorrect: "off", spellcheck: "false", enterkeyhint: "next" });
+    igL.style.textTransform = "uppercase";
+    var ig = { get value() { return (trim(igN.value) + " " + trim(igL.value).toUpperCase()).trim(); } };
     var iav = input("text", "det-avg", cur.avg ? String(cur.avg) : "", { maxlength: "9", placeholder: "4580", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
-    var icd = input("text", "det-card", cur.card || "", { maxlength: "40", placeholder: "335826", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
+    var icd = input("text", "det-card", cur.card || "", { maxlength: "40", placeholder: "335826", inputmode: "numeric", pattern: "[0-9]*", autocomplete: "off", enterkeyhint: "next" });   // text, so a leading 0 stays
     var itt = input("text", "det-total", cur.total ? String(cur.total) : "", { maxlength: "10", placeholder: "41528", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var icn = input("text", "det-coils", cur.coils ? String(cur.coils) : "", { maxlength: "3", placeholder: "10", inputmode: "numeric", pattern: "[0-9]*", autocomplete: "off", enterkeyhint: "next" });
     var ip = input("text", "det-part", cur.part || "", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
@@ -3290,7 +3296,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     form.appendChild(ra); paintRa();
     var rT = el("div", "row2"); rT.appendChild(field("Card total (lbs)", itt)); rT.appendChild(field("Avg weight (lbs)", iav)); form.appendChild(rT);
     form.appendChild(avMsg); paintAvg();
-    form.appendChild(field("Grade", ig));
+    var rG = el("div", "row2"); rG.appendChild(field("Grade number", igN)); rG.appendChild(field("Grade letters", igL)); form.appendChild(rG);
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Conditions (tap all that apply)")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
     var sw = el("div", "field"); sw.appendChild(el("span", "lbl", "Draw type")); sw.lastChild.style.display = "block"; sw.lastChild.style.marginBottom = "0.4rem"; sw.appendChild(seg); form.appendChild(sw);
     var redW = field("Reduction % (optional)", ird); redW.hidden = shape !== "shape"; form.appendChild(redW);
@@ -3304,7 +3310,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
       save(); paintDet();
     };
-    [ip, is, ig, ino, ist, ird, iav, icd, icn, itt].forEach(function (x) { x.addEventListener("input", put); });
+    [ip, is, igN, igL, ino, ist, ird, iav, icd, icn, itt].forEach(function (x) { x.addEventListener("input", put); });
     [itt, icn].forEach(function (x) { x.addEventListener("input", paintAvg); });
     [is, ist, ird].forEach(function (x) { x.addEventListener("input", paintRa); });
     iav.addEventListener("input", paintAvg);
