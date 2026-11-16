@@ -584,6 +584,7 @@
   .wt-box h3 { margin: 0 0 0.4rem; color: var(--white); letter-spacing: 0.06em; font-size: 1.05rem; }
   .wt-box .in { width: 100%; height: 3.5rem; font-size: 1.5rem; }
   .wt-box .row2 { margin-top: 0.75rem; }
+  .wt-card { color: var(--white); font-size: 1.1rem; font-weight: 700; margin: 0.2rem 0 0.3rem; font-variant-numeric: tabular-nums; }
   .wt-col { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
   .wt-col .btn { width: 100%; min-height: 3.5rem; font-size: 1.05rem; letter-spacing: 0.05em; }
   .card-avg { color: var(--fg-dim); font-size: 0.9rem; margin: -0.3rem 0 0.8rem; min-height: 1em; }
@@ -1218,6 +1219,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var av = avgNum(d.avg); if (av != null) o.avg = av;
     var cn = coilsOnCard(d.coils); if (cn != null) o.coils = cn;
     var tt = cardTotal(d.total); if (tt != null) { o.total = tt; if (o.coils) o.avg = Math.round(tt / o.coils * 10) / 10; }   // avg = card total ÷ coils
+    // KEEP THIS CARD: a card carried from an earlier shift. prior = coils YOU logged on it before this shift (this phone only;
+    // other shifts and people may have run some, so no "X of 10" for a carried card). Changing the card # drops it.
+    if (o.card && d.priorCard === cardKey(o.card)) { o.priorCard = d.priorCard; var pr = num(d.prior); if (pr > 0 && pr <= 1000) o.prior = Math.round(pr); }
     if (d.shape === "shape") { o.shape = "shape"; var r = redNum(d.red); if (r != null) o.red = r; }
     if (o.size && d.sizeKeep === o.size) o.sizeKeep = o.size;     // "Keep 600": the operator said so; don't ask again
     if (o.start && d.startKeep === o.start) o.startKeep = o.start;
@@ -1345,6 +1349,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         minutes: endAt ? (Date.parse(endAt) - Date.parse(startAt)) / 60000 : null, reason: str(d.reason, 200) };
     }).filter(Boolean) : [];
     var st = { schema: SCHEMA, setupDone: setupDone, shift: s, machines: machines, coils: coils, downtime: downtime, settings: cleanSettings(p.settings) };
+    // last shift's cards, waiting for KEEP THIS CARD / ENTER A NEW CARD (keyed by draw name)
+    if (Array.isArray(p.cardOffer)) st.cardOffer = p.cardOffer.filter(function (o) { return o && typeof o === "object" && typeof o.name === "string"; }).slice(0, 9)
+      .map(function (o) { var d = cleanDetail(o.d); return d ? { name: str(o.name, 40), d: d } : null; }).filter(Boolean);
     if (st.setupDone && !Calc.shiftWindow(s)) st.setupDone = false;
     return st;
   }
@@ -1436,6 +1443,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     try {
       state.shift.updatedAt = iso(Date.now());
       var out = { schema: SCHEMA, setupDone: state.setupDone, shift: state.shift, machines: state.machines, coils: state.coils, downtime: state.downtime, settings: state.settings };
+      if (state.cardOffer && state.cardOffer.length) out.cardOffer = state.cardOffer;
       window.localStorage.setItem(KEY, JSON.stringify(out));
     } catch (e) { /* storage blocked or full: keep working in memory */ }
   }
@@ -1477,7 +1485,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     $("dash").hidden = true; $("wizard").hidden = false; armGuard();
     renderWizard();
   }
-  function closeWizard() { wz = null; $("wizard").hidden = true; $("dash").hidden = false; buildDashboard(); tick(); }
+  function closeWizard() { wz = null; $("wizard").hidden = true; $("dash").hidden = false; buildDashboard(); tick(); setTimeout(offerCards, 250); }
 
   function field(labelText, input, extraCls) {
     var f = el("div", "field" + (extraCls ? " " + extraCls : ""));
@@ -2392,6 +2400,16 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (has) { try { ask = !mlCredsReady(); sentKey = mlBase(); mlSend(false); } catch (e) {} }   // queued before anything is cleared
     var now = Date.now();
     if (has) { try { histArchive(state, now); } catch (e) {} }   // keep a week on this phone; do not block clear/send
+    // last shift's job cards (each draw): offered again when the new shift is set up
+    var offer = [];
+    state.machines.forEach(function (m) {
+      var d = (state.shift.details || {})[m.id];
+      if (!d || !(d.card || d.avg || d.total)) return;
+      var c = JSON.parse(JSON.stringify(d)); delete c.note;
+      if (c.card) { c.prior = (d.prior || 0) + coilsLoggedOn(d.card); c.priorCard = cardKey(d.card); }
+      offer.push({ name: m.name, d: cleanDetail(c) });
+    });
+    state.cardOffer = offer.filter(function (o) { return o.d; });
     state.coils = []; state.downtime = [];
     // the next shift that has not ended yet (tapped at 7 PM after a 6-6 day shift -> tomorrow, not a shift that is already over)
     state.shift.id = uid("s"); state.shift.date = nextShiftDate(state.shift.start, state.shift.end, now); state.shift.createdAt = iso(now);
@@ -3188,8 +3206,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function cardProgress(mid) {
     var d = (state.shift.details || {})[mid]; if (!d || !d.card) return null;
     var x = coilsLoggedOn(d.card), n = d.coils || 0;
+    if (d.priorCard) return { t: (x + (d.prior || 0)) + " logged by you on card " + d.card, done: false };   // carried over: only your own count
     if (!n) return { t: x + " logged on card " + d.card, done: false };
-    if (x > n) return { t: x + " of " + n + " · more than the card", done: true, over: true };
+    if (x > n) return { t: x + " logged · card says " + n, done: true, over: true };
     if (x === n) return { t: n + " of " + n + " · card done", done: true };
     return { t: x + " of " + n + " from card " + d.card, done: false };
   }
@@ -3280,7 +3299,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     body.appendChild(form);
     var put = function () {
       var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, shape: shape, red: ird.value, avg: iav.value, card: icd.value, coils: icn.value, total: itt.value,
-        sizeKeep: cur.sizeKeep, startKeep: cur.startKeep });
+        sizeKeep: cur.sizeKeep, startKeep: cur.startKeep, prior: cur.prior, priorCard: cur.priorCard });
       if (!state.shift.details) state.shift.details = {};
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
       save(); paintDet();
@@ -3384,6 +3403,38 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return box;
   }
   function wtClose() { var box = $("wt-ask"); if (box) { box.hidden = true; box.textContent = ""; } try { $("dock-log").focus(); } catch (e) {} }
+  // new shift: one popup per draw that had a card last shift. KEEP THIS CARD carries it (the count goes on from
+  // last shift), ENTER A NEW CARD opens the card screen empty. No card last shift = no popup.
+  function offerCards() {
+    if (!state.setupDone || wz || !Array.isArray(state.cardOffer)) return;
+    var box = $("wt-ask"), ml = $("ml"), ask = $("ask");
+    if ((box && !box.hidden) || sheetKind || (ml && !ml.hidden) || (ask && !ask.hidden)) { setTimeout(offerCards, 1000); return; }   // wait for the screen on top
+    var names = {}; state.machines.forEach(function (m) { names[m.name] = m; });
+    state.cardOffer = state.cardOffer.filter(function (o) { return names[o.name] && !(state.shift.details || {})[names[o.name].id]; });
+    if (!state.cardOffer.length) { delete state.cardOffer; save(); return; }
+    var o = state.cardOffer[0], m = names[o.name], d = o.d;
+    var done = function () { state.cardOffer.shift(); if (!state.cardOffer.length) delete state.cardOffer; save(); };
+    box = wtBox(); var inner = el("div", "wt-box");
+    var h = el("h3", null, "NEW SHIFT" + (state.machines.length > 1 ? " · " + m.name.toUpperCase() : "")); h.id = "wt-title"; inner.appendChild(h);
+    var bits = [];
+    if (d.coils) bits.push(d.coils + " coils"); if (d.total) bits.push(fmtLb(d.total) + " lbs");
+    else if (d.avg) bits.push(fmtLb(d.avg) + " lbs avg");
+    var line = "Last shift's card " + (d.card ? "#" + d.card : cardText(d) || "(no card #)") + (bits.length ? " (" + bits.join(", ") + ")" : "") + ".";
+    var p1 = el("p", "wt-card", line); p1.id = "oc-line"; inner.appendChild(p1);
+    if (d.card) { var mine = el("p", "sub", d.prior ? "You logged " + d.prior + " on it." : "You haven't logged any on it yet."); mine.id = "oc-mine"; inner.appendChild(mine); }
+    var col = el("div", "wt-col");
+    var bk = el("button", "btn solid", "KEEP THIS CARD"); bk.type = "button"; bk.id = "oc-keep";
+    var bn = el("button", "btn", "ENTER A NEW CARD"); bn.type = "button"; bn.id = "oc-new";
+    col.appendChild(bk); col.appendChild(bn); inner.appendChild(col); box.appendChild(inner);
+    bk.addEventListener("click", function () {
+      if (!state.shift.details) state.shift.details = {};
+      state.shift.details[m.id] = cleanDetail(d); done(); wtClose(); buildDashboard(); tick();
+      dockMsg("Kept last shift's card" + (d.card ? " #" + d.card : "") + (state.machines.length > 1 ? " on " + m.name : "") + ".");
+      setTimeout(offerCards, 250);
+    });
+    bn.addEventListener("click", function () { done(); wtClose(); if (sheetKind) closeSheet(); sheetFresh = true; openSheet("details", m.id); setTimeout(offerCards, 1000); });   // the next draw's card after the card screen closes
+    setTimeout(function () { try { bk.focus(); } catch (e) {} }, 50);
+  }
   // job card blank: say so, then ENTER THIS COIL'S WEIGHT, FILL OUT JOB CARD, or CANCEL
   function askBlankCard(m) {
     var box = wtBox(), inner = el("div", "wt-box");
@@ -3839,7 +3890,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
   /* ---------- start ---------- */
   applyView();
-  if (state.setupDone) { $("dash").hidden = false; buildDashboard(); tick(); }
+  if (state.setupDone) { $("dash").hidden = false; buildDashboard(); tick(); setTimeout(offerCards, 400); }
   else openWizard(false);
   setInterval(tick, 1000);
   /* SEND TO TRACKER from the calculator (/calc/?go=avg): it leaves one request in localStorage and opens this page.
