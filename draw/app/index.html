@@ -26,7 +26,7 @@
       "dayNotes": "",                     // "Notes about my day" (free text, sent as day_notes)
       "details": { "m_...": { "part": "", "size": "", "start": "", "grade": "", "tags": [], "avg": 4580, "note": "" } }
                                           // the CARD: what the NEXT coils on that machine get (cleared by NEW SHIFT);
-                                          // "avg" = average coil weight (lbs) that REPEAT COIL logs; "note" goes on the next coil only
+                                          // "avg" = average coil weight (lbs) that LOG COIL logs ("total" / "coils" when both are set); "note" goes on the next coil only
     },
     "machines": [                         // table: machines (FK shift.id)
       { "id": "m_...", "slot": 1, "name": "Machine 1", "needRate": 2800,   // lb/hr
@@ -36,7 +36,7 @@
       { "id": "c_...", "machineId": "m_...", "loggedAt": ISO, "weight": 450.5,  // lb
         "coilNo": "", "heatNo": "", "size": "", "notes": "",          // size = finish size in inches (".600")
         "part": "", "grade": "", "tags": ["Grease", "Shape change", "Stainless", "Other"],  // part # (customer), grade, run conditions
-        "rep": "" | "card" | "last",      // logged with REPEAT COIL: card = the card's avg weight, last = the last coil's weight
+        "rep": "" | "card" | "last",      // one-tap LOG COIL weight: card = the card's avg weight, last = the last coil's weight, "" = typed
         "downtimeMin": null | number, "downtimeReason": "" }
     ],
     "downtime": [                         // table: downtime (FK machines.id, or "all")
@@ -300,7 +300,6 @@
     .dock .readback { padding: 0.35rem 0.6rem; margin-bottom: 0.3rem; }
     .dock .dock-lbl { display: none; }
     .dock .dock-row .in, .dock .dock-row .btn { min-height: 2.6rem; height: 2.6rem; font-size: 1rem; }
-    .dock .rep-btn { min-height: 2.6rem; margin-bottom: 0.3rem; font-size: 1rem; }
     .dock .dock-inner { padding-top: 0.35rem; padding-bottom: 0.35rem; }
     #dock .readback:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem; padding: 0.3rem 0.6rem; margin-bottom: 0.3rem; }
     #dock .readback .rb-top, #dock .readback .rb-det { display: none; }
@@ -392,7 +391,7 @@
   .s-proj b { color: var(--white); font-weight: 700; }
   .s-down { display: block; width: 100%; text-align: left; background: rgba(255, 95, 86, 0.12); border: 1px solid var(--red); color: var(--red); font-weight: 700; padding: 0.5rem 0.75rem; min-height: 3rem; margin-top: 0.75rem; cursor: pointer; font-size: 0.95rem; letter-spacing: 0.04em; }
   .s-machines { margin-top: 0.25rem; }
-  /* SIMPLE view: the card line (+ NEW CARD), REPEAT COIL, LOG COIL and MORE OPTIONS. Everything else is in the MORE OPTIONS menu. */
+  /* SIMPLE view: LOG COIL and MORE OPTIONS. The card (THIS CARD / NEW CARD) and everything else are in the MORE OPTIONS menu. */
   .s-more, .ob-simple { display: none; }
   .v-simple #dash .top-r .calc-link, .v-simple #dash .tools, .v-simple .dock #notes-open, .v-simple .readback #rb-fix, .v-simple .readback #rb-x, .v-simple #over-new { display: none !important; }
   .v-simple .readback .rb-act, .v-simple #dock .readback .rb-act { grid-template-columns: minmax(0, 1fr); }   /* simple: UNDO only */
@@ -571,9 +570,20 @@
   .det-row #dock-det { flex: 1 1 auto; }
   .det-row .notes { flex: 0 0 auto; width: auto; }
   .det-row .notes[hidden] { display: none; }
-  /* REPEAT COIL: one tap logs another coil at the card's average weight */
-  .rep-btn { display: block; width: 100%; min-height: 3.5rem; margin: 0 0 0.6rem; font-size: 1.15rem; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
-  .rep-btn[hidden] { display: none; }
+  /* LOG COIL is one tap: the card's average weight, else the last coil's weight (asks once when neither is known) */
+  .dock-row.one, .dock .dock-row.one { grid-template-columns: minmax(0, 1fr); }
+  .dock-row.one .btn, .dock .dock-row.one .btn { width: 100%; min-height: 4rem; height: auto; font-size: 1.3rem; letter-spacing: 0.08em; }
+  .dock-row.one .btn.has-prog { max-width: none; }
+  .dock-row.one .btn .log-prog { font-size: 0.85rem; -webkit-line-clamp: 1; }
+  .dock-row.one .btn .log-w { display: block; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.02em; margin-top: 0.15rem; text-transform: none; }
+  .dock-for-row:empty, .dock-for-row:has(.dock-for:empty) { display: none; }
+  .v-simple .dock #dock-det, .v-simple .dock #card-new { display: none !important; }   /* simple: just LOG COIL + MORE OPTIONS */
+  .wt-ask { position: fixed; inset: 0; z-index: 47; background: rgba(0, 0, 0, 0.72); display: flex; align-items: flex-end; justify-content: center; }
+  .wt-ask[hidden] { display: none; }
+  .wt-box { width: 100%; max-width: 30rem; background: var(--bg, #000); border-top: 2px solid var(--fg); padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); }
+  .wt-box h3 { margin: 0 0 0.4rem; color: var(--white); letter-spacing: 0.06em; font-size: 1.05rem; }
+  .wt-box .in { width: 100%; height: 3.5rem; font-size: 1.5rem; }
+  .wt-box .row2 { margin-top: 0.75rem; }
   .card-avg { color: var(--fg-dim); font-size: 0.9rem; margin: -0.3rem 0 0.8rem; min-height: 1em; }
   .card-avg.amber { color: var(--amber); }
   .det-row .det-btn { margin: 0; }
@@ -752,10 +762,8 @@
           <button type="button" class="det-btn notes" id="card-new" aria-haspopup="dialog" hidden>NEW CARD</button>
           <button type="button" class="det-btn notes" id="notes-open" aria-haspopup="dialog">DAY NOTES</button>
         </div>
-        <button type="button" class="btn solid rep-btn" id="dock-rep" hidden>REPEAT COIL</button>
-        <label class="dock-lbl" for="dock-in"><span>COIL WEIGHT (LBS)</span><span class="dock-for" id="dock-for"></span></label>
-        <div class="dock-row">
-          <input class="in" id="dock-in" type="text" inputmode="decimal" placeholder="Weight (lbs)" enterkeyhint="done" autocomplete="off" aria-label="Coil weight in lbs">
+        <div class="dock-lbl dock-for-row"><span class="dock-for" id="dock-for"></span></div>
+        <div class="dock-row one">
           <button type="button" class="btn solid" id="dock-log">LOG COIL</button>
         </div>
         <button type="button" class="btn s-more" id="s-more" aria-haspopup="dialog">&#9776; MORE OPTIONS</button>
@@ -1207,11 +1215,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       start: normSize(str(d.start, 40)), card: trim(str(d.card, 40)).replace(/\s+/g, " ") };
     var av = avgNum(d.avg); if (av != null) o.avg = av;
     var cn = coilsOnCard(d.coils); if (cn != null) o.coils = cn;
+    var tt = cardTotal(d.total); if (tt != null) { o.total = tt; if (o.coils) o.avg = Math.round(tt / o.coils * 10) / 10; }   // avg = card total ÷ coils
     if (d.shape === "shape") { o.shape = "shape"; var r = redNum(d.red); if (r != null) o.red = r; }
     if (o.size && d.sizeKeep === o.size) o.sizeKeep = o.size;     // "Keep 600": the operator said so; don't ask again
     if (o.start && d.startKeep === o.start) o.startKeep = o.start;
-    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.shape || o.avg || o.card || o.coils ? o : null;
+    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.shape || o.avg || o.card || o.coils || o.total ? o : null;
   }
+  // card total weight (lbs): plain number, commas ok, up to 2,000,000
+  function cardTotal(v) { var t = String(v == null ? "" : v).replace(/,/g, "").trim(); if (!/^\d+(?:\.\d)?$/.test(t)) return null; var n = +t; return n > 0 && n <= 2000000 ? n : null; }
   // coils on the job card: a whole number 1 to 500, anything else = not set
   function coilsOnCard(v) { var t = String(v == null ? "" : v).trim(); if (!/^\d{1,3}$/.test(t)) return null; var n = +t; return n >= 1 && n <= 500 ? n : null; }
   // card # compare: case, spaces and dashes don't matter (335826 = 335 826)
@@ -2036,7 +2047,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     setText(ph, phase); setCls(ph, phCls);
     setText($("s-phase"), r.phase === "invalid" ? "SETUP INCOMPLETE · tap MORE OPTIONS, then EDIT SETUP" : phase); setCls($("s-phase"), phCls + " s-phase");
     updateOverBar(now);
-    paintRepeat();
 
     setText($("d-ran"), fmtInt(r.lbsRan));
     var ranReady = !(r.paceCar == null || r.phase === "before" || r.phase === "invalid" || r.paceCar <= 0);
@@ -3169,7 +3179,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }
     var nb = $("card-new"); if (nb) nb.hidden = !d;
     paintLogBtn();
-    paintRepeat();
     sizeDock();
   }
   // LOG COIL shows how far along the current job card is (this phone's coils on that card # only):
@@ -3186,35 +3195,30 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var m = detMachine(), pr = m ? cardProgress(m.id) : null;
     ["dock-log", "s-log-btn"].forEach(function (id) {
       var b = $(id); if (!b) return;
-      var key = pr ? pr.t + (pr.over ? "!" : "") : "";
+      var wf = id === "dock-log" && m ? weightFor(m.id) : null;
+      var wt = wf ? fmtLb(wf.w) + " lbs" + (wf.src === "card" ? " (card avg)" : " (last coil)") : id === "dock-log" ? "tap to enter the weight" : "";
+      var key = (pr ? pr.t + (pr.over ? "!" : "") : "") + "|" + wt;
       if (b._prog === key) return;
       b._prog = key; b.textContent = "LOG COIL";
       setCls(b, "btn solid" + (pr ? " has-prog" + (pr.done ? " prog-done" : "") + (pr.over ? " prog-over" : "") : ""));
-      if (pr) { var sm = el("small", "log-prog", pr.t); b.appendChild(sm); b.setAttribute("aria-label", "Log coil. " + pr.t); }
+      if (wt) b.appendChild(el("small", "log-w", wt));
+      if (pr) b.appendChild(el("small", "log-prog", pr.t));
+      if (pr || wt) b.setAttribute("aria-label", "Log coil" + (wt ? ", " + wt : "") + (pr ? ". " + pr.t : ""));
       else b.removeAttribute("aria-label");
     });
   }
-  // what REPEAT COIL logs on a machine: the card's average weight, else the last coil logged on that machine
-  function repeatFor(mid) {
+  // the weight LOG COIL logs on a machine: the card's average (card total ÷ coils, or the avg typed on the card),
+  // else the last coil logged on that machine, else the last coil logged this shift. null = not known yet (ask once).
+  function weightFor(mid) {
     var d = (state.shift.details || {})[mid];
     if (d && d.avg > 0) return { w: d.avg, src: "card" };
-    var last = null;
-    state.coils.forEach(function (c) { if (c.machineId === mid && (!last || Date.parse(c.loggedAt) >= Date.parse(last.loggedAt))) last = c; });
-    return last ? { w: last.weight, src: "last" } : null;
-  }
-  function paintRepeat() {
-    var b = $("dock-rep"); if (!b) return;
-    var m = detMachine(), r = m ? repeatFor(m.id) : null, hide = !r;
-    if (b.hidden !== hide) { b.hidden = hide; sizeDock(); }
-    if (!r) return;
-    setText(b, "REPEAT COIL \u00b7 " + fmtLb(r.w) + " LBS");
-    b.setAttribute("aria-label", "Log one more coil at " + fmtLb(r.w) + " lbs" + (r.src === "card" ? " (the card's average)" : " (same as the last coil)") + (state.machines.length > 1 ? " on " + m.name : ""));
-  }
-  function dockRepeat() {
-    var m = machineById(dockSel) || state.machines[0]; if (!m) return;
-    var r = repeatFor(m.id);
-    if (!r) { openSheet("details", m.id); return; }
-    guardEnded(function () { dockMsg(""); addCoil(m.id, r.w, null, r.src); });
+    var last = null, any = null;
+    state.coils.forEach(function (c) {
+      if (!any || Date.parse(c.loggedAt) >= Date.parse(any.loggedAt)) any = c;
+      if (c.machineId === mid && (!last || Date.parse(c.loggedAt) >= Date.parse(last.loggedAt))) last = c;
+    });
+    var c = last || any;
+    return c ? { w: c.weight, src: "last" } : null;
   }
   // NEW CARD: the card screen opens empty; the old card stays until something is typed
   function openNewCard() { var m = detMachine(); if (!m) return; if (sheetKind) closeSheet(); sheetFresh = true; openSheet("details", m.id); }
@@ -3224,13 +3228,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     setText($("sheet-title"), (fresh ? "NEW CARD" : "THIS CARD") + many);
     body.textContent = "";
     var cur = fresh ? {} : (state.shift.details || {})[m.id] || {};
-    body.appendChild(el("p", "sh-sub", "Fill it in once per job card. Every coil you log" + (state.machines.length > 1 ? " on " + m.name : "") + " gets it, and REPEAT COIL logs one more at the average weight. Skip what you don't know."));
+    body.appendChild(el("p", "sh-sub", "Fill it in once per job card. Every coil you log" + (state.machines.length > 1 ? " on " + m.name : "") + " gets it, and LOG COIL logs each coil at the average weight (card total ÷ coils). Skip what you don't know."));
     var form = el("div", "det-form"); form.style.marginTop = "0.75rem";
     var ist = input("text", "det-start", cur.start || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var is = input("text", "det-size", cur.size || "", { maxlength: "40", placeholder: ".275", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var ig = input("text", "det-grade", cur.grade || "", { maxlength: "40", placeholder: "1018", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
     var iav = input("text", "det-avg", cur.avg ? String(cur.avg) : "", { maxlength: "9", placeholder: "4580", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var icd = input("text", "det-card", cur.card || "", { maxlength: "40", placeholder: "335826", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
+    var itt = input("text", "det-total", cur.total ? String(cur.total) : "", { maxlength: "10", placeholder: "41528", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var icn = input("text", "det-coils", cur.coils ? String(cur.coils) : "", { maxlength: "3", placeholder: "10", inputmode: "numeric", pattern: "[0-9]*", autocomplete: "off", enterkeyhint: "next" });
     var ip = input("text", "det-part", cur.part || "", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off", autocapitalize: "characters", enterkeyhint: "next" });
     var shape = cur.shape === "shape" ? "shape" : "round";
@@ -3249,19 +3254,23 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     };
     var avMsg = el("p", "card-avg"); avMsg.id = "det-avg-msg";
     var paintAvg = function () {
+      // card total and coils on card both set: the average is worked out (total ÷ coils), not typed
+      var tt = cardTotal(itt.value), cn = coilsOnCard(icn.value);
+      if (tt != null && cn != null) { iav.value = String(Math.round(tt / cn * 10) / 10); iav.readOnly = true; } else if (iav.readOnly) { iav.readOnly = false; }
       var t = trim(iav.value), a = avgNum(t), set = defaultSettings();
       if (!t) { setText(avMsg, ""); setCls(avMsg, "card-avg"); return; }
       if (a == null) { setText(avMsg, "Type the weight in lbs, for example 4580."); setCls(avMsg, "card-avg amber"); return; }
       if (a < set.confirmUnderLb || a > set.confirmOverLb) { setText(avMsg, fmtLb(a) + " lbs a coil is outside " + fmtInt(set.confirmUnderLb) + " to " + fmtInt(set.confirmOverLb) + " lbs. Check it."); setCls(avMsg, "card-avg amber"); return; }
-      setText(avMsg, "REPEAT COIL logs " + fmtLb(a) + " lbs a tap."); setCls(avMsg, "card-avg");
+      setText(avMsg, "LOG COIL logs " + fmtLb(a) + " lbs a tap" + (iav.readOnly ? " (card total ÷ coils)." : ".")); setCls(avMsg, "card-avg");
     };
     var it = tagChips(cur.tags, "det-tag-");
     var ino = el("textarea", "in"); ino.id = "det-note"; ino.rows = 2; ino.maxLength = 300; ino.placeholder = "Only goes on the next coil"; ino.value = cur.note || "";
     var r0 = el("div", "row2"); r0.appendChild(field("Card #", icd)); r0.appendChild(field("Coils on card", icn)); form.appendChild(r0);
     var r1 = el("div", "row2"); r1.appendChild(field("Start size (in)", ist)); r1.appendChild(field("Finish size (in)", is)); form.appendChild(r1);
     form.appendChild(ra); paintRa();
-    var r2 = el("div", "row2"); r2.appendChild(field("Grade", ig)); r2.appendChild(field("Avg weight (lbs)", iav)); form.appendChild(r2);
+    var rT = el("div", "row2"); rT.appendChild(field("Card total (lbs)", itt)); rT.appendChild(field("Avg weight (lbs)", iav)); form.appendChild(rT);
     form.appendChild(avMsg); paintAvg();
+    form.appendChild(field("Grade", ig));
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Conditions (tap all that apply)")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
     var sw = el("div", "field"); sw.appendChild(el("span", "lbl", "Draw type")); sw.lastChild.style.display = "block"; sw.lastChild.style.marginBottom = "0.4rem"; sw.appendChild(seg); form.appendChild(sw);
     var redW = field("Reduction % (optional)", ird); redW.hidden = shape !== "shape"; form.appendChild(redW);
@@ -3269,13 +3278,14 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     form.appendChild(field("Note", ino));
     body.appendChild(form);
     var put = function () {
-      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, shape: shape, red: ird.value, avg: iav.value, card: icd.value, coils: icn.value,
+      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, shape: shape, red: ird.value, avg: iav.value, card: icd.value, coils: icn.value, total: itt.value,
         sizeKeep: cur.sizeKeep, startKeep: cur.startKeep });
       if (!state.shift.details) state.shift.details = {};
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
       save(); paintDet();
     };
-    [ip, is, ig, ino, ist, ird, iav, icd, icn].forEach(function (x) { x.addEventListener("input", put); });
+    [ip, is, ig, ino, ist, ird, iav, icd, icn, itt].forEach(function (x) { x.addEventListener("input", put); });
+    [itt, icn].forEach(function (x) { x.addEventListener("input", paintAvg); });
     [is, ist, ird].forEach(function (x) { x.addEventListener("input", paintRa); });
     iav.addEventListener("input", paintAvg);
     is.addEventListener("blur", function () { var v = normSize(is.value); if (v !== is.value) { is.value = v; put(); } });
@@ -3304,7 +3314,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
   $("dock-det").addEventListener("click", function () { var m = detMachine(); if (m) openSheet("details", m.id); });
   $("card-new").addEventListener("click", openNewCard);
-  $("dock-rep").addEventListener("click", dockRepeat);
   $("notes-open").addEventListener("click", function () { openSheet("notes"); });
   $("notes-open-2").addEventListener("click", function () { openSheet("notes"); });
 
@@ -3342,7 +3351,6 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var m = machineById(dockSel);
     if (m) {
-      $("dock-in").setAttribute("aria-label", "Coil weight in lbs for " + m.name);
       $("dock-for").textContent = state.machines.length > 1 ? "for " + m.name : "";
     }
   }
@@ -3360,21 +3368,48 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     }
     sizeDock();
   }
+  // LOG COIL: one tap at the weight already known (see weightFor). Nothing known yet: ask once for the weight.
   function dockLog() {
-    var inp = $("dock-in"), m = machineById(dockSel) || state.machines[0];
+    var m = machineById(dockSel) || state.machines[0];
     if (!m) return;
-    checkCoilWeight(inp.value, inp, function (msg) { dockMsg(msg, "red"); }, function (w) { guardEnded(function () {
-      inp.value = ""; dockMsg("");
-      try { inp.blur(); } catch (e) {}
-      addCoil(m.id, w);                 // big LOGGED readback + 12 s UNDO sits on top of the dock
-    }); });
+    var wf = weightFor(m.id);
+    if (!wf) { askWeight(m); return; }
+    guardEnded(function () { dockMsg(""); addCoil(m.id, wf.w, null, wf.src); });   // big LOGGED readback + 12 s UNDO on top of the dock
+  }
+  // first coil with no card weight: a small popup asks for the weight (the 3,000 to 6,000 lbs check applies),
+  // logs the coil, and from then on LOG COIL reuses it
+  function askWeight(m) {
+    var box = $("wt-ask");
+    if (!box) { box = el("div", "wt-ask"); box.id = "wt-ask"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-labelledby", "wt-title"); document.body.appendChild(box); }
+    box.textContent = "";
+    var inner = el("div", "wt-box");
+    var h = el("h3", null, "COIL WEIGHT (LBS)" + (state.machines.length > 1 ? " · " + m.name.toUpperCase() : "")); h.id = "wt-title"; inner.appendChild(h);
+    inner.appendChild(el("p", "sub", "No weight yet. Type this coil's weight once; LOG COIL uses it after that. A card's average weight (MORE OPTIONS, THIS CARD) takes over when set."));
+    var inp = input("text", "wt-in", "", { inputmode: "decimal", placeholder: "Weight (lbs)", autocomplete: "off", enterkeyhint: "done", "aria-label": "Coil weight in lbs" });
+    inner.appendChild(inp);
+    var err = el("p", "err"); err.id = "wt-err"; inner.appendChild(err);
+    var row = el("div", "row2");
+    var cancel = el("button", "btn", "CANCEL"); cancel.type = "button"; cancel.id = "wt-cancel";
+    var go = el("button", "btn solid", "LOG COIL"); go.type = "button"; go.id = "wt-go";
+    row.appendChild(cancel); row.appendChild(go); inner.appendChild(row);
+    box.appendChild(inner); box.hidden = false;
+    var close = function () { box.hidden = true; box.textContent = ""; try { $("dock-log").focus(); } catch (e) {} };
+    var submit = function () {
+      checkCoilWeight(inp.value, inp, function (msg) { setText(err, msg); }, function (w) {
+        close(); guardEnded(function () { dockMsg(""); addCoil(m.id, w); });
+      });
+    };
+    cancel.addEventListener("click", close);
+    go.addEventListener("click", submit);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); submit(); } if (e.key === "Escape") close(); });
+    inp.addEventListener("input", function () { setText(err, ""); });
+    box.addEventListener("click", function (e) { if (e.target === box) close(); });
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 50);
   }
   // the readback lives in the dock on the phone, right above the weight box
   (function () { var rb = $("readback"), di = document.querySelector("#dock .dock-inner"); if (rb && di) di.insertBefore(rb, di.firstChild); })();
   window.__onReadback = function () { sizeDock(); };
   $("dock-log").addEventListener("click", dockLog);
-  $("dock-in").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); dockLog(); } });
-  $("dock-in").addEventListener("input", function () { if ($("dock-msg").className.indexOf("red") >= 0) dockMsg(""); });
   window.addEventListener("resize", sizeDock);
 
 
