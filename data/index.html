@@ -513,7 +513,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       SQ.hits = hits; SQ.tips = j.tips || [];
       if (f === "tips") SQ.note = SQ.tips.length + " job tip" + (SQ.tips.length === 1 ? " matches" : "s match") + ". Tips are for a job, not a shift: they show here.";
       else SQ.note = n + " shift" + (n === 1 ? "" : "s") + " match" + (n === 1 ? "es" : "") + (f === "all" ? "" : " in " + FLABEL[f]) + (SQ.tips.length ? " \u00b7 " + SQ.tips.length + " job tip" + (SQ.tips.length === 1 ? "" : "s") : "") +
-        (extra > 0 ? " (" + extra + " older than the shifts shown: SHOW MORE or widen the dates)" : "") + ".";
+        (extra > 0 ? " (" + extra + " older than the shifts shown: SHOW MORE or widen the dates)" : "") + (j.truncated ? " Showing the newest 500: add a word or narrow the dates." : "") + ".";
       renderList();
     }).catch(function (e) {
       if (e.message === "401" || SQ.key !== key) return;
