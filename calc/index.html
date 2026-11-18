@@ -1205,7 +1205,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         }).join("") + '</div>' +
         '<span class="lbl">Which Draw? <span style="color:var(--ph)">(skip if you ran one machine)</span></span>' + chips("row" + i, r.machine) +
         '<details><summary>+ Finish size, grade, compound, package</summary><div class="grid2">' +
-        field("Finish Size (in)", "r" + i + "-finish", r.finish, "finish size", 'inputmode="decimal"') + field("Grade", "r" + i + "-grade", r.grade, "grade", 'inputmode="text"') +
+        field("Finish Size (in)", "r" + i + "-finish", r.finish, "finish size", 'inputmode="decimal"') + field("Grade", "r" + i + "-grade", r.grade, "10B21", 'inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" style="text-transform:uppercase"') +
         field("Draw Compound", "r" + i + "-compound", r.compound, "compound", 'inputmode="text" data-compound="1"') + field("Package", "r" + i + "-package", r.package, "package", 'inputmode="text"') +
         '</div></details>' +
         '<div class="live"><span>IN=OUT <b id="r' + i + '-io" style="font-size:16px">' + esc(rr.coilsText || "\u2013") + '</b> &middot; Avg</span><b id="r' + i + '-avg">' + (rr.avg !== null ? P.fmtInt(rr.avg) : "\u2013") + '</b></div>' +
@@ -1229,6 +1229,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
         var el = $("r" + i + "-" + k); if (!el) return;
         el.addEventListener("input", function () {
           r[k] = el.value;
+          if (k === "grade" && !el._gradeBlur) { el._gradeBlur = 1; el.addEventListener("blur", function () { var g = (window.Fields && Fields.grade ? Fields.grade(el.value) : String(el.value || "").toUpperCase().trim()); if (g !== el.value) { el.value = g; r.grade = g; save(); } }); }
           if (k === "coilsDrawn" && r.cut > 1) { var n = P.num(el.value); r.coilsOut = n !== null && n > 0 ? P.fmtNum(n * r.cut).replace(/,/g, "") : ""; $("r" + i + "-coilsOut").value = r.coilsOut; }
           if (k === "coilsOut") { r.cut = 0; app.querySelectorAll('[data-cut="' + i + '"]').forEach(function (b) { b.classList.remove("on"); }); }
           save(); rowLive(i);
@@ -1327,7 +1328,7 @@ if (typeof module !== "undefined") module.exports = ProdCalc;
     var N = SheetScan.num, str = function (x) { return x === null || x === undefined ? "" : String(x); };
     var rows = sc.coils.map(function (c) {
       var r = blankRow(), cin = N(c.coils_in), cout = N(c.coils_out), avg = N(c.avg_wgt), w = N(c.weight);
-      r.card = str(c.card); r.machine = SheetScan.drawName(c.machine); r.finish = str(c.finish); r.grade = str(c.grade); r.compound = str(c.compound); r.package = str(c.package);
+      r.card = str(c.card); r.machine = SheetScan.drawName(c.machine); r.finish = str(c.finish); r.grade = (window.Fields && Fields.grade ? Fields.grade(str(c.grade)) : String(str(c.grade) || "").toUpperCase().trim()); r.compound = str(c.compound); r.package = str(c.package);
       if (cin !== null && cin > 0) {
         r.coilsDrawn = str(cin);
         if (cout !== null && cout !== cin) { r.coilsOut = str(cout); r.cut = cout === cin * 2 ? 2 : cout === cin * 3 ? 3 : 0; }

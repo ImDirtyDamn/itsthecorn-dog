@@ -86,7 +86,7 @@
       coils.push({ work_order: txt(row.card, 30), tot_avg_wgt: num(row.woTotal), wo_coils: num(row.woCoils), avg_wgt: rr.avg !== undefined ? rr.avg : null,
         coils_in: cin, coils_out: rr.coilsOut !== null && rr.coilsOut !== undefined ? rr.coilsOut : cin, coils_text: txt(rr.coilsText, 20),
         weight: rr.weight !== undefined ? rr.weight : null, machine: txt(row.machine || only, 30),
-        finish: txt(row.finish, 40), grade: txt(row.grade, 40), compound: txt(row.compound, 40), package: txt(row.package, 40) });
+        finish: txt(row.finish, 40), grade: txt((window.Fields && Fields.grade ? Fields.grade(row.grade) : String(row.grade || "").toUpperCase().trim()), 40), compound: txt(row.compound, 40), package: txt(row.package, 40) });
     });
     var raw = {}; Object.keys(S).forEach(function (k) { if (k !== "q" && k !== "screen" && k !== "step") raw[k] = S[k]; });
     return {

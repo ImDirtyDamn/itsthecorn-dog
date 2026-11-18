@@ -1214,7 +1214,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   }
   function cleanDetail(d) {
     d = d && typeof d === "object" ? d : {};
-    var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: trim(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)),
+    var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: gradeNorm(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)),
       start: normSize(str(d.start, 40)), card: trim(str(d.card, 40)).replace(/\s+/g, " ") };
     var av = avgNum(d.avg); if (av != null) o.avg = av;
     var cn = coilsOnCard(d.coils); if (cn != null) o.coils = cn;
@@ -1249,6 +1249,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var sz = d.start && d.size ? d.start + " to " + d.size : d.size ? d.size : d.start ? d.start + " start" : "";
     if (d.shape === "shape") sz = ("SHAPE " + sz).trim();
     return [d.card ? "#" + d.card + (d.coils ? " (" + d.coils + " coils)" : "") : d.coils ? d.coils + " coils" : "", sz, d.grade, (d.tags || []).join(" + "), d.avg ? fmtLb(d.avg) + " lbs" : "", d.part].filter(Boolean).join(" \u00b7 ");
+  }
+  // grade: uppercase, trimmed, letter suffix off ("4037 CHQ" -> "4037"); the B in 10B21 stays (same rule as Fields.grade)
+  function gradeNorm(v) {
+    var t = String(v == null ? "" : v).toUpperCase().replace(/\s+/g, " ").trim().slice(0, 40);
+    var m = /^(\d+(?:[A-Z]\d+)?)(?:\s+[A-Z]{1,5}|\s*CH[QO0])$/.exec(t);
+    return m ? m[1] : t;
   }
   function redNum(v) { var t = String(v == null ? "" : v).trim(); if (!t) return null; var n = Number(t); return isFinite(n) && n > 0 && n < 100 ? Math.round(n * 10) / 10 : null; }
   // % area reduction, round draws: (1 - (finish / start)^2) x 100. Sizes are inches: ".600", "0.6", "1.250"; a whole
@@ -1331,7 +1337,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var dt = num(c.downtimeMin);
       return { id: str(c.id, 64) || uid("c"), machineId: c.machineId, loggedAt: c.loggedAt, weight: num(c.weight),
         coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500), card: str(c.card, 40),
-        part: str(c.part, 60), grade: str(c.grade, 40), tags: cleanTags(c.tags), startSize: str(c.startSize, 40),
+        part: str(c.part, 60), grade: gradeNorm(str(c.grade, 40)), tags: cleanTags(c.tags), startSize: str(c.startSize, 40),
         shape: c.shape === "shape" ? "shape" : "", red: c.shape === "shape" ? redNum(c.red) : null,
         rep: c.rep === "card" || c.rep === "last" ? c.rep : "",
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
@@ -2265,7 +2271,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var icn = f("Coil #", "coilNo", "text", { maxlength: "40" });
     var ip = f("Part #", "part", "text", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off" });
     var is = f("Finish size (in)", "size", "text", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off" });
-    var ig = f("Grade", "grade", "text", { maxlength: "40", placeholder: "Grade", autocomplete: "off" });
+    var ig = f("Grade", "grade", "text", { maxlength: "40", placeholder: "10B21", autocomplete: "off", autocapitalize: "characters", autocorrect: "off", spellcheck: "false" }); ig.style.textTransform = "uppercase";
     var iss = f("Start size (in)", "startSize", "text", { maxlength: "40", placeholder: ".750", inputmode: "decimal", autocomplete: "off" });
     var ish = shapePicker("ce-", c.shape, c.red); g.appendChild(ish.el);
     var it = tagChips(c.tags, "ce-tag"); var itw = el("div", "field det-full"); itw.style.marginBottom = "0";
@@ -2280,7 +2286,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var shp = ish.get();
       if (shp.bad) { setText(err, "Reduction must be a % between 0 and 100, or blank."); return; }
       var rest = { coilNo: str(icn.value, 40), size: normSize(is.value), dm: num(idm.value), dr: str(idr.value, 200), notes: str(ino.value, 500),
-        part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: trim(str(ig.value, 40)), tags: it.get(), startSize: normSize(iss.value) };
+        part: trim(str(ip.value, 60)).replace(/\s+/g, " "), grade: gradeNorm(str(ig.value, 40)), tags: it.get(), startSize: normSize(iss.value) };
       checkCoilWeight(iw.value, iw, function (msg) { setText(err, msg); }, function (w) {
       var sz = { label: "Finish size", v: rest.size, old: c.size || "" }, ss = { label: "Start size", v: rest.startSize, old: c.startSize || "" };
       pickSizes([sz, ss], function () {
@@ -2722,7 +2728,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         ed.appendChild(field("Coil weight (lbs)", wi)); ed.appendChild(field("Machine", ms));
         var rp = input("text", "rc-part-" + k, c.part || "", { maxlength: "60", placeholder: "Customer part #", autocomplete: "off" });
         var rs = input("text", "rc-size-" + k, c.size || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off" });
-        var rg = input("text", "rc-grade-" + k, c.grade || "", { maxlength: "40", placeholder: "Grade", autocomplete: "off" });
+        var rg = input("text", "rc-grade-" + k, c.grade || "", { maxlength: "40", placeholder: "10B21", autocomplete: "off", autocapitalize: "characters", autocorrect: "off", spellcheck: "false" }); rg.style.textTransform = "uppercase";
         var rn = input("text", "rc-note-" + k, c.notes || "", { maxlength: "300", placeholder: "Note for this coil", autocomplete: "off" });
         var rt = tagChips(c.tags, "rc-tag-" + k + "-");
         ed.appendChild(field("Part #", rp, "det-full")); ed.appendChild(field("Finish size (in)", rs)); ed.appendChild(field("Grade", rg));
@@ -2738,7 +2744,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
             var sz = { label: "Finish size", v: normSize(rs.value), old: c.size || "" };
             pickSizes([sz], function () {
               c.weight = w; if (machineById(ms.value)) c.machineId = ms.value;
-              c.part = trim(str(rp.value, 60)).replace(/\s+/g, " "); c.size = sz.v; c.grade = trim(str(rg.value, 40));
+              c.part = trim(str(rp.value, 60)).replace(/\s+/g, " "); c.size = sz.v; c.grade = gradeNorm(str(rg.value, 40));
               c.tags = rt.get(); c.notes = trim(str(rn.value, 300)); c.shape = shp.shape; c.red = shp.red;
               rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
             });
@@ -3252,13 +3258,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var form = el("div", "det-form"); form.style.marginTop = "0.75rem";
     var ist = input("text", "det-start", cur.start || "", { maxlength: "40", placeholder: ".600", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var is = input("text", "det-size", cur.size || "", { maxlength: "40", placeholder: ".275", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
-    // Grade "4037 CHQ" = number box (number keypad) + optional letters box (letter keyboard): phones can't open one box
-    // on numbers and still switch to letters (iPhone's number pad has no ABC key), so the two parts get their own box
-    var gm = /^(\d+)\s*(.*)$/.exec(cur.grade || ""), gN = gm ? gm[1] : "", gL = gm ? gm[2] : (cur.grade || "");
-    var igN = input("text", "det-grade", gN, { maxlength: "12", placeholder: "4037", inputmode: "numeric", pattern: "[0-9]*", autocomplete: "off", enterkeyhint: "next" });
-    var igL = input("text", "det-grade-x", gL, { maxlength: "27", placeholder: "CHQ (if any)", autocomplete: "off", autocapitalize: "characters", autocorrect: "off", spellcheck: "false", enterkeyhint: "next" });
-    igL.style.textTransform = "uppercase";
-    var ig = { get value() { return (trim(igN.value) + " " + trim(igL.value).toUpperCase()).trim(); } };
+    // Grade: one box, letter keyboard, shown and saved uppercase (10B21, 1018, 4037). A suffix like CHQ isn't asked for.
+    var ig = input("text", "det-grade", gradeNorm(cur.grade || ""), { maxlength: "40", placeholder: "10B21", autocomplete: "off", autocapitalize: "characters", autocorrect: "off", spellcheck: "false", enterkeyhint: "next" });
+    ig.style.textTransform = "uppercase";
     var iav = input("text", "det-avg", cur.avg ? String(cur.avg) : "", { maxlength: "9", placeholder: "4580", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
     var icd = input("text", "det-card", cur.card || "", { maxlength: "40", placeholder: "335826", inputmode: "numeric", pattern: "[0-9]*", autocomplete: "off", enterkeyhint: "next" });   // text, so a leading 0 stays
     var itt = input("text", "det-total", cur.total ? String(cur.total) : "", { maxlength: "10", placeholder: "41528", inputmode: "decimal", autocomplete: "off", enterkeyhint: "next" });
@@ -3296,7 +3298,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     form.appendChild(ra); paintRa();
     var rT = el("div", "row2"); rT.appendChild(field("Card total (lbs)", itt)); rT.appendChild(field("Avg weight (lbs)", iav)); form.appendChild(rT);
     form.appendChild(avMsg); paintAvg();
-    var rG = el("div", "row2"); rG.appendChild(field("Grade number", igN)); rG.appendChild(field("Grade letters", igL)); form.appendChild(rG);
+    form.appendChild(field("Grade", ig));
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Conditions (tap all that apply)")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
     var sw = el("div", "field"); sw.appendChild(el("span", "lbl", "Draw type")); sw.lastChild.style.display = "block"; sw.lastChild.style.marginBottom = "0.4rem"; sw.appendChild(seg); form.appendChild(sw);
     var redW = field("Reduction % (optional)", ird); redW.hidden = shape !== "shape"; form.appendChild(redW);
@@ -3310,7 +3312,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
       save(); paintDet();
     };
-    [ip, is, igN, igL, ino, ist, ird, iav, icd, icn, itt].forEach(function (x) { x.addEventListener("input", put); });
+    [ip, is, ig, ino, ist, ird, iav, icd, icn, itt].forEach(function (x) { x.addEventListener("input", put); });
     [itt, icn].forEach(function (x) { x.addEventListener("input", paintAvg); });
     [is, ist, ird].forEach(function (x) { x.addEventListener("input", paintRa); });
     iav.addEventListener("input", paintAvg);
@@ -3710,7 +3712,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var coils = st.coils.slice().sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }).slice(0, ML_COIL_MAX).map(function (c) {
       var m = (byId[c.machineId] || {}).m;
       return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? machineDraw(m) : null,
-        finish: str(c.size || "", 40), grade: str(c.grade || "", 40), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300),
+        finish: str(c.size || "", 40), grade: gradeNorm(str(c.grade || "", 40)), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300),
         start_size: str(c.startSize || "", 40), shape: c.shape === "shape" ? "shape" : "round", reduction: reductionFor(c), repeat: c.rep || "" };
     });
     var downtime = [], problems = [];

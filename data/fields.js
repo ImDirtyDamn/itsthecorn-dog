@@ -11,7 +11,8 @@
    3) COMPOUND. A text input marked data-compound gets a dropdown in front of it: 4392, 3814, TN5, 1360, Drawsol,
       Salvia, Other. The input stays the stored value (a plain string) and keeps its listeners; it only shows
       when Other is picked, for typing the compound. A saved known value picks it; anything else picks Other.
-   4) DATES. Fields.niceDate("2026-11-13") -> "Fri Nov 13, 2026"; niceDate(v, true) -> "Fri Nov 13". Display only. */
+   4) GRADE. Fields.grade(v): uppercase, trimmed, letter suffix dropped ("4037 CHQ" -> "4037"), B in 10B21 kept.
+   5) DATES. Fields.niceDate("2026-11-13") -> "Fri Nov 13, 2026"; niceDate(v, true) -> "Fri Nov 13". Display only. */
 (function () {
   "use strict";
   if (window.Fields) return;
@@ -207,6 +208,14 @@
     for (var i = 0; i < els.length; i++) { var e = els[i], v = e.value.trim(); if (v && sizeAmbig(v) && e._sizeKeep !== v) return e; }
     return null;
   }
-  window.Fields = { hmSplit: hmSplit, hmJoin: hmJoin, enhance: enhance, scan: scan, sizeAmbig: sizeAmbig, sizeChoices: sizeChoices, sizePick: sizePick, sizeNeedsPick: sizeNeedsPick,
+  /* GRADE. One box, uppercased and trimmed: "10b21" -> "10B21", "1018" -> "1018". A letter inside the number (the B in
+     10B21 / 15B41, the L in 12L14) is part of the grade and always kept. A letter suffix after it isn't needed and comes off:
+     "4037 CHQ" -> "4037", "1018CHQ" / "1018 CHO" -> "1018", "10B21 CHQ" -> "10B21". Anything else is kept as typed (uppercased). */
+  function gradeNorm(v) {
+    var t = String(v == null ? "" : v).toUpperCase().replace(/\s+/g, " ").trim().slice(0, 40);
+    var m = /^(\d+(?:[A-Z]\d+)?)(?:\s+[A-Z]{1,5}|\s*CH[QO0])$/.exec(t);
+    return m ? m[1] : t;
+  }
+  window.Fields = { grade: gradeNorm, hmSplit: hmSplit, hmJoin: hmJoin, enhance: enhance, scan: scan, sizeAmbig: sizeAmbig, sizeChoices: sizeChoices, sizePick: sizePick, sizeNeedsPick: sizeNeedsPick,
     COIL_LBS: COIL_LBS, compound: compound, compoundKnown: compoundKnown, COMPOUNDS: COMPOUNDS, niceDate: niceDate };
 })();

@@ -65,7 +65,7 @@
       raw.forEach(function (r) {
         var targets = r.draw ? [r.draw] : (D.length ? D : [""]), k = targets.length;
         targets.forEach(function (d) {
-          parts.push(Object.assign({}, base, { draw: d, grade: r.grade, finish: r.finish, part: r.part, partKey: partKey(r.part), tags: r.tags,
+          parts.push(Object.assign({}, base, { draw: d, grade: (window.Fields && Fields.grade ? Fields.grade(r.grade) : String(r.grade || "").toUpperCase().trim()), finish: r.finish, part: r.part, partKey: partKey(r.part), tags: r.tags,
             lbs: total === null ? null : total * r.share / k, coils: r.coils / k, hours: hours === null ? null : hours * r.share / k,
             dt: r.dt / k, rated: total !== null && hours !== null }));
         });

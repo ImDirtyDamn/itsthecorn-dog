@@ -103,7 +103,7 @@
     var h = '<div class="jl">' +
       '<p class="jl-sub">Search everyone\u2019s past runs and job tips in the master log. Every box is optional. Size and grade match exactly (.600 and 0.6 are the same size). Close means area reduction within \u00b1' + RED_NEAR + ' points, on any size: type a reduction alone to learn from similar jobs.</p>' +
       '<div class="jl-grid">' +
-      fld("Finish size (in)", "jl-size", q0.size, 'inputmode="decimal" placeholder=".600"') + fld("Grade", "jl-grade", q0.grade, 'placeholder="1018" autocapitalize="characters"') +
+      fld("Finish size (in)", "jl-size", q0.size, 'inputmode="decimal" placeholder=".600"') + fld("Grade", "jl-grade", q0.grade, 'placeholder="10B21" autocapitalize="characters" style="text-transform:uppercase"') +
       fld("Start size (in)", "jl-start", q0.start, 'inputmode="decimal" placeholder=".750"') + fld("Reduction %", "jl-red", q0.red, 'inputmode="decimal" placeholder="36"') +
       fld("Reduction from %", "jl-rmin", q0.red_min, 'inputmode="decimal" placeholder="31"') + fld("to %", "jl-rmax", q0.red_max, 'inputmode="decimal" placeholder="41"') +
       '</div><span class="jl-lbl" style="margin-top:.6rem">Draw type</span><div class="jl-seg" role="group" aria-label="Draw type">' +
@@ -246,7 +246,7 @@
         var box = $("jl-tipbox"), f = form(), op = get(K_OP, "") || "", tshape = f.shape || pre.shape || "round";
         box.hidden = false; $("jl-add").hidden = true;
         box.innerHTML = '<div class="jl-tipform"><b class="jl-h">NEW JOB TIP</b><p class="jl-sub">Something the next person running this job should know. Everyone on the crew sees it in JOB LOOKUP, on top.</p><div class="jl-grid">' +
-          fld("Finish size (in)", "jt-size", f.size || pre.size, 'inputmode="decimal" placeholder=".600"') + fld("Grade", "jt-grade", f.grade || pre.grade, 'placeholder="1018"') +
+          fld("Finish size (in)", "jt-size", f.size || pre.size, 'inputmode="decimal" placeholder=".600"') + fld("Grade", "jt-grade", f.grade || pre.grade, 'placeholder="10B21" autocapitalize="characters" style="text-transform:uppercase"') +
           fld("Start size (in)", "jt-start", f.start || pre.start, 'inputmode="decimal" placeholder=".750"') + fld("Your name", "jt-op", op, 'maxlength="60"') + '</div>' +
           '<span class="jl-lbl" style="margin-top:.6rem">Draw type</span><div class="jl-seg two" role="group" aria-label="Draw type">' +
           ['round', 'shape'].map(function (v) { return '<button type="button" id="jt-shape-' + v + '" data-tshape="' + v + '" aria-pressed="' + String(tshape === v) + '">' + v.toUpperCase() + '</button>'; }).join("") + '</div>' +
@@ -274,7 +274,7 @@
           }
           var redT = tshape === "shape" ? $("jt-red").value.trim() : "";
           if (redT && !(+redT > 0 && +redT < 100)) return err("Reduction must be a % between 0 and 100.");
-          var t = { id: uid(), date: today(), operator: $("jt-op").value.trim(), finish: $("jt-size").value.trim(), grade: $("jt-grade").value.trim(), start_size: $("jt-start").value.trim(),
+          var t = { id: uid(), date: today(), operator: $("jt-op").value.trim(), finish: $("jt-size").value.trim(), grade: (window.Fields && Fields.grade ? Fields.grade($("jt-grade").value) : $("jt-grade").value.trim().toUpperCase()), start_size: $("jt-start").value.trim(),
             shape: tshape, reduction: redT === "" ? "" : +redT,
             machine: pre.machine || "", tags: Array.prototype.filter.call(box.querySelectorAll(".jl-tag.on"), function () { return true; }).map(function (b) { return b.textContent; }), tip: $("jt-tip").value.trim() };
           if (!t.tip) return err("Type the tip.");

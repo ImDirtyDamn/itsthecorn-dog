@@ -254,7 +254,7 @@
   /* ---------- tidy what the reader returned (job cards and P-310 rows) ----------
      Machine names written on cards (process lines) become their Draw number; only "Draw N" is ever shown.
      Same card # twice in one photo = one card. Finish is the DRAW TO size, never the start size (a fraction like
-     31/64) or the tolerance (+/- .0015). "CHO" in a grade is the CHQ suffix. Compound stays blank unless it is a
+     31/64) or the tolerance (+/- .0015). Grades are uppercased and lose a letter suffix ("4037 CHQ" -> "4037"); the B in 10B21 stays. Compound stays blank unless it is a
      real compound. On the job card flow nothing else from the card (names, notes) is kept. */
   var DRAW_NAMES = [["west vaughn", 2], ["east vaughn", 9], ["vaughn", 3], ["cheng", 1], ["robinson", 4], ["macbee", 5],
     ["showa", 6], ["v-22", 7], ["v 22", 7], ["v22", 7], ["shaver", 8]];
@@ -302,7 +302,7 @@
         if (looksMach && !r.machine && drawOf(cp)) r.machine = drawOf(cp);
         if (only || looksMach) { r.compound = ""; delete f[p + "compound"]; }
       }
-      if (r.grade) r.grade = String(r.grade).replace(/(\d\s*)CH[O0]\b/i, "$1CHQ").replace(/\bCH[O0]$/i, "CHQ");
+      if (r.grade) r.grade = (window.Fields && Fields.grade ? Fields.grade(r.grade) : String(r.grade || "").toUpperCase().trim());   // 10B21 keeps its B; a suffix (CHQ, CHO) comes off
       var fs = String(r.finish == null ? "" : r.finish).trim(), fn = num(fs);
       if (fs && /\d\s*\/\s*\d/.test(fs)) {
         c.extra.push({ p: p + "finish", soft: true, msg: fs + " is the start size. Type the DRAW TO size" }); r.finish = "";
@@ -457,7 +457,7 @@
         tbox(p + ".card", "Card #", r.card, "card number", "text") +
         '<div class="grid2">' + avgbox(i, r) + tbox(p + ".coils_drawn", "Coils Drawn (in=out)", r.coils_text, "3 or 3=6", "text") + '</div>' +
         '<div class="grid2">' + tbox(p + ".weight", full ? "Weight (lbs)" : "Weight (lbs, card total)", v(r.weight), full ? "weight" : "upper right", "decimal") + machbox(p + ".machine", "Machine", r.machine) + '</div>' +
-        '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "grade") + '</div>' +
+        '<div class="grid2">' + tbox(p + ".finish", "Finish Size (in)", r.finish, "finish size", "decimal") + tbox(p + ".grade", "Grade", r.grade, "10B21", "text", ' autocapitalize="characters" autocorrect="off" spellcheck="false" style="text-transform:uppercase"') + '</div>' +
         '<div class="grid2">' + tbox(p + ".compound", "Draw Compound", r.compound, "compound", "text", ' data-compound="1"') + tbox(p + ".package", "Package", r.package, "package") + '</div></div>';
     });
 
