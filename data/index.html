@@ -91,6 +91,17 @@ details.filters>summary span{color:var(--fg-dim);font-weight:normal;font-size:13
 .badge.met{background:var(--fg);color:#000}
 .badge.notmet{background:var(--red);color:#000}
 .badge.inc{border:1px solid var(--amber);color:var(--amber)}
+.badge.nr{border:1px solid var(--red);color:var(--red)}
+.why{color:var(--amber);font-size:13px;line-height:1.35;margin:-2px 0 8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.srch{margin:10px 0}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.srow2{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-top:8px}
+.srow2 button{min-width:96px}
+.snote{color:var(--fg-dim);font-size:13px;margin:8px 0 0;min-height:1em}
+.hit{color:var(--white);font-size:13px;line-height:1.35;margin:0 0 8px;border-left:3px solid var(--amber);padding-left:8px}
+.hit i{font-style:normal;color:var(--amber);letter-spacing:.06em;font-size:11px;display:block}
+mark{background:var(--amber);color:#000;padding:0 1px}
+.nrf{margin-top:.6rem;width:100%}
 .muted{color:var(--fg-dim)}
 .msg{padding:10px 12px;border:1px solid var(--amber);color:var(--amber);margin:10px 0}
 .msg.bad{border-color:var(--red);color:var(--red)}
@@ -236,7 +247,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   var PAGE = 100;
   var VKEY = "logdbView", view = (function () { try { return sessionStorage.getItem(VKEY) || (/[#&]cmp=/.test(location.hash) ? "analyze" : "logs"); } catch (e) { return "logs"; } })();
   if (/[#&]cmp=/.test(location.hash)) view = "analyze";
-  var F = { from: "", to: "", operator: "", draw: "" }, logs = [], summary = null, operators = [], hasMore = false, current = null;
+  var F = { from: "", to: "", operator: "", draw: "" }, NR = false, logs = [], summary = null, operators = [], hasMore = false, current = null;
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function code() { try { return sessionStorage.getItem(SKEY) || ""; } catch (e) { return ""; } }
@@ -321,6 +332,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     api("/logs" + qs({ limit: PAGE, offset: append ? logs.length : 0 })).then(function (j) {
       logs = append ? logs.concat(j.logs) : j.logs; summary = j.summary; operators = j.operators || []; hasMore = j.logs.length === PAGE;
       renderList();
+      if (SQ.q) runSearch(SQ.q, SQ.f);
     }).catch(function (e) {
       if (e.message === "401") return;
       $("app").innerHTML = '<div class="msg bad" role="alert">Could not load logs: ' + esc(e.message === "Failed to fetch" ? "no connection to the database." : e.message) +
@@ -333,6 +345,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     if (F.from || F.to) p.push((F.from ? day(F.from) : "start") + " \u2192 " + (F.to ? day(F.to) : "today"));
     if (F.operator) p.push(F.operator);
     if (F.draw) p.push("Draw " + F.draw);
+    if (NR) p.push("below goal, no reason");
     return p.length ? p.join(" \u00b7 ") : "all logs";
   }
   function unratedNote(n) {
@@ -346,14 +359,16 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
     $("lockbtn").hidden = false; setTabs();
     var s = summary || {}, rated = (s.met || 0) + (s.not_met || 0), pct = rated ? Math.round(s.met * 100 / rated) : 0;
     var opOpts = '<option value="">Everyone</option>' + operators.map(function (o) { return '<option' + (o.toLowerCase() === F.operator.toLowerCase() ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("");
-    var h = '<details class="filters panel"' + (renderList.open ? " open" : "") + ' id="fbox"><summary>FILTERS <span>' + esc(filterNote()) + '</span></summary><div style="margin-top:10px">' +
+    var h = searchBox();
+    h += '<details class="filters panel"' + (renderList.open ? " open" : "") + ' id="fbox"><summary>FILTERS <span>' + esc(filterNote()) + '</span></summary><div style="margin-top:10px">' +
       '<div class="quick"><button type="button" data-q="7">7 DAYS</button><button type="button" data-q="30">30 DAYS</button><button type="button" data-q="month">MONTH</button><button type="button" data-q="all">ALL</button></div>' +
       '<div class="row2"><div class="field"><label class="lbl" for="ffrom">From</label><input class="in" type="date" id="ffrom" value="' + esc(F.from) + '"></div>' +
       '<div class="field"><label class="lbl" for="fto">To</label><input class="in" type="date" id="fto" value="' + esc(F.to) + '"></div></div>' +
       '<div class="field"><label class="lbl" for="fop">Operator</label><select class="in" id="fop">' + opOpts + '</select></div>' +
       '<div class="field"><span class="lbl">Draw</span><div class="chips" id="fdraw">' +
       ["", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (F.draw === d ? "on" : "") + '">' + (d || "ALL") + '</button>'; }).join("") +
-      '</div></div></div></details>';
+      '</div></div>' +
+      '<button type="button" class="nrf' + (NR ? " on" : "") + '" id="fnr" aria-pressed="' + NR + '">BELOW GOAL, NO REASON' + (NR ? " \u2713" : "") + '</button></div></details>';
     h += '<div class="stats">' +
       '<div class="stat"><i>Logs</i><b>' + n0(s.count) + '</b><small>' + esc(n0(s.net_hours)) + ' run hrs</small></div>' +
       '<div class="stat"><i>Total lbs</i><b>' + n0(s.total_lbs) + '</b><small>goal ' + n0(s.goal_lbs) + '</small></div>' +
@@ -363,10 +378,15 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       (s.count > rated ? '<small>' + unratedNote(s.count - rated) + '</small>' : "") + '</div></div>';
     h += '<div class="toolbar"><button type="button" id="csv">EXPORT CSV</button><button type="button" id="refresh" class="ghost">REFRESH</button></div>';
     if (!logs.length) h += '<div class="msg">No logs match. Try ALL in the filters.</div>';
+    var shown = logs.map(function (l, i) { return i; }).filter(function (i) { return (!NR || noReason(logs[i])) && (!SQ.hits || SQ.hits[logs[i].id]); });
+    if (logs.length && !shown.length) h += '<div class="msg">' + (SQ.hits ? "No shifts match the search." : "Every below-goal shift here has a reason.") + '</div>';
+    else if (NR) h += '<div class="snote">' + shown.length + ' below-goal shift' + (shown.length === 1 ? "" : "s") + ' with no day notes and no downtime.</div>';
     h += '<div class="loglist">';
-    logs.forEach(function (l, i) {
+    shown.forEach(function (i) { var l = logs[i];
       h += '<button type="button" class="logcard" data-i="' + i + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(day(l.shift_date)) + (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div>' +
-        '<div class="lc2">' + badge(l.goal_met, l) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + '</div>' +
+        '<div class="lc2">' + badge(l.goal_met, l) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + (noReason(l) ? '<span class="badge nr">NO REASON</span>' : "") + '</div>' +
+        (l.goal_met === 0 && reasonOf(l) ? '<div class="why">' + esc(reasonOf(l)) + '</div>' : "") +
+        (SQ.hits && SQ.hits[l.id] ? '<div class="hit"><i>' + esc(SQ.hits[l.id].label) + '</i>' + markUp(SQ.hits[l.id].text, SQ.terms) + '</div>' : "") +
         '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? n0(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LBS/HR</i><b>' + n1(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + n1(l.goal_lbhr) + '</b></div></div></button>';
     });
     h += '</div>';
@@ -386,10 +406,131 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll(".logcard"), function (b) { b.onclick = function () { openDetail(logs[+b.dataset.i]); }; });
+    $("fnr").onclick = function () { NR = !NR; renderList(); };
+    wireSearch();
     $("csv").onclick = exportCsv;
     $("refresh").onclick = function () { load(false); };
     if ($("more")) $("more").onclick = function () { load(true); };
     loadCoilCounts();
+  }
+  /* ---------- NOT MET: the reason, or a NO REASON badge ----------
+     The reason is the operator's "Under goal:" line (tracker prompt) or the first line of the day notes, else the
+     first downtime line. NO REASON = goal not met, no day notes and no downtime minutes. */
+  function reasonOf(l) {
+    var dn = String(l.day_notes || "").trim(), m = /^Under goal:.*$/m.exec(dn);
+    if (m) return m[0].slice(0, 160);
+    if (dn) return dn.split("\n")[0].slice(0, 160);
+    var pr = String(l.problems || "").split("\n").filter(function (p) { return /min down/i.test(p) || (p && !/^Sent before the shift ended|^Ran \d+ machines/.test(p)); })[0];
+    return pr ? pr.slice(0, 160) : "";
+  }
+  function noReason(l) { return l.goal_met === 0 && !String(l.day_notes || "").trim() && !(+l.downtime_minutes > 0); }
+
+  /* ---------- SEARCH: keyword search of the shifts, picked field ----------
+     Asks the database first (GET /find, every log). If that isn't there (older database), it searches the logs loaded
+     on this page instead, opening each shift's coils once (read only) for coil fields. */
+  var SFIELDS = [["all", "All fields"], ["day", "Day notes"], ["coil", "Coil notes"], ["problems", "Problems / downtime"], ["maint", "Maintenance"],
+    ["tips", "Job tips"], ["operator", "Operator"], ["card", "Card #"], ["wo", "Work order"], ["part", "Part #"], ["size", "Size / grade"], ["split", "Coil split / conditions"]];
+  var SQ = { q: "", f: "all", hits: null, terms: [], note: "", busy: false, tips: null }, DC = {};
+  function sTerms(q) { return String(q || "").toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8); }
+  function markUp(t, terms) {
+    var h = esc(t);
+    terms.forEach(function (w) { var e = esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); h = h.replace(new RegExp("(" + e + ")", "gi"), "<mark>$1</mark>"); });
+    return h;
+  }
+  function searchBox() {
+    return '<form class="panel srch" id="sform" autocomplete="off" role="search"><label class="lbl" for="sq">Search the shifts</label>' +
+      '<div class="srow"><input class="in" id="sq" type="search" maxlength="80" placeholder="pay-off jam, 335826, .312 1018" value="' + esc(SQ.q) + '">' +
+      '<button type="submit" class="solid" id="sgo">SEARCH</button></div>' +
+      '<div class="srow2"><select class="in" id="sf" aria-label="Search in">' + SFIELDS.map(function (x) { return '<option value="' + x[0] + '"' + (SQ.f === x[0] ? " selected" : "") + '>' + esc(x[1]) + '</option>'; }).join("") + '</select>' +
+      '<button type="button" class="ghost" id="sclr"' + (SQ.hits || SQ.q ? "" : " hidden") + '>CLEAR</button></div>' +
+      '<p class="snote" id="snote" role="status">' + esc(SQ.note) + '</p>' + (SQ.tips && SQ.tips.length ? tipsHtml(SQ.tips) : "") + '</form>';
+  }
+  function tipsHtml(t) {
+    return '<div style="margin-top:8px">' + t.slice(0, 20).map(function (x) {
+      return '<div class="hit"><i>JOB TIP \u00b7 ' + esc([x.finish, x.grade, x.machine, x.operator, x.date ? day(String(x.date).slice(0, 10)) : ""].filter(Boolean).join(" \u00b7 ")) + '</i>' + markUp(x.tip || "", SQ.terms) + '</div>';
+    }).join("") + '</div>';
+  }
+  function wireSearch() {
+    $("sform").onsubmit = function (e) { e.preventDefault(); runSearch($("sq").value, $("sf").value); };
+    $("sf").onchange = function () { SQ.f = $("sf").value; if (trim($("sq").value)) runSearch($("sq").value, SQ.f); };
+    $("sclr").onclick = function () { SQ = { q: "", f: SQ.f, hits: null, terms: [], note: "", busy: false, tips: null }; renderList(); };
+  }
+  function trim(v) { return String(v == null ? "" : v).replace(/^\s+|\s+$/g, ""); }
+  function needsCoils(f) { return ["all", "coil", "card", "wo", "part", "size", "split", "problems"].indexOf(f) >= 0; }
+  // the text of one field of one shift (j = the opened shift, when it was needed)
+  function fieldText(f, l, j) {
+    var cs = j ? j.coils || [] : [], rc = j && j.raw && j.raw.raw && j.raw.raw.state && Array.isArray(j.raw.raw.state.coils) ? j.raw.raw.state.coils : [];
+    var col = function (fn) { return cs.map(fn).filter(Boolean).join(" \u00b7 "); };
+    if (f === "day") return l.day_notes || "";
+    if (f === "maint") return l.maintenance || "";
+    if (f === "operator") return l.operator || "";
+    if (f === "problems") return [l.problems || ""].concat(j ? (j.downtime || []).map(function (d) { return d.reason; }) : []).filter(Boolean).join(" \u00b7 ");
+    if (f === "coil") return col(function (c) { return c.note; });
+    if (f === "card" || f === "wo") return [col(function (c) { return c.work_order; })].concat(rc.map(function (c) { return c.card || c.coilNo; })).filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(" \u00b7 ");
+    if (f === "part") return col(function (c) { return c.part; });
+    if (f === "size") return col(function (c) { return [c.start_size && c.start_size + " to", c.finish, c.grade].filter(Boolean).join(" "); });
+    if (f === "split") return col(function (c) { return [c.tags ? String(c.tags).split(",").join(" + ") : "", c.coils_text === "1/2" || c.coils_text === "1/3" ? "coils drawn " + c.coils_text : ""].filter(Boolean).join(" "); });
+    return "";
+  }
+  var FLABEL = {}; SFIELDS.forEach(function (x) { FLABEL[x[0]] = x[1]; });
+  function matchLog(f, l, j, terms) {
+    var list = f === "all" ? ["day", "coil", "problems", "maint", "operator", "card", "part", "size", "split"] : [f];
+    var all = list.map(function (k) { return fieldText(k, l, j); }).join(" \n ").toLowerCase();
+    if (!terms.every(function (w) { return all.indexOf(w) >= 0; })) return null;
+    for (var i = 0; i < list.length; i++) {
+      var t = fieldText(list[i], l, j), lo = t.toLowerCase();
+      var k = terms.reduce(function (a, w) { var x = lo.indexOf(w); return a < 0 || (x >= 0 && x < a) ? x : a; }, -1);
+      if (k >= 0) { var a = Math.max(0, k - 50); return { label: FLABEL[list[i]] || list[i], text: (a ? "\u2026" : "") + t.slice(a, a + 170) + (t.length > a + 170 ? "\u2026" : "") }; }
+    }
+    return { label: FLABEL[f] || f, text: "" };
+  }
+  function openAll(list, done) {
+    var todo = list.filter(function (l) { return !DC[l.id]; }), n = 0, i = 0, act = 0, failed = 0;
+    if (!todo.length) { done(failed); return; }
+    function next() {
+      while (act < 6 && i < todo.length) {
+        var l = todo[i++]; act++;
+        (function (l) {
+          api("/logs/" + encodeURIComponent(l.id)).then(function (j) { DC[l.id] = j; }).catch(function () { failed++; }).then(function () {
+            act--; n++; var sn = $("snote"); if (sn) sn.textContent = "Reading shifts\u2026 " + n + " of " + todo.length;
+            if (n === todo.length) done(failed); else next();
+          });
+        })(l);
+      }
+    }
+    next();
+  }
+  function runSearch(q, f) {
+    q = trim(q).slice(0, 80); SQ.q = q; SQ.f = f; SQ.tips = null;
+    if (!q) { SQ.hits = null; SQ.terms = []; SQ.note = ""; renderList(); return; }
+    var terms = sTerms(q), key = q + "|" + f + "|" + qs(); SQ.key = key; SQ.terms = terms;
+    $("snote").textContent = "Searching\u2026";
+    api("/find" + qs({ q: q, field: f, limit: 500 })).then(function (j) {
+      if (SQ.key !== key) return;
+      var hits = {}, n = 0, extra = 0;
+      (j.results || []).forEach(function (r) { if (!hits[r.id]) { hits[r.id] = { label: FLABEL[r.field] || r.field || "", text: r.snippet || "" }; n++; } });
+      extra = n - logs.filter(function (l) { return hits[l.id]; }).length;
+      SQ.hits = hits; SQ.tips = j.tips || [];
+      if (f === "tips") SQ.note = SQ.tips.length + " job tip" + (SQ.tips.length === 1 ? " matches" : "s match") + ". Tips are for a job, not a shift: they show here.";
+      else SQ.note = n + " shift" + (n === 1 ? "" : "s") + " match" + (n === 1 ? "es" : "") + (f === "all" ? "" : " in " + FLABEL[f]) + (SQ.tips.length ? " \u00b7 " + SQ.tips.length + " job tip" + (SQ.tips.length === 1 ? "" : "s") : "") +
+        (extra > 0 ? " (" + extra + " older than the shifts shown: SHOW MORE or widen the dates)" : "") + ".";
+      renderList();
+    }).catch(function (e) {
+      if (e.message === "401" || SQ.key !== key) return;
+      localSearch(q, f, terms, key);
+    });
+  }
+  function localSearch(q, f, terms, key) {
+    if (f === "tips") { SQ.hits = {}; SQ.note = "Job tips can only be searched by the database. Use the LOOKUP tab (size and grade) for tips."; renderList(); return; }
+    var go = function (failed) {
+      if (SQ.key !== key) return;
+      var hits = {}, n = 0;
+      logs.forEach(function (l) { var m = matchLog(f, l, DC[l.id], terms); if (m) { hits[l.id] = m; n++; } });
+      SQ.hits = hits;
+      SQ.note = n + " of the " + logs.length + " shifts shown match" + (f === "all" ? "" : " in " + FLABEL[f]) + "." + (hasMore ? " Older shifts aren't searched: SHOW MORE first." : "") + (failed ? " " + failed + " couldn't be opened." : "");
+      renderList();
+    };
+    if (needsCoils(f)) openAll(logs, go); else go(0);
   }
   /* coils per log for the list cards (one card row can be several coils: Coils Drawn) */
   var coilCount = {}, coilQs = null;
@@ -461,6 +602,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
         ["Machine", c.machine], ["Finish Size", c.finish], ["Grade", c.grade]];
       if (c.start_size || c.reduction != null || c.shape === "shape") cells.push(["Start size", c.start_size], ["Reduction", c.reduction != null ? c.reduction + "%" : ""], ["Draw type", c.shape === "shape" ? "Shape" : "Round"]);
       if (c.compound || c.package) cells.push(["Draw Compound", c.compound], ["Package", c.package], ["", ""]);
+      var spl = /(^|,)\s*Cut in half\s*(,|$)/i.test(c.tags || "") || c.coils_text === "1/2" ? "Cut in half" : /(^|,)\s*Thirds\s*(,|$)/i.test(c.tags || "") || c.coils_text === "1/3" ? "Thirds" : "";
+      if (spl) cells.push(["Coil split", spl]);
       if (c.part || c.tags || c.note) cells.push(["Part #", c.part, "wide"], ["Run conditions", c.tags ? String(c.tags).split(",").join(" + ") : "", "wide"], ["Note", c.note, "wide"]);
       // tracker coils never have the paper-card fields: show only what's filled in
       if (tracker) cells = cells.filter(function (x) { return x[0] && x[1] !== null && x[1] !== undefined && x[1] !== "" && x[1] !== "\u2013"; });

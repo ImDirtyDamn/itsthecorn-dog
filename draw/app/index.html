@@ -606,6 +606,13 @@
   .rb-det:empty { display: none; }
   .hist-notes { white-space: pre-wrap; color: var(--white); font-size: 0.95rem; background: #000; border: 1px solid var(--fg-faint); padding: 0.6rem 0.75rem; margin: 0.5rem 0 0; }
   #ml { z-index: 46; }
+  .det-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .det-split button { font-size: 0.85rem; letter-spacing: 0.04em; padding: 0.2rem 0.3rem; }
+  #why { z-index: 52; align-items: flex-end; }
+  .why-box { max-height: 92vh; overflow-y: auto; }
+  .why-sub { color: var(--fg-dim); font-size: 0.95rem; margin: -0.75rem 0 0.9rem; line-height: 1.35; }
+  #why-picks .chip { flex: 1 0 40%; }
+  #why-text { margin: 0.75rem 0 1rem; min-height: 4rem; }
   #ml .ldb .ldb-show { background: transparent; color: var(--fg); border: 2px solid var(--fg); border-radius: 3px; font-family: inherit; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
   #ml .ldb .ldb-show:active { background: var(--fg); color: #000; }
 </style>
@@ -812,6 +819,15 @@
     <dl class="cfd-rows" id="cfd-rows"></dl>
     <div id="cfd-flags"></div>
     <div class="ask-btns"><button type="button" class="btn" id="cfd-no">Go back</button><button type="button" class="btn solid" id="cfd-yes">Confirm</button></div>
+  </div>
+</div>
+<div class="ask" id="why" hidden role="dialog" aria-modal="true" aria-labelledby="why-title">
+  <div class="ask-box why-box">
+    <p class="ask-msg" id="why-title">You're under goal. What slowed you down?</p>
+    <p class="why-sub" id="why-sub"></p>
+    <div class="det-tags" id="why-picks" role="group" aria-label="Reasons"></div>
+    <textarea class="in" id="why-text" rows="2" maxlength="300" placeholder="Anything else (optional)" aria-label="More about why"></textarea>
+    <div class="ask-btns"><button type="button" class="btn" id="why-skip">SKIP</button><button type="button" class="btn solid" id="why-save">SAVE REASON</button></div>
   </div>
 </div>
 <div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
@@ -1212,6 +1228,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function normSize(v) {
     return trim(v).replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, "").slice(0, 40);
   }
+  /* coil split on the job card: "" full coils, "half" each coil cut in half, "third" each coil cut in thirds.
+     Saved on each coil; the master log gets it as a run-condition tag ("Cut in half" / "Thirds") and as
+     Coils Drawn "1/2" or "1/3", both fields the master log already keeps. */
+  var SPLITS = { half: { n: 2, tag: "Cut in half", txt: "1/2", lbl: "CUT IN HALF" }, third: { n: 3, tag: "Thirds", txt: "1/3", lbl: "THIRDS" } };
+  function splitOf(v) { return v === "half" || v === "third" ? v : ""; }
+  function splitPcs(v) { var x = SPLITS[splitOf(v)]; return x ? x.n : 1; }
   function cleanDetail(d) {
     d = d && typeof d === "object" ? d : {};
     var o = { part: trim(str(d.part, 60)).replace(/\s+/g, " "), size: normSize(str(d.size, 40)), grade: gradeNorm(str(d.grade, 40)), tags: cleanTags(d.tags), note: trim(str(d.note, 300)),
@@ -1223,9 +1245,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     // other shifts and people may have run some, so no "X of 10" for a carried card). Changing the card # drops it.
     if (o.card && d.priorCard === cardKey(o.card)) { o.priorCard = d.priorCard; var pr = num(d.prior); if (pr > 0 && pr <= 1000) o.prior = Math.round(pr); }
     if (d.shape === "shape") { o.shape = "shape"; var r = redNum(d.red); if (r != null) o.red = r; }
+    if (splitOf(d.split)) o.split = splitOf(d.split);
     if (o.size && d.sizeKeep === o.size) o.sizeKeep = o.size;     // "Keep 600": the operator said so; don't ask again
     if (o.start && d.startKeep === o.start) o.startKeep = o.start;
-    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.shape || o.avg || o.card || o.coils || o.total ? o : null;
+    return o.part || o.size || o.grade || o.tags.length || o.note || o.start || o.shape || o.split || o.avg || o.card || o.coils || o.total ? o : null;
   }
   // card total weight (lbs): plain number, commas ok, up to 2,000,000
   function cardTotal(v) { var t = String(v == null ? "" : v).replace(/,/g, "").trim(); if (!/^\d+(?:\.\d)?$/.test(t)) return null; var n = +t; return n > 0 && n <= 2000000 ? n : null; }
@@ -1248,7 +1271,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (!d) return "";
     var sz = d.start && d.size ? d.start + " to " + d.size : d.size ? d.size : d.start ? d.start + " start" : "";
     if (d.shape === "shape") sz = ("SHAPE " + sz).trim();
-    return [d.card ? "#" + d.card + (d.coils ? " (" + d.coils + " coils)" : "") : d.coils ? d.coils + " coils" : "", sz, d.grade, (d.tags || []).join(" + "), d.avg ? fmtLb(d.avg) + " lbs" : "", d.part].filter(Boolean).join(" \u00b7 ");
+    return [d.card ? "#" + d.card + (d.coils ? " (" + d.coils + " coils)" : "") : d.coils ? d.coils + " coils" : "", sz, d.grade, (d.tags || []).join(" + "), d.split ? SPLITS[d.split].tag : "", d.avg ? fmtLb(d.avg) + " lbs" : "", d.part].filter(Boolean).join(" \u00b7 ");
   }
   // grade: uppercase, trimmed, letter suffix off ("4037 CHQ" -> "4037"); the B in 10B21 stays (same rule as Fields.grade)
   function gradeNorm(v) {
@@ -1311,6 +1334,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     if (isIso(sh.createdAt)) s.createdAt = sh.createdAt;
     if (isIso(sh.updatedAt)) s.updatedAt = sh.updatedAt;
     s.dayNotes = str(sh.dayNotes, 2000);
+    if (sh.underSkip === "mid" || sh.underSkip === "end") s.underSkip = sh.underSkip;
 
     var seen = {};
     var ms = Array.isArray(p.machines) ? p.machines.filter(function (m) { return m && typeof m === "object"; }).slice(0, MAX_MACHINES) : [];
@@ -1339,7 +1363,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         coilNo: str(c.coilNo, 40), heatNo: str(c.heatNo, 40), size: str(c.size, 40), notes: str(c.notes, 500), card: str(c.card, 40),
         part: str(c.part, 60), grade: gradeNorm(str(c.grade, 40)), tags: cleanTags(c.tags), startSize: str(c.startSize, 40),
         shape: c.shape === "shape" ? "shape" : "", red: c.shape === "shape" ? redNum(c.red) : null,
-        rep: c.rep === "card" || c.rep === "last" ? c.rep : "",
+        rep: c.rep === "card" || c.rep === "last" ? c.rep : "", split: splitOf(c.split),
         downtimeMin: dt >= 0 ? dt : null, downtimeReason: str(c.downtimeReason, 200) };
     }) : [];
     var downtime = Array.isArray(p.downtime) ? p.downtime.filter(function (d) {
@@ -1836,8 +1860,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // coil weight in lb: a plain positive number only. Commas (4,500) and one decimal place (4500.5) are fine.
   // Nothing is ever changed to make it fit: -500, 1e3, 4500 lbs, abc and 0 are refused with a message.
   var MAX_COIL_LB = 100000;
-  function checkCoilWeight(raw, inp, showErr, onOk) {
+  function checkCoilWeight(raw, inp, showErr, onOk, pcs) {
     var t = String(raw == null ? "" : raw).trim(), set = defaultSettings();
+    if (pcs > 1) set.confirmUnderLb = Math.round(set.confirmUnderLb / pcs);   // a cut piece is half or a third of a coil
     var ask = "Enter the coil weight in lbs";
     if (!t) { showErr(ask + "."); return; }
     if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^\.\d+$/.test(t)) {
@@ -1958,6 +1983,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var rr = reductionFor(d); if (rr != null) rows.push([label + " reduction", rr + "%" + (d.shape === "shape" ? " (typed)" : "")]);
     if (d.tags && d.tags.length) rows.push([label + " conditions", d.tags.join(" + ")]);
     if (d.avg) rows.push([label + " avg coil weight", fmtLb(d.avg) + " lbs"]);
+    if (d.split) rows.push([label + " coil split", SPLITS[d.split].tag + (d.avg ? ": " + fmtLb(Math.round(d.avg / splitPcs(d.split) * 10) / 10) + " lbs a piece" : "")]);
     if (d.note) rows.push([label + " note (next coil)", d.note]);
   }
   $("ask-yes").addEventListener("click", function () { closeAsk(true); });
@@ -1966,7 +1992,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
 
   function logCoil(machineId, inp, lastEl) {
     checkCoilWeight(inp.value, inp, function (msg) { setText(lastEl, msg); setCls(lastEl, "mc-last red"); },
-      function (w) { guardEnded(function () { addCoil(machineId, w); inp.value = ""; try { inp.blur(); } catch (e) {} }); });
+      function (w) { guardEnded(function () { addCoil(machineId, w); inp.value = ""; try { inp.blur(); } catch (e) {} }); }, splitPcs(((state.shift.details || {})[machineId] || {}).split));
   }
   /* ---------- shift is over: which shift comes next, and do not log into an old one silently ---------- */
   var OVER_BANNER_MS = 60 * 60000;   // banner shows once the shift has been over this long
@@ -2022,7 +2048,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   function addCoil(machineId, w, extra, rep) {
     var d = extra ? {} : (state.shift.details || {})[machineId] || {};
     var c = { id: uid("c"), machineId: machineId, loggedAt: iso(Date.now()), weight: w, coilNo: "", heatNo: "", rep: rep === "card" || rep === "last" ? rep : "",
-      card: d.card || "", size: d.size || "", startSize: d.start || "", shape: d.shape === "shape" ? "shape" : "", red: d.shape === "shape" && d.red != null ? d.red : null, notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(),
+      card: d.card || "", size: d.size || "", startSize: d.start || "", shape: d.shape === "shape" ? "shape" : "", red: d.shape === "shape" && d.red != null ? d.red : null, notes: d.note || "", part: d.part || "", grade: d.grade || "", tags: (d.tags || []).slice(), split: splitOf(d.split),
       downtimeMin: null, downtimeReason: "" };
     if (extra) {   // a scanned card: its own card #, size and note, and the time the scan page worked out
       c.coilNo = str(extra.coilNo, 40); c.size = str(extra.size, 40); c.notes = str(extra.notes, 300);
@@ -2297,7 +2323,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       c.downtimeMin = rest.dm >= 0 ? rest.dm : null; c.downtimeReason = rest.dr; c.notes = rest.notes;
       editingCoil = null; save(); tick(); renderAdvanced(); if (rcOpen) renderRecent();
       });
-      });
+      }, splitPcs(c.split));
     }));
     line.appendChild(smallBtn("DELETE COIL", "warn", function () {
       askConfirm("Delete this " + fmtLb(c.weight) + " lbs coil?", "Delete it", "Keep it", function () {
@@ -2402,6 +2428,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
         "Start new shift", "Cancel", function () { startNewShift(true); }, function () {}, function () {}, true);
       return;
     }
+    if (has && confirmed !== "why") { askWhy(function () { startNewShift("why"); }); return; }
     var ask = false, sentKey = null;
     if (has) { try { ask = !mlCredsReady(); sentKey = mlBase(); mlSend(false); } catch (e) {} }   // queued before anything is cleared
     var now = Date.now();
@@ -2419,7 +2446,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     state.coils = []; state.downtime = [];
     // the next shift that has not ended yet (tapped at 7 PM after a 6-6 day shift -> tomorrow, not a shift that is already over)
     state.shift.id = uid("s"); state.shift.date = nextShiftDate(state.shift.start, state.shift.end, now); state.shift.createdAt = iso(now);
-    state.shift.dayNotes = ""; state.shift.details = {};          // a fresh shift starts with nothing filled in
+    state.shift.dayNotes = ""; state.shift.details = {}; delete state.shift.underSkip;          // a fresh shift starts with nothing filled in
     state.machines.forEach(function (m) { m.timerStartedAt = null; m.timerAccumMs = 0; });
     state.setupDone = false; editingCoil = null;
     save();
@@ -2748,7 +2775,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
               c.tags = rt.get(); c.notes = trim(str(rn.value, 300)); c.shape = shp.shape; c.red = shp.red;
               rcEdit = null; rcHl = c.id; save(); tick(); if (advOpen) renderAdvanced(); renderRecent();
             });
-          });
+          }, splitPcs(c.split));
         }); sv.id = "rc-save-" + k;
         var cx = smallBtn("CANCEL", "", function () { rcEdit = null; renderRecent(); });
         bs.appendChild(sv); bs.appendChild(cx); ed.appendChild(bs); ed.appendChild(er);
@@ -3211,9 +3238,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // "3 of 10 from card 335826", "10 of 10 · card done", or "3 logged on card 335826" when the coil count isn't set.
   function cardProgress(mid) {
     var d = (state.shift.details || {})[mid]; if (!d || !d.card) return null;
-    var x = coilsLoggedOn(d.card), n = d.coils || 0;
+    var x = coilsLoggedOn(d.card), n = (d.coils || 0) * splitPcs(d.split);
     if (d.priorCard) return { t: (x + (d.prior || 0)) + " logged by you on card " + d.card, done: false };   // carried over: only your own count
     if (!n) return { t: x + " logged on card " + d.card, done: false };
+    if (d.split) return x >= n ? { t: x + " pieces of " + n + " · card done", done: true, over: x > n } : { t: x + " of " + n + " pieces (" + SPLITS[d.split].tag.toLowerCase() + ") on card " + d.card, done: false };
     if (x > n) return { t: x + " logged · card says " + n, done: true, over: true };
     if (x === n) return { t: n + " of " + n + " · card done", done: true };
     return { t: x + " of " + n + " from card " + d.card, done: false };
@@ -3223,7 +3251,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     ["dock-log", "s-log-btn"].forEach(function (id) {
       var b = $(id); if (!b) return;
       var wf = id === "dock-log" && m ? weightFor(m.id) : null;
-      var wt = wf ? fmtLb(wf.w) + " lbs (card avg)" : id === "dock-log" ? "job card is blank" : "";
+      var wt = wf ? fmtLb(wf.w) + " lbs (" + (wf.split ? SPLITS[wf.split].txt + " of card avg" : "card avg") + ")" : id === "dock-log" ? "job card is blank" : "";
       var key = (pr ? pr.t + (pr.over ? "!" : "") : "") + "|" + wt;
       if (b._prog === key) return;
       b._prog = key; b.textContent = "LOG COIL";
@@ -3238,7 +3266,9 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   // null = the job card is blank: LOG COIL asks (enter this coil's weight, or fill out the job card)
   function weightFor(mid) {
     var d = (state.shift.details || {})[mid];
-    return d && d.avg > 0 ? { w: d.avg, src: "card" } : null;
+    if (!(d && d.avg > 0)) return null;
+    var n = splitPcs(d.split);
+    return { w: n > 1 ? Math.round(d.avg / n * 10) / 10 : d.avg, src: "card", split: splitOf(d.split) };
   }
   // the last coil logged on this draw (only used to prefill the weight box)
   function lastCoilOn(mid) {
@@ -3274,6 +3304,13 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       b.addEventListener("click", function () { shape = v; segBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); redW.hidden = shape !== "shape"; paintRa(); put(); });
       seg.appendChild(b); return b;
     });
+    var split = splitOf(cur.split);
+    var spSeg = el("div", "det-seg det-split"); spSeg.setAttribute("role", "group"); spSeg.setAttribute("aria-label", "Coil split");
+    var spBtns = [["", "FULL"], ["half", "CUT IN HALF"], ["third", "THIRDS"]].map(function (v) {
+      var b = el("button", null, v[1]); b.type = "button"; b.id = "det-split-" + (v[0] || "full"); b.setAttribute("aria-pressed", String(split === v[0]));
+      b.addEventListener("click", function () { split = v[0]; spBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); put(); paintAvg(); });
+      spSeg.appendChild(b); return b;
+    });
     var ra = el("p", "det-ra"); ra.id = "det-ra";
     var paintRa = function () {
       if (shape === "shape") { var t = redNum(ird.value); setText(ra, t != null ? "Shape draw: reduction " + t + "% (typed)." : "Shape draw: reduction isn't worked out from sizes. Type it if you know it."); return; }
@@ -3289,6 +3326,8 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       if (!t) { setText(avMsg, ""); setCls(avMsg, "card-avg"); return; }
       if (a == null) { setText(avMsg, "Type the weight in lbs, for example 4580."); setCls(avMsg, "card-avg amber"); return; }
       if (a < set.confirmUnderLb || a > set.confirmOverLb) { setText(avMsg, fmtLb(a) + " lbs a coil is outside " + fmtInt(set.confirmUnderLb) + " to " + fmtInt(set.confirmOverLb) + " lbs. Check it."); setCls(avMsg, "card-avg amber"); return; }
+      var pn = splitPcs(split);
+      if (pn > 1) { setText(avMsg, "Coils are " + SPLITS[split].tag.toLowerCase() + ": LOG COIL logs " + fmtLb(Math.round(a / pn * 10) / 10) + " lbs a piece (" + SPLITS[split].txt + " of " + fmtLb(a) + ")."); setCls(avMsg, "card-avg"); return; }
       setText(avMsg, "LOG COIL logs " + fmtLb(a) + " lbs a tap" + (iav.readOnly ? " (card total ÷ coils)." : ".")); setCls(avMsg, "card-avg");
     };
     var it = tagChips(cur.tags, "det-tag-");
@@ -3297,6 +3336,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var r1 = el("div", "row2"); r1.appendChild(field("Start size (in)", ist)); r1.appendChild(field("Finish size (in)", is)); form.appendChild(r1);
     form.appendChild(ra); paintRa();
     var rT = el("div", "row2"); rT.appendChild(field("Card total (lbs)", itt)); rT.appendChild(field("Avg weight (lbs)", iav)); form.appendChild(rT);
+    var spW = el("div", "field"); spW.appendChild(el("span", "lbl", "Coil split")); spW.lastChild.style.display = "block"; spW.lastChild.style.marginBottom = "0.4rem"; spW.appendChild(spSeg); form.appendChild(spW);
     form.appendChild(avMsg); paintAvg();
     form.appendChild(field("Grade", ig));
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Conditions (tap all that apply)")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
@@ -3306,7 +3346,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     form.appendChild(field("Note", ino));
     body.appendChild(form);
     var put = function () {
-      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, shape: shape, red: ird.value, avg: iav.value, card: icd.value, coils: icn.value, total: itt.value,
+      var d = cleanDetail({ part: ip.value, size: is.value, grade: ig.value, tags: it.get(), note: ino.value, start: ist.value, shape: shape, red: ird.value, split: split, avg: iav.value, card: icd.value, coils: icn.value, total: itt.value,
         sizeKeep: cur.sizeKeep, startKeep: cur.startKeep, prior: cur.prior, priorCard: cur.priorCard });
       if (!state.shift.details) state.shift.details = {};
       if (d) state.shift.details[m.id] = d; else delete state.shift.details[m.id];
@@ -3325,6 +3365,54 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     body.appendChild(clr);
     body.appendChild(el("p", "sh-sub", "Starting the next job? Tap NEW CARD. Already logged a coil? Fix it in RECENT COILS. NEW SHIFT clears the card."));
   }
+  /* ---------- under goal: ask why (at SEND TO MASTER LOG and at NEW SHIFT) ----------
+     Asked when the shift ended under its goal, or mid-shift when more than about a coil behind the pace car.
+     The answer goes into the day notes as one line, "Under goal: Pay-off jam, Die change. <typed text>",
+     so it reaches the master log in day_notes like any note. SKIP sends without a reason (asked again at shift end). */
+  var WHY = ["Pay-off jam", "Die change", "Wire breaks", "Material issue", "Waiting on material", "Maintenance", "Training", "Other"];
+  var whyOpen = null;
+  function underInfo(now) {
+    if (!state.setupDone) return null;
+    var r = Calc.compute(state, now); if (r.phase === "invalid" || r.phase === "before") return null;
+    var done = r.phase === "after", goal = done ? r.target : r.paceCar;
+    if (goal == null || !(goal > 0)) return null;
+    var short = goal - (r.lbsRan || 0);
+    if (done ? short <= 0 : short <= BEHIND_YELLOW_LB) return null;
+    return { done: done, short: short, pct: r.target > 0 ? (r.lbsRan || 0) / r.target * 100 : null, key: done ? "end" : "mid" };
+  }
+  var WHY_RE = /^Under goal:.*$/m;
+  function hasUnderReason() { return WHY_RE.test(state.shift.dayNotes || ""); }
+  function askWhy(go) {
+    var u = null; try { u = underInfo(Date.now()); } catch (e) {}
+    var sk = state.shift.underSkip;
+    if (!u || hasUnderReason() || sk === "end" || sk === u.key) { go(); return; }
+    var picks = [], box = $("why-picks"); box.textContent = "";
+    WHY.forEach(function (t, i) {
+      var b = el("button", "btn chip", t); b.type = "button"; b.id = "why-p-" + i; b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { var k = picks.indexOf(t); if (k >= 0) picks.splice(k, 1); else picks.push(t); b.className = "btn chip" + (k < 0 ? " on" : ""); b.setAttribute("aria-pressed", String(k < 0)); });
+      box.appendChild(b);
+    });
+    $("why-text").value = "";
+    setText($("why-sub"), fmtInt(u.short) + " lbs " + (u.done ? "under the shift goal" : "behind the pace car") + (u.pct != null ? " · " + u.pct.toFixed(0) + "% of goal done" : "") + ". Tap what happened. It goes to the master log with your day notes. Or SKIP.");
+    whyOpen = { go: go, picks: picks, key: u.key };
+    $("why").hidden = false;
+  }
+  function closeWhy(save1) {
+    var w = whyOpen; if (!w) return; whyOpen = null; $("why").hidden = true;
+    if (save1) {
+      var txt = trim($("why-text").value).replace(/\s+/g, " ").slice(0, 300), list = WHY.filter(function (t) { return w.picks.indexOf(t) >= 0; });
+      if (list.length || txt) {
+        var line = "Under goal: " + (list.length ? list.join(", ") + "." : "") + (txt ? (list.length ? " " : "") + txt : "");
+        var dn = String(state.shift.dayNotes || "").replace(WHY_RE, "").replace(/^\n+|\n+$/g, "");
+        state.shift.dayNotes = (line + (dn ? "\n" + dn : "")).slice(0, 2000);
+      } else state.shift.underSkip = w.key;
+    } else state.shift.underSkip = w.key;
+    save(); paintNotes();
+    w.go();
+  }
+  $("why-save").addEventListener("click", function () { closeWhy(true); });
+  $("why-skip").addEventListener("click", function () { closeWhy(false); });
+  document.addEventListener("keydown", function (e) { if (whyOpen && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeWhy(false); } }, true);
   function paintNotes() {
     var has = !!trim(state.shift.dayNotes);
     setText($("notes-open"), has ? "DAY NOTES \u2713" : "DAY NOTES"); setCls($("notes-open"), "det-btn notes" + (has ? " set" : ""));
@@ -3711,8 +3799,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     var coils = st.coils.slice().sort(function (a, b) { return Date.parse(a.loggedAt) - Date.parse(b.loggedAt); }).slice(0, ML_COIL_MAX).map(function (c) {
       var m = (byId[c.machineId] || {}).m;
-      return { work_order: "", weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: "1", machine: mlName(m), draw: m ? machineDraw(m) : null,
-        finish: str(c.size || "", 40), grade: gradeNorm(str(c.grade || "", 40)), part: str(c.part || "", 60), tags: cleanTags(c.tags), note: str(c.notes || "", 300),
+      var sp = SPLITS[splitOf(c.split)], tg = cleanTags(c.tags);
+      if (sp && tg.indexOf(sp.tag) < 0) tg = tg.slice(0, 7).concat([sp.tag]);
+      return { work_order: str(c.card || c.coilNo || "", 30), weight: mlR(c.weight, 1), avg_wgt: mlR(c.weight, 1), coils_in: 1, coils_out: 1, coils_text: sp ? sp.txt : "1", machine: mlName(m), draw: m ? machineDraw(m) : null,
+        finish: str(c.size || "", 40), grade: gradeNorm(str(c.grade || "", 40)), part: str(c.part || "", 60), tags: tg, note: str(c.notes || "", 300), split: splitOf(c.split),
         start_size: str(c.startSize || "", 40), shape: c.shape === "shape" ? "shape" : "round", reduction: reductionFor(c), repeat: c.rep || "" };
     });
     var downtime = [], problems = [];
@@ -3862,7 +3952,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       LogDB.mount(body, mode === "send" ? function () { return mlHasData() ? masterLogPayload(state, Date.now()) : null; }
         : function () { var it = mlQueued(k); return it ? it.payload : null; }, {
         title: mode === "first" ? "YOUR NAME AND CREW CODE" : "SEND TO MASTER LOG", go: mode === "first" ? "SEND IT" : "SEND TO MASTER LOG", key: k,
-        send: function () { if (mode === "send") mlSend(true); else LogDB.flush("manual"); }
+        send: function () { if (mode === "send") askWhy(function () { mlSend(true); }); else LogDB.flush("manual"); }
       });
     }
     $("ml").hidden = false;
@@ -3874,11 +3964,12 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
   $("ml").addEventListener("click", function (e) { if (e.target === $("ml")) mlClose(); });
   document.addEventListener("keydown", function (e) { if (mlMode && !askOpen && !cfdOpen && !e.defaultPrevented && e.key === "Escape") mlClose(); });
   ["ml-bar-w", "ml-bar-d"].forEach(function (id) { var b = $(id); if (b) b.querySelector(".btn").addEventListener("click", function () { mlOpen(mlCounts().total ? "queue" : "send"); }); });
-  $("btn-ml").addEventListener("click", function () {
+  $("btn-ml").addEventListener("click", function () { askWhy(btnMlGo); });
+  function btnMlGo() {
     var ready = window.LogDB && mlHasData() && mlCredsReady();
     mlOpen("send");
     if (ready) mlSend(true);
-  });
+  }
   mlPaint();
 
 
