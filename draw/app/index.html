@@ -611,7 +611,7 @@
   #why { z-index: 52; align-items: flex-end; }
   .why-box { max-height: 92vh; overflow-y: auto; }
   .why-sub { color: var(--fg-dim); font-size: 0.95rem; margin: -0.75rem 0 0.9rem; line-height: 1.35; }
-  #why-picks .chip { flex: 1 0 40%; }
+  #why-picks .chip { flex: 1 0 40%; white-space: normal; line-height: 1.15; font-size: 0.9rem; overflow: visible; text-overflow: clip; }
   #why-text { margin: 0.75rem 0 1rem; min-height: 4rem; }
   #ml .ldb .ldb-show { background: transparent; color: var(--fg); border: 2px solid var(--fg); border-radius: 3px; font-family: inherit; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
   #ml .ldb .ldb-show:active { background: var(--fg); color: #000; }
@@ -3241,7 +3241,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var x = coilsLoggedOn(d.card), n = (d.coils || 0) * splitPcs(d.split);
     if (d.priorCard) return { t: (x + (d.prior || 0)) + " logged by you on card " + d.card, done: false };   // carried over: only your own count
     if (!n) return { t: x + " logged on card " + d.card, done: false };
-    if (d.split) return x >= n ? { t: x + " pieces of " + n + " · card done", done: true, over: x > n } : { t: x + " of " + n + " pieces (" + SPLITS[d.split].tag.toLowerCase() + ") on card " + d.card, done: false };
+    if (d.split) return x >= n ? { t: x + " of " + n + (d.split === "half" ? " halves" : " thirds") + " · card done", done: true, over: x > n } : { t: x + " of " + n + (d.split === "half" ? " halves" : " thirds") + " · card " + d.card, done: false };
     if (x > n) return { t: x + " logged · card says " + n, done: true, over: true };
     if (x === n) return { t: n + " of " + n + " · card done", done: true };
     return { t: x + " of " + n + " from card " + d.card, done: false };
