@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script>
+  /* PHONE FIT: if the phone browser is set to "Request Desktop Website" it lays the page out
+     about 980px wide and shrinks it to fit, so everything looks tiny. Spot that (small touch
+     screen, much wider layout) and zoom the page back up to real phone size. */
+  (function () {
+    var d = document.documentElement, last = "";
+    function fit() {
+      var key = (window.innerWidth > window.innerHeight ? "L" : "P") + screen.width + "x" + screen.height;
+      if (key === last) return; last = key;
+      d.style.zoom = ""; d.classList.remove("fit");
+      var lw = d.clientWidth || window.innerWidth, lh = d.clientHeight || window.innerHeight;
+      var sw = screen.width, sh = screen.height, dw = lw > lh ? Math.max(sw, sh) : Math.min(sw, sh);
+      if (navigator.maxTouchPoints > 0 && dw > 0 && dw < 600 && lw > dw * 1.3) {
+        var z = lw / dw;
+        d.style.zoom = z.toFixed(4); d.classList.add("fit");
+        d.style.setProperty("--fvw", (lw / z / 100).toFixed(3) + "px");
+        d.style.setProperty("--fvh", (lh / z / 100).toFixed(3) + "px");
+      }
+    }
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", function () { last = ""; setTimeout(fit, 250); });
+  })();
+  </script>
+  <meta name="theme-color" content="#0d0f12">
+  <meta name="description" content="Shop Docs work samples: a scrubbed standard operating procedure mapped to ISO 9001 and IATF 16949.">
+  <title>Work samples | Shop Docs</title>
+  <link rel="icon" href="/assets-site/favicon.svg" type="image/svg+xml">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0d0f12; color: #f7f3ec; font-family: Arial, Helvetica, sans-serif; }
+    header { padding: 32px 20px 24px; border-bottom: 5px solid #e3a83b; text-align: center; }
+    .brand { margin: 0; color: #fff; font-size: clamp(28px, 6vw, 46px); letter-spacing: .03em; }
+    .brand span { color: #e3a83b; }
+    .sub { margin: 10px 0 0; font-weight: 700; font-size: clamp(18px, 4vw, 26px); }
+    main { width: min(800px, 100%); margin: 0 auto; padding: 24px 16px 42px; }
+    .sample { margin: 0; padding: 28px 24px; border: 1px solid rgba(227, 168, 59, 0.35); background: #15181d; }
+    .sample h2 { margin: 0 0 12px; color: #fff; font-size: clamp(20px, 3.2vw, 26px); font-weight: 700; line-height: 1.3; }
+    .sample p { margin: 0 0 20px; line-height: 1.6; color: #f7f3ec; }
+    .button { display: inline-block; padding: 14px 22px; border: 2px solid #e3a83b; background: #e3a83b; color: #0d0f12; font-weight: 700; text-decoration: none; }
+    .button:focus, .button:hover { outline: 3px solid #fff; outline-offset: 3px; }
+    .contact { margin: 28px 0 0; text-align: center; line-height: 1.6; }
+    .contact a { color: #e3a83b; }
+    .contact strong { color: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 class="brand">SHOP <span>DOCS</span></h1>
+    <p class="sub">Work samples</p>
+  </header>
+  <main>
+    <article class="sample">
+      <h2>Sample SOP: Precision Cold Wire Drawing Operations (Rev 2.3)</h2>
+      <p>A scrubbed 4-page standard operating procedure mapped to ISO 9001 and IATF 16949, with controls for calibration, first-piece approval, suspect-material containment, safety, and troubleshooting.</p>
+      <a class="button" href="/samples/Sample_SOP_Cold_Wire_Drawing_Rev2.3.pdf">View PDF</a>
+    </article>
+    <p class="contact"><strong>Built around your shop.</strong><br>Daniel Smith, Shop Docs, Madison Heights, MI<br><a href="mailto:sales@itsthecorn.dog">sales@itsthecorn.dog</a> &middot; <a href="tel:+12486363913">(248) 636-3913</a><br><a href="/">See the sample company website</a> &middot; <a href="/pricing/">Price list</a></p>
+  </main>
+</body>
+</html>
