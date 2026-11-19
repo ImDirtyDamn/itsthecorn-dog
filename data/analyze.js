@@ -27,6 +27,25 @@
   function partKey(s) { return String(s || "").trim().replace(/\s+/g, " ").toLowerCase(); }
   function tagList(s) { var o = []; String(s || "").split(",").forEach(function (t) { t = t.trim(); if (t && o.indexOf(t) < 0) o.push(t); }); return o; }
   var NO_TAG = "No condition";
+  /* under-goal reasons: the structured field (logs.under_reasons, JSON list) when the log has it, else the operator's
+     "Under goal: A, B. typed words" day-notes line (older logs). Old wording still counts as its own reason. */
+  var WHY = ["Tangled coil", "Scratch", "Dropped coil", "Small diameter (linear feet)", "Spin out", "Machine issue", "See downtime", "Jump strands", "Other"];
+  var R_NONE = "No reason", R_NOPICK = "No pick (notes or downtime only)", R_MET = "Met goal", R_OPEN = "Not rated";
+  function canonWhy(t) { var k = String(t || "").trim().toLowerCase(); for (var i = 0; i < WHY.length; i++) if (WHY[i].toLowerCase() === k) return WHY[i]; return String(t || "").trim(); }
+  function underReasons(l) {
+    var u = l.under_reasons, a = null;
+    if (typeof u === "string" && u) { try { a = JSON.parse(u); } catch (e) { a = null; } } else if (Array.isArray(u)) a = u;
+    if (Array.isArray(a)) return a.map(canonWhy).filter(Boolean);
+    var m = /^Under goal:\s*(.*)$/m.exec(String(l.day_notes || "")); if (!m) return [];
+    var t = m[1].trim(), i = t.search(/\.(\s|$)/), items = (i >= 0 ? t.slice(0, i) : t).split(/,\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
+    return items.length && items.every(function (x) { return x.length <= 40; }) ? items.map(canonWhy) : [];
+  }
+  function reasonKeys(l) {
+    if (l.goal_met === 1) return [R_MET];
+    if (l.goal_met !== 0) return [R_OPEN];
+    var r = underReasons(l); if (r.length) return r;
+    return String(l.day_notes || "").trim() || (num(l.downtime_minutes) || 0) > 0 ? [R_NOPICK] : [R_NONE];
+  }
   // finish size as a number of inches (".600", "0.600", '.600"' -> 0.6); null when it isn't a plain number
   function sizeNum(s) {
     var t = String(s || "").trim().replace(/\s*(?:"|''|in\.?|inch(?:es)?)$/i, "");
@@ -41,7 +60,8 @@
     (data.logs || []).forEach(function (l) {
       var D = drawList(l.draws), cs = coils[l.id] || [];
       var base = { log_id: l.id, date: l.shift_date, op: String(l.operator || "").trim().replace(/\s+/g, " "), opKey: opKey(l.operator),
-        shift: shiftKind(l), goal: num(l.goal_lbhr), submitted: l.submitted_at || "" };
+        shift: shiftKind(l), goal: num(l.goal_lbhr), submitted: l.submitted_at || "", reasons: reasonKeys(l) };
+      var gl = num(l.goal_lbs), tl = num(l.total_lbs), short = l.goal_met === 0 && gl !== null && gl > (tl || 0) ? gl - (tl || 0) : 0;
       var raw = cs.length ? cs.map(function (c) {
         return { draw: c.draw !== null && c.draw !== undefined && c.draw !== "" ? String(c.draw) : "", grade: String(c.grade || "").trim(),
           finish: String(c.finish || "").trim(), w: Math.max(num(c.weight) || 0, 0), coils: coilCount(c),
@@ -67,7 +87,7 @@
         targets.forEach(function (d) {
           parts.push(Object.assign({}, base, { draw: d, grade: (window.Fields && Fields.grade ? Fields.grade(r.grade) : String(r.grade || "").toUpperCase().trim()), finish: r.finish, part: r.part, partKey: partKey(r.part), tags: r.tags,
             lbs: total === null ? null : total * r.share / k, coils: r.coils / k, hours: hours === null ? null : hours * r.share / k,
-            dt: r.dt / k, rated: total !== null && hours !== null }));
+            dt: r.dt / k, short: short * r.share / k, rated: total !== null && hours !== null }));
         });
       });
     });
@@ -90,12 +110,12 @@
     });
   }
   function agg(parts) {
-    var a = { lbs: 0, coils: 0, hours: 0, dt: 0, rlbs: 0, rhours: 0, logs: {} };
+    var a = { lbs: 0, coils: 0, hours: 0, dt: 0, short: 0, rlbs: 0, rhours: 0, logs: {} };
     parts.forEach(function (p) {
-      a.lbs += p.lbs || 0; a.coils += p.coils || 0; a.hours += p.hours || 0; a.dt += p.dt || 0; a.logs[p.log_id] = 1;
+      a.short += p.short || 0; a.lbs += p.lbs || 0; a.coils += p.coils || 0; a.hours += p.hours || 0; a.dt += p.dt || 0; a.logs[p.log_id] = 1;
       if (p.rated) { a.rlbs += p.lbs; a.rhours += p.hours; }
     });
-    return { lbs: a.lbs, coils: a.coils, hours: a.hours, dt: a.dt, shifts: Object.keys(a.logs).length, lbhr: a.rhours > 0 ? a.rlbs / a.rhours : null };
+    return { lbs: a.lbs, coils: a.coils, hours: a.hours, dt: a.dt, short: a.short, shifts: Object.keys(a.logs).length, lbhr: a.rhours > 0 ? a.rlbs / a.rhours : null };
   }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
   function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
@@ -106,7 +126,8 @@
     day: function (p) { return p.date; }, week: function (p) { return weekKey(p.date); }, operator: function (p) { return p.opKey; },
     draw: function (p) { return p.draw; }, grade: function (p) { return p.grade; }, finish: function (p) { return p.finish; }, shift: function (p) { return p.shift; },
     part: function (p) { return p.partKey || ""; },
-    tag: function (p) { return p.tags && p.tags.length ? p.tags : [NO_TAG]; }     // a row with 2 conditions lands in both groups
+    tag: function (p) { return p.tags && p.tags.length ? p.tags : [NO_TAG]; },    // a row with 2 conditions lands in both groups
+    reason: function (p) { return p.reasons && p.reasons.length ? p.reasons : [R_NONE]; }   // a shift with 2 reasons lands in both
   };
   function groupBy(parts, by) {
     var fn = KEYS[by], m = {}, order = [];
@@ -185,14 +206,14 @@
   }
   var engine = { opKey: opKey, shiftKind: shiftKind, coilCount: coilCount, buildParts: buildParts, filterParts: filterParts, agg: agg, groupBy: groupBy,
     shiftPoints: shiftPoints, fitLine: fitLine, progressStats: progressStats, bucketSeries: bucketSeries, weekKey: weekKey, dayNum: dayNum, ymd: ymd,
-    parseYmd: parseYmd, emptyF: emptyF, csvCell: csvCell, partKey: partKey, tagList: tagList, sizeNum: sizeNum, sizeKey: sizeKey, factors: factors, THIN: THIN, NO_TAG: NO_TAG };
+    parseYmd: parseYmd, emptyF: emptyF, csvCell: csvCell, underReasons: underReasons, reasonKeys: reasonKeys, WHY: WHY, partKey: partKey, tagList: tagList, sizeNum: sizeNum, sizeKey: sizeKey, factors: factors, THIN: THIN, NO_TAG: NO_TAG };
   if (typeof module !== "undefined" && module.exports) { module.exports = engine; return; }
 
   /* ================= UI ================= */
   var C, data = null, parts = [], opts = null, host = null, rerender = null;
   var LS = "analyzeSetupV1", PAL = ["#39ff6a", "#ffc23d", "#4dd0ff", "#ff6bd6", "#ff5f56", "#eaffea", "#b48cff", "#ff9a3d"];
-  var METRICS = { lbs: "Total lbs", coils: "Coils", hours: "Hours", lbhr: "Lbs/hr", shifts: "Shifts", dt: "Downtime hr" };
-  var BYS = { day: "Day", week: "Week", operator: "Operator", draw: "Draw", grade: "Grade", finish: "Finish size", part: "Part #", tag: "Condition", shift: "Shift" };
+  var METRICS = { lbs: "Total lbs", coils: "Coils", hours: "Hours", lbhr: "Lbs/hr", shifts: "Shifts", dt: "Downtime hr", short: "Lbs short" };
+  var BYS = { day: "Day", week: "Week", operator: "Operator", draw: "Draw", grade: "Grade", finish: "Finish size", part: "Part #", tag: "Condition", shift: "Shift", reason: "Under-goal reason" };
   var S = { sub: "compare", unit: "day", metric: "lbs", series: [], seq: 0,
     group: { f: emptyF(), by: "operator", metric: "lbhr", sort: { col: "", dir: -1 } },
     prog: { op: "", from: "", to: "", cmp: "off", op2: "", from2: "", to2: "" },
@@ -453,6 +474,8 @@
     if (col) rows.sort(function (a, b) { var va = col === "label" ? a.label : mval(a, col), vb = col === "label" ? b.label : mval(b, col);
       if (va === null) return 1; if (vb === null) return -1; return (va < vb ? -1 : va > vb ? 1 : 0) * G.sort.dir; });
     else if (G.by === "day" || G.by === "week" || G.by === "draw") rows.sort(function (a, b) { return a.key < b.key ? -1 : 1; });
+    else if (G.by === "reason") { var tail = function (k) { return k === R_MET ? 3 : k === R_OPEN ? 2 : k === R_NONE || k === R_NOPICK ? 1 : 0; };
+      rows.sort(function (a, b) { return tail(a.key) - tail(b.key) || b.shifts - a.shifts || (b.short || 0) - (a.short || 0); }); }
     else rows.sort(function (a, b) { return (mval(b, G.metric) || 0) - (mval(a, G.metric) || 0); });
     return { rows: rows, total: agg(ps) };
   }
@@ -460,11 +483,12 @@
     var G = S.group, box = $("asub");
     var h = '<details class="filters panel"' + (open.gf ? " open" : "") + ' id="gfbox"><summary>FILTERS <span>' + esc(fSummary(G.f)) + '</span></summary><div style="margin-top:10px" id="gfed">' + fEditor("g", G.f) + '</div></details>' +
       '<div class="panel"><div class="seghdr"><span class="lbl" style="margin:0">Group by</span>' + info("Rows are counted by the shift date written on the log. Grade, finish size and Draw come from each card row, so one shift can land in several groups; its hours are split by the weight each row made, and its shift count shows in each group it touches (group shifts can add up to more than the total). " +
-      "Draw 1 & 4 and Draw 2 & 6 are often run together: pounds go to the Draw written on each row, and a row with no Draw is split evenly. lbs/hr = total lbs \u00f7 total hours.") + '</div>' +
+      "Draw 1 & 4 and Draw 2 & 6 are often run together: pounds go to the Draw written on each row, and a row with no Draw is split evenly. lbs/hr = total lbs \u00f7 total hours. " +
+      "Under-goal reason: a shift that missed its goal goes under each reason the operator picked (two picks, two groups). No reason = missed goal with no reason, no notes and no downtime. Shifts that met goal or were not rated get their own rows at the bottom. Lbs short = goal lbs minus lbs made, on shifts that missed goal.") + '</div>' +
       '<div class="seg" id="gby">' + Object.keys(BYS).map(function (k) { return '<button type="button" data-by="' + k + '" class="' + (G.by === k ? "on" : "") + '">' + BYS[k].toUpperCase() + '</button>'; }).join("") + '</div>' +
       '<span class="lbl" style="margin-top:10px">Chart</span><div class="seg" id="gmet">' + Object.keys(METRICS).map(function (k) { return '<button type="button" data-m="' + k + '" class="' + (G.metric === k ? "on" : "") + '">' + METRICS[k].toUpperCase() + '</button>'; }).join("") + '</div>' +
       '<div id="gchart" class="chartbox"></div></div>';
-    var cols = [["label", BYS[G.by]], ["shifts", "Shifts"], ["lbs", "Lbs"], ["coils", "Coils"], ["hours", "Hours"], ["lbhr", "Lbs/hr"], ["dt", "Down hr"]];
+    var cols = [["label", BYS[G.by]], ["shifts", "Shifts"], ["lbs", "Lbs"], ["coils", "Coils"], ["hours", "Hours"], ["lbhr", "Lbs/hr"], ["dt", "Down hr"], ["short", "Lbs short"]];
     h += '<div class="tblwrap"><table class="tbl"><thead><tr>' + cols.map(function (c) { return '<th><button type="button" data-sort="' + c[0] + '">' + esc(c[1]) + (G.sort.col === c[0] ? (G.sort.dir > 0 ? " \u25b2" : " \u25bc") : "") + '</button></th>'; }).join("") + '</tr></thead><tbody id="gtable"></tbody></table></div>' +
       '<div class="toolbar"><button type="button" id="gcsv">EXPORT THIS TABLE</button><button type="button" id="gunsort" class="ghost">DEFAULT ORDER</button></div>';
     box.innerHTML = h;
@@ -476,13 +500,13 @@
     $("gunsort").onclick = function () { G.sort = { col: "", dir: -1 }; render(); };
     var R = groupRows(), t = R.total;
     $("gtable").innerHTML = (R.rows.length ? R.rows.map(function (r) {
-      return '<tr><td>' + esc(r.label) + '</td><td>' + r.shifts + '</td><td>' + fmt("lbs", r.lbs) + '</td><td>' + fmt("coils", r.coils) + '</td><td>' + fmt("hours", r.hours) + '</td><td>' + fmt("lbhr", r.lbhr) + '</td><td>' + fmt("dt", r.dt / 60) + '</td></tr>';
-    }).join("") : '<tr><td colspan="7" class="muted">No logs match these filters.</td></tr>') +
-      '<tr class="tot"><td>ALL</td><td>' + t.shifts + '</td><td>' + fmt("lbs", t.lbs) + '</td><td>' + fmt("coils", t.coils) + '</td><td>' + fmt("hours", t.hours) + '</td><td>' + fmt("lbhr", t.lbhr) + '</td><td>' + fmt("dt", t.dt / 60) + '</td></tr>';
+      return '<tr><td>' + esc(r.label) + '</td><td>' + r.shifts + '</td><td>' + fmt("lbs", r.lbs) + '</td><td>' + fmt("coils", r.coils) + '</td><td>' + fmt("hours", r.hours) + '</td><td>' + fmt("lbhr", r.lbhr) + '</td><td>' + fmt("dt", r.dt / 60) + '</td><td>' + fmt("short", r.short) + '</td></tr>';
+    }).join("") : '<tr><td colspan="8" class="muted">No logs match these filters.</td></tr>') +
+      '<tr class="tot"><td>ALL</td><td>' + t.shifts + '</td><td>' + fmt("lbs", t.lbs) + '</td><td>' + fmt("coils", t.coils) + '</td><td>' + fmt("hours", t.hours) + '</td><td>' + fmt("lbhr", t.lbhr) + '</td><td>' + fmt("dt", t.dt / 60) + '</td><td>' + fmt("short", t.short) + '</td></tr>';
     $("gcsv").onclick = function () {
       var lines = [["group_by", BYS[G.by]].map(csvCell).join(","), ["filters", fSummary(G.f)].map(csvCell).join(","), cols.map(function (c) { return csvCell(c[1]); }).join(",")];
       var r1 = function (v, d) { return v === null || v === undefined ? "" : Math.round(v * d) / d; };
-      R.rows.concat([Object.assign({ label: "ALL" }, t)]).forEach(function (r) { lines.push([r.label, r.shifts, r1(r.lbs, 1), r1(r.coils, 10), r1(r.hours, 100), r1(r.lbhr, 10), r1(r.dt / 60, 100)].map(csvCell).join(",")); });
+      R.rows.concat([Object.assign({ label: "ALL" }, t)]).forEach(function (r) { lines.push([r.label, r.shifts, r1(r.lbs, 1), r1(r.coils, 10), r1(r.hours, 100), r1(r.lbhr, 10), r1(r.dt / 60, 100), r1(r.short, 1)].map(csvCell).join(",")); });
       var blob = new Blob(["\uFEFF" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }), name = "analysis-by-" + G.by + "-" + ymd(new Date()) + ".csv";
       var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000); C.toast("CSV saved: " + name);

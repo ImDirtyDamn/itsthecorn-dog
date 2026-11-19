@@ -104,6 +104,10 @@
     if (items.length && items.every(function (x) { return x.length <= 40; })) return { picks: items.map(canonWhy), typed: i >= 0 ? s.slice(i + 1).trim() : "" };
     return { picks: [], typed: s };
   }
+  function structReasons(u) {
+    var a = null; if (Array.isArray(u)) a = u; else if (typeof u === "string" && u) { try { a = JSON.parse(u); } catch (e) { a = null; } }
+    return Array.isArray(a) && a.length ? a.map(canonWhy).filter(Boolean) : null;
+  }
   function noReason(l) { return l.goal_met === 0 && !String(l.day_notes || "").trim() && !(num(l.downtime_minutes) > 0); }
   var DT_RE = /^(.*?):\s*([\d.]+)\s*min down(?:,\s*(.*?))?(?:\s*\((?:\d|still)[^()]*\))?\s*$/i;
   function parseProblems(p) {
@@ -195,6 +199,8 @@
       });
       // under goal
       var U = parseUnder(l.day_notes); if (U) underLines++;
+      // the structured field (logs.under_reasons) wins; the day-notes line is the fallback for older logs
+      var SR = structReasons(l.under_reasons); if (SR) U = { picks: SR, typed: U ? U.typed : "" };
       if (l.goal_met === 0) {
         var why;
         if (U && U.picks.length) { U.picks.forEach(function (p) { addTo(uReason, p, 1); addTo(repeatPick, p, 1); }); why = U.picks.join(", ") + (U.typed ? ". " + U.typed : ""); }

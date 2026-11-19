@@ -3391,6 +3391,24 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     return { done: done, short: short, pct: r.target > 0 ? (r.lbsRan || 0) / r.target * 100 : null, key: done ? "end" : "mid" };
   }
   var WHY_RE = /^Under goal:.*$/m;
+  /* the same answer as its own field for the master log: { reasons: [quick picks], note: typed words } (null when there is none).
+     Read back from the day-notes line at send time, so an operator who edits that line by hand still sends what it says. */
+  function underGoalOf(notes) {
+    var m = /^Under goal:\s*(.*)$/m.exec(String(notes || "")); if (!m) return null;
+    var t = m[1].replace(/^\s+|\s+$/g, ""), reasons = [], rest = t;
+    for (var go = true; go;) {
+      go = false;
+      for (var i = 0; i < WHY.length; i++) {
+        var w = WHY[i];
+        if (rest.slice(0, w.length) === w && /^(,\s*|\.\s*|$)/.test(rest.slice(w.length))) {
+          if (reasons.indexOf(w) < 0) reasons.push(w);
+          var sep = /^(,\s*|\.\s*|)/.exec(rest.slice(w.length))[0]; rest = rest.slice(w.length + sep.length);
+          go = sep.charAt(0) === ","; break;
+        }
+      }
+    }
+    return reasons.length || rest ? { reasons: reasons, note: rest.slice(0, 300) } : null;
+  }
   function hasUnderReason() { return WHY_RE.test(state.shift.dayNotes || ""); }
   function askWhy(go) {
     var u = null; try { u = underInfo(Date.now()); } catch (e) {}
@@ -3851,7 +3869,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       totals: { total_lbs: mlR(r.lbsRan, 1), net_hours: net != null ? mlR(Math.min(24, net), 2) : null, goal_lbs: goalLbs != null ? mlR(Math.max(0, goalLbs), 0) : null,
         goal_lbhr: r.rateSum != null ? mlR(r.rateSum, 2) : null, avg_lbhr: net > 0 ? mlR(r.lbsRan / net, 1) : null,
         goal_met: done && r.target != null ? r.lbsRan >= r.target : null },
-      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "", day_notes: str(s.dayNotes || "", 2000),
+      problems: problems.slice(0, 40).map(function (p) { return p.slice(0, 300); }), maintenance: "", day_notes: str(s.dayNotes || "", 2000), under_goal: underGoalOf(s.dayNotes),
       raw: { source: "tracker", page: location.pathname, complete: done, phase: r.phase, sent_at: iso(now),
         state: { shift: st.shift, machines: st.machines, coils: st.coils, downtime: st.downtime, settings: st.settings } }
     };

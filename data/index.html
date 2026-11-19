@@ -265,10 +265,10 @@ details.rp-cols>summary span{color:var(--fg-dim)}
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=5"></script>
+<script src="analyze.js?v=6"></script>
 <script src="lookup.js?v=5"></script>
 <script src="fields.js?v=4"></script>
-<script src="report.js?v=1"></script>
+<script src="report.js?v=2"></script>
 <script>
 (function () {
   "use strict";
@@ -472,7 +472,7 @@ details.rp-cols>summary span{color:var(--fg-dim)}
   }
   function searchBox() {
     return '<form class="panel srch" id="sform" autocomplete="off" role="search"><label class="lbl" for="sq">Search the shifts</label>' +
-      '<div class="srow"><input class="in" id="sq" type="search" maxlength="80" placeholder="pay-off jam, 335826, .312 1018" value="' + esc(SQ.q) + '">' +
+      '<div class="srow"><input class="in" id="sq" type="search" maxlength="80" placeholder="tangle, 335826, .312 1018" value="' + esc(SQ.q) + '">' +
       '<button type="submit" class="solid" id="sgo">SEARCH</button></div>' +
       '<div class="srow2"><select class="in" id="sf" aria-label="Search in">' + SFIELDS.map(function (x) { return '<option value="' + x[0] + '"' + (SQ.f === x[0] ? " selected" : "") + '>' + esc(x[1]) + '</option>'; }).join("") + '</select>' +
       '<button type="button" class="ghost" id="sclr"' + (SQ.hits || SQ.q ? "" : " hidden") + '>CLEAR</button></div>' +
