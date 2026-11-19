@@ -138,7 +138,8 @@ ul.list{padding-left:22px;color:var(--white);line-height:1.45;font-size:17px;mar
 body.noscroll{overflow:hidden}
 .more{margin:12px 0}
 /* tabs + analyze */
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 0 0}
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0 0}
+.tabs button{padding:10px 2px;font-size:15px;letter-spacing:.02em;min-width:0}
 .tabs[hidden]{display:none}
 .subtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0}
 .subtabs button{font-size:14px;padding:6px 2px;letter-spacing:.04em}
@@ -222,6 +223,34 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   .confirm .box{border-bottom:1px solid var(--red)}
 }
 @media (min-width:1300px){ .loglist{grid-template-columns:repeat(3,minmax(0,1fr))} }
+/* REPORT builder */
+.rp-help{margin:4px 0 10px}
+.rp-rtxt{font-size:13px;margin:-4px 0 6px}
+.rp-small{font-size:12px;margin-top:6px}
+.rp-tp .field:last-child{margin-bottom:0}
+.rp-quick{grid-template-columns:repeat(3,minmax(0,1fr))}
+.rp-lay{display:flex;gap:8px;margin-bottom:8px}
+.rp-lay .in{flex:1}
+.rp-lay button{flex:none;padding:0 14px}
+.rp-seclbl{margin-top:16px}
+.rp-sec{border:1px solid var(--fg-dim);background:var(--panel);padding:8px 10px;margin:6px 0}
+.rp-sec.off{border-color:var(--fg-faint);opacity:.72}
+.rp-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rp-chk{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;color:var(--white);flex:1;min-width:0}
+.rp-chk input{width:22px;height:22px;accent-color:var(--fg);flex:none;margin:0}
+.rp-chk.sm{min-height:40px;font-size:14px;color:var(--fg)}
+.rp-mv{display:flex;gap:6px;flex:none}
+.rp-mv button{min-width:44px;min-height:44px;padding:0;font-size:18px}
+.rp-opts{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 2px}
+.rp-opts .rp-chart{width:auto;min-width:9.5rem;height:2.75rem;font-size:1rem}
+.rp-fixed{font-size:13px}
+.rp-n{display:inline-block;min-width:2.2em;color:var(--amber);font-variant-numeric:tabular-nums}
+details.rp-cols>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;gap:10px;color:var(--amber);font-size:13px;letter-spacing:.1em}
+details.rp-cols>summary span{color:var(--fg-dim)}
+.rp-colgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}
+.rp-allbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px}
+.rp-status{margin:10px 0;min-height:1.2em;color:var(--white)}
+@media (min-width:900px){ .rp-tp{display:grid;grid-template-columns:1fr 1fr;gap:.75rem} .rp-tp .field{margin-bottom:0} .rp-quick{grid-template-columns:repeat(6,minmax(0,1fr))} .rp-colgrid{grid-template-columns:repeat(3,minmax(0,1fr))} #app>.panel,#rp-secs,#rp-build,#rp-ready,.rp-allbtns,.rp-status{max-width:900px} }
 </style>
 </head>
 <body>
@@ -229,7 +258,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   <h1>MASTER LOG<small>Every production log sent in</small></h1>
   <div class="hbtns"><button id="lockbtn" type="button" class="ghost" hidden>LOCK</button><a class="back" href="/draw/app/">&larr; TRACKER</a></div>
 </header>
-<nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button><button type="button" data-v="lookup">LOOKUP</button></nav>
+<nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button><button type="button" data-v="lookup">LOOKUP</button><button type="button" data-v="report">REPORT</button></nav>
 <main id="app"></main>
 <div class="overlay" id="detail" hidden role="dialog" aria-label="Log detail"><div class="ovtop"><b id="dtitle">LOG</b><button id="dclose" type="button">CLOSE</button></div><div id="dbody"></div></div>
 <div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm"><div class="box"><b id="ctitle">DELETE THIS LOG?</b><p id="cmsg"></p><ul class="diffl" id="clist" hidden></ul>
@@ -239,6 +268,7 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
 <script src="analyze.js?v=5"></script>
 <script src="lookup.js?v=5"></script>
 <script src="fields.js?v=4"></script>
+<script src="report.js?v=1"></script>
 <script>
 (function () {
   "use strict";
@@ -305,6 +335,9 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
       setTabs(); $("lockbtn").hidden = false;
       $("app").innerHTML = '<h3 style="margin-top:16px">JOB LOOKUP</h3><div id="jlhost"></div>';
       window.JobLookup.mount($("jlhost"), { auth: function () { return { "X-Admin-Code": code() }; }, needCode: false, canTip: false });
+    } else if (view === "report" && window.Report) {
+      setTabs(); $("lockbtn").hidden = false;
+      window.Report.show($("app"), { api: api, esc: esc, toast: toast });
     } else { view = "logs"; load(false); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
