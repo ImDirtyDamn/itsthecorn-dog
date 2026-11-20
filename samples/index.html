@@ -3,32 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <script>
-  /* PHONE FIT: if the phone browser is set to "Request Desktop Website" it lays the page out
-     about 980px wide and shrinks it to fit, so everything looks tiny. Spot that (small touch
-     screen, much wider layout) and zoom the page back up to real phone size. */
-  (function () {
-    var d = document.documentElement, last = "";
-    function fit() {
-      var key = (window.innerWidth > window.innerHeight ? "L" : "P") + screen.width + "x" + screen.height;
-      if (key === last) return; last = key;
-      d.style.zoom = ""; d.classList.remove("fit");
-      var lw = d.clientWidth || window.innerWidth, lh = d.clientHeight || window.innerHeight;
-      var sw = screen.width, sh = screen.height, dw = lw > lh ? Math.max(sw, sh) : Math.min(sw, sh);
-      if (navigator.maxTouchPoints > 0 && dw > 0 && dw < 600 && lw > dw * 1.3) {
-        var z = lw / dw;
-        d.style.zoom = z.toFixed(4); d.classList.add("fit");
-        d.style.setProperty("--fvw", (lw / z / 100).toFixed(3) + "px");
-        d.style.setProperty("--fvh", (lh / z / 100).toFixed(3) + "px");
-      }
-    }
-    fit();
-    window.addEventListener("resize", fit);
-    window.addEventListener("orientationchange", function () { last = ""; setTimeout(fit, 250); });
-  })();
-  </script>
+  <meta http-equiv="refresh" content="0; url=/walkthrough/">
+  <link rel="canonical" href="https://itsthecorn.dog/walkthrough/">
   <meta name="theme-color" content="#0d0f12">
-  <meta name="description" content="Shop Docs work samples: a scrubbed standard operating procedure mapped to ISO 9001 and IATF 16949.">
+  <meta name="description" content="Shop Docs work samples. Watch the production tracker walkthrough.">
   <title>Work samples | Shop Docs</title>
   <link rel="icon" href="/assets-site/favicon.svg" type="image/svg+xml">
   <style>
@@ -44,10 +22,8 @@
     .sample p { margin: 0 0 20px; line-height: 1.6; color: #f7f3ec; }
     .button { display: inline-block; padding: 14px 22px; border: 2px solid #e3a83b; background: #e3a83b; color: #0d0f12; font-weight: 700; text-decoration: none; }
     .button:focus, .button:hover { outline: 3px solid #fff; outline-offset: 3px; }
-    .contact { margin: 28px 0 0; text-align: center; line-height: 1.6; }
-    .contact a { color: #e3a83b; }
-    .contact strong { color: #fff; }
   </style>
+  <script>location.replace("/walkthrough/");</script>
 </head>
 <body>
   <header>
@@ -56,16 +32,10 @@
   </header>
   <main>
     <article class="sample">
-      <h2>Sample SOP: Precision Cold Wire Drawing Operations (Rev 2.3)</h2>
-      <p>A scrubbed 4-page standard operating procedure mapped to ISO 9001 and IATF 16949, with controls for calibration, first-piece approval, suspect-material containment, safety, and troubleshooting.</p>
-      <a class="button" href="/samples/Sample_SOP_Cold_Wire_Drawing_Rev2.3.pdf">View PDF</a>
-    </article>
-    <article class="sample" style="margin-top:20px">
-      <h2>Production tracker walkthrough (video, about 7.5 minutes)</h2>
-      <p>A phone-based production tracker, with the operator end and the supervisor dashboard: searchable shift notes, analysis, and a weekly PDF report. Shown with demo data.</p>
+      <h2>Production tracker walkthrough</h2>
+      <p>This page now points to the production tracker walkthrough, a 7.5-minute video of the operator end and the supervisor dashboard.</p>
       <a class="button" href="/walkthrough/">Watch the walkthrough</a>
     </article>
-    <p class="contact"><strong>Built around your shop.</strong><br>Daniel Smith, Shop Docs, Madison Heights, MI<br><a href="mailto:sales@itsthecorn.dog">sales@itsthecorn.dog</a> &middot; <a href="tel:+12486363913">(248) 636-3913</a><br><a href="/">See the sample company website</a> &middot; <a href="/pricing/">Price list</a></p>
   </main>
 </body>
 </html>
