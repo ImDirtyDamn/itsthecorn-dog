@@ -121,12 +121,12 @@
   function addTo(map, k, v) { map[k] = (map[k] || 0) + v; }
   function listOf(map, sortBy) { return Object.keys(map).map(function (k) { return { label: k, v: map[k] }; }).filter(function (x) { return x.v > 0; }).sort(sortBy || function (a, b) { return b.v - a.v || (a.label < b.label ? -1 : 1); }); }
   function shopOf(logs, coils) {
-    var S = { shifts: logs.length, rated: 0, met: 0, under: 0, unfinished: 0, noreason: 0, lbs: 0, hrs: 0, rlbs: 0, goal: 0, hlbs: 0, downMin: 0, coils: 0, coilLbs: 0, half: 0, third: 0, rows: 0 };
+    var S = { shifts: logs.length, goalShifts: 0, rated: 0, met: 0, under: 0, unfinished: 0, noreason: 0, lbs: 0, hrs: 0, rlbs: 0, goal: 0, hlbs: 0, downMin: 0, coils: 0, coilLbs: 0, half: 0, third: 0, rows: 0 };
     logs.forEach(function (l) {
       var lbs = num(l.total_lbs), h = num(l.net_hours), g = num(l.goal_lbs);
       S.lbs += lbs; S.downMin += num(l.downtime_minutes);
       if (h > 0) { S.hrs += h; S.hlbs += lbs; }
-      if (g > 0) { S.goal += g; S.rlbs += lbs; }
+      if (g > 0) { S.goal += g; S.rlbs += lbs; S.goalShifts++; }
       if (l.goal_met === 1 || l.goal_met === 0) { S.rated++; if (l.goal_met === 1) S.met++; else S.under++; } else if (g > 0) S.unfinished++;
       if (noReason(l)) S.noreason++;
     });
@@ -138,6 +138,7 @@
     S.lbhr = div(S.hlbs, S.hrs); S.pct = S.goal > 0 ? S.rlbs / S.goal * 100 : null; S.underPct = S.rated ? S.under / S.rated * 100 : null;
     S.util = S.hrs + S.downMin / 60 > 0 ? S.hrs / (S.hrs + S.downMin / 60) * 100 : null; S.avgCoil = div(S.coilLbs, S.coils);
     S.splitPct = S.rows ? (S.half + S.third) / S.rows * 100 : null;
+    S.nogoal = S.shifts - S.goalShifts; S.perShift = div(S.lbs, S.shifts);
     return S;
   }
   /* A = /analyze answer, o = { from, to, details: {log_id: /logs/:id answer}, tips: [..] or null, prev: /analyze answer or null } */
@@ -150,7 +151,7 @@
     var M = { from: o.from, to: o.to, days: o.from && o.to ? nDays(o.from, o.to) : null };
     M.shop = shopOf(logs, A.coils);
     var mach = {}, ops = {}, daily = {}, shift = {}, dow = {}, dReason = {}, dOp = {}, dMach = {}, uReason = {}, sizes = {}, repeatDt = {}, repeatPick = {};
-    function MA(k) { return mach[k] || (mach[k] = { key: k, label: mlabel(k), lbs: 0, hlbs: 0, hrs: 0, goal: 0, downMin: 0, coils: 0, reasons: {}, ops: {} }); }
+    function MA(k) { return mach[k] || (mach[k] = { key: k, label: mlabel(k), lbs: 0, hlbs: 0, glbs: 0, ghrs: 0, hrs: 0, goal: 0, downMin: 0, coils: 0, reasons: {}, ops: {} }); }
     var checked = 0, coilNotes = 0, dayNotes = 0, underLines = 0;
     M.underList = [];
     logs.forEach(function (l) {
@@ -160,12 +161,16 @@
       // a shift's lbs are its total; coil rows only say how it splits across machines (same as the Analyze tab)
       var coilSum = cs.reduce(function (a, c) { return a + num(c.weight); }, 0);
       var timed = ms.some(function (m) { return num(m.run_hours) > 0; });
-      cs.forEach(function (c) { var m = MA(mkey(c.draw)), v = coilSum > 0 ? lbs * num(c.weight) / coilSum : 0; m.lbs += v; if (timed) m.hlbs += v; m.coils += isSplit(c) ? 0 : (num(c.coils_in) || 1); });
+      // % of goal per machine only counts lbs from machines that had a goal rate on this log (scanned sheets often have none)
+      var hasGoal = {}; ms.forEach(function (m) { if (num(m.goal_lbhr) > 0 && num(m.run_hours) > 0) hasGoal[mkey(m.draw)] = 1; });
+      cs.forEach(function (c) { var m = MA(mkey(c.draw)), v = coilSum > 0 ? lbs * num(c.weight) / coilSum : 0; m.lbs += v; if (timed) m.hlbs += v; if (hasGoal[mkey(c.draw)]) m.glbs += v; m.coils += isSplit(c) ? 0 : (num(c.coils_in) || 1); });
       var runSum = ms.reduce(function (a, m) { return a + num(m.run_hours); }, 0);
-      ms.forEach(function (m) { var x = MA(mkey(m.draw)); x.hrs += num(m.run_hours); x.goal += num(m.goal_lbhr) * num(m.run_hours); addTo(x.ops, op, num(m.run_hours)); });
+      // scanned sheets put the shift's one goal rate on every machine it ran (Draw 1 + Draw 4 both 2100): scale so the machines add up to the shift's goal
+      var mgoal = ms.reduce(function (a, m) { return a + num(m.goal_lbhr) * num(m.run_hours); }, 0), gk = g > 0 && mgoal > 0 ? g / mgoal : 1;
+      ms.forEach(function (m) { var x = MA(mkey(m.draw)); x.hrs += num(m.run_hours); x.goal += num(m.goal_lbhr) * num(m.run_hours) * gk; if (num(m.goal_lbhr) > 0) x.ghrs += num(m.run_hours); addTo(x.ops, op, num(m.run_hours)); });
       if (!(coilSum > 0) && lbs > 0) { // no coil rows (old or scanned logs): spread the shift's lbs over its machines by run time
         var dl = String(l.draws || "").split(",").filter(function (x) { return /^\d+$/.test(x); });
-        if (runSum > 0) ms.forEach(function (m) { var x = MA(mkey(m.draw)), v = lbs * num(m.run_hours) / runSum; x.lbs += v; x.hlbs += v; });
+        if (runSum > 0) ms.forEach(function (m) { var x = MA(mkey(m.draw)), v = lbs * num(m.run_hours) / runSum; x.lbs += v; x.hlbs += v; if (hasGoal[mkey(m.draw)]) x.glbs += v; });
         else if (dl.length) dl.forEach(function (d) { MA(d).lbs += lbs / dl.length; }); else MA("none").lbs += lbs;
       }
       // downtime rows: reason from the full log when we have it, else from the "min down" lines
@@ -219,7 +224,7 @@
     });
     function fin(x) { x.lbhr = div(x.hlbs, x.hrs); x.pct = x.goal > 0 ? x.rlbs / x.goal * 100 : null; return x; }
     M.machines = Object.keys(mach).map(function (k) {
-      var m = mach[k]; m.lbhr = div(m.hlbs, m.hrs); m.goalRate = div(m.goal, m.hrs); m.pct = m.goal > 0 ? m.hlbs / m.goal * 100 : null;
+      var m = mach[k]; m.lbhr = div(m.hlbs, m.hrs); m.goalRate = div(m.goal, m.ghrs); m.pct = m.goal > 0 ? m.glbs / m.goal * 100 : null;
       m.util = m.hrs + m.downMin / 60 > 0 ? m.hrs / (m.hrs + m.downMin / 60) * 100 : null;
       m.reasonList = listOf(m.reasons); var oh = 0; Object.keys(m.ops).forEach(function (n) { oh += m.ops[n]; });
       m.opList = listOf(m.ops).map(function (x) { return { label: x.label, v: x.v, share: oh > 0 ? x.v / oh * 100 : 0 }; });
@@ -230,7 +235,7 @@
     M.ops = Object.keys(ops).map(function (k) {
       var O = fin(ops[k]); var n = O.pcts.length, mean = n ? O.pcts.reduce(function (a, b) { return a + b; }, 0) / n : 0;
       O.sd = n > 1 ? Math.sqrt(O.pcts.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1)) : null;
-      O.steady = O.sd === null ? "One shift" : O.sd < 5 ? "Steady" : O.sd < 12 ? "Some swing" : "Swings a lot";
+      O.steady = n === 0 ? "No goal set" : O.sd === null ? "One shift" : O.sd < 5 ? "Steady" : O.sd < 12 ? "Some swing" : "Swings a lot";
       return O;
     }).sort(function (a, b) { return b.lbs - a.lbs; });
     M.daily = Object.keys(daily).sort().map(function (k) { return fin(daily[k]); });
@@ -254,9 +259,17 @@
     M.ops.forEach(function (O) { if (O.under >= 3) F.push({ t: O.name + " was under goal on " + O.under + " of " + O.rated + " rated shifts." }); });
     M.machines.forEach(function (m) { if (m.pct !== null && m.pct < 90 && m.hrs >= 8) F.push({ t: m.label + " ran at " + f1(m.pct) + "% of goal (under 90%)." }); });
     if (M.shop.unfinished) F.push({ t: M.shop.unfinished + " shift" + (M.shop.unfinished === 1 ? " was" : "s were") + " sent before the shift was done (not rated)." });
+    var seenDup = {}; logs.forEach(function (a, i) { logs.slice(i + 1).forEach(function (b) {
+      if (a.shift_date !== b.shift_date || String(a.operator || "").trim().toLowerCase() !== String(b.operator || "").trim().toLowerCase()) return;
+      var da = String(a.draws || "").split(",").filter(Boolean), db = String(b.draws || "").split(",").filter(Boolean), both = da.filter(function (x) { return db.indexOf(x) >= 0; });
+      if (!both.length) return; var k = a.id + "|" + b.id; if (seenDup[k]) return; seenDup[k] = 1;
+      F.push({ t: "Possible duplicate: " + dmid(a.shift_date) + ", " + (String(a.operator || "").trim() || "Unknown") + " on Draw " + both.join(", Draw ") + " was sent twice (" + f0(num(a.total_lbs)) + " lb and " + f0(num(b.total_lbs)) + " lb). Both are counted in every total. Delete one in Logs." });
+    }); });
     M.flags = F;
     M.prev = o.prev && (o.prev.logs || []).length ? shopOf(o.prev.logs, o.prev.coils || []) : null;
     M.prevRange = o.prevFrom ? { from: o.prevFrom, to: o.prevTo } : null;
+    M.uneven = !!(M.prev && M.prev.shifts && Math.abs(M.shop.shifts - M.prev.shifts) / Math.max(M.shop.shifts, M.prev.shifts) > 0.25);
+    if (M.uneven) F.push({ t: "The previous period has " + M.prev.shifts + " shifts logged and this one has " + M.shop.shifts + ", so total lbs, downtime and coils are not a fair comparison. Output per shift changed " + (M.shop.perShift >= M.prev.perShift ? "+" : "") + f1((M.shop.perShift - M.prev.perShift) / M.prev.perShift * 100) + "%." });
     return M;
   }
 
@@ -427,19 +440,21 @@
       kpi: function (sec) {
         var P = M.prev, items = [];
         function d(cur, prev, f, unit) { if (!P || prev === null || prev === undefined || cur === null || cur === undefined) return "nothing logged before"; var x = cur - prev; return (x >= 0 ? "+" : "") + f(x) + (unit || "") + " vs previous"; }
+        // totals only compare fairly when both periods have about the same number of shifts logged
+        function tot(cur, prev, f, unit) { return M.uneven ? "only " + P.shifts + " shifts logged before" : d(cur, prev, f, unit); }
         var all = {
-          lbs: ["TOTAL OUTPUT", f0(S.lbs) + " lb", d(S.lbs, P && P.lbs, f0, " lb")],
+          lbs: ["TOTAL OUTPUT", f0(S.lbs) + " lb", tot(S.lbs, P && P.lbs, f0, " lb")],
           lbhr: ["AVERAGE LBS/HR", f0(S.lbhr), d(S.lbhr, P && P.lbhr, f0)],
-          pct: ["% OF GOAL", fp(S.pct), d(S.pct, P && P.pct, f1, " pts")],
-          goal: ["GOAL", f0(S.goal) + " lb", "rated shifts"],
-          down: ["TOTAL DOWNTIME", fh(S.downMin) + " hr", d(S.downMin / 60, P && P.downMin / 60, f1, " hr")],
+          pct: ["% OF GOAL", fp(S.pct), S.goalShifts < S.shifts ? "made " + f0(S.rlbs) + " vs " + f0(S.goal) : d(S.pct, P && P.pct, f1, " pts")],
+          goal: ["GOAL", f0(S.goal) + " lb", "for the " + S.goalShifts + " shift" + (S.goalShifts === 1 ? "" : "s") + " with a goal"],
+          down: ["TOTAL DOWNTIME", fh(S.downMin) + " hr", tot(S.downMin / 60, P && P.downMin / 60, f1, " hr")],
           util: ["RUNNING VS DOWN", fp(S.util), "running share of run + down"],
-          shifts: ["SHIFTS LOGGED", f0(S.shifts), S.met + " met goal"],
+          shifts: ["SHIFTS LOGGED", f0(S.shifts), S.met + " met, " + S.under + " under" + (S.nogoal ? ", " + S.nogoal + " no goal" : "")],
           under: ["SHIFTS UNDER GOAL", f0(S.under) + (S.underPct !== null ? " (" + Math.round(S.underPct) + "%)" : ""), "of " + S.rated + " rated"],
           noreason: ["UNDER GOAL, NO REASON", f0(S.noreason), S.noreason ? "see flags" : "every miss explained"],
           coils: ["COILS DRAWN", f0(S.coils), "full coils"],
           avgcoil: ["AVG COIL WEIGHT", f0(S.avgCoil) + " lb", "full coils"],
-          split: ["COILS SPLIT", f0(S.half + S.third), S.half + " halves, " + S.third + " thirds"]
+          split: ["COILS SPLIT", f0(S.half + S.third), S.half + (S.half === 1 ? " half, " : " halves, ") + S.third + (S.third === 1 ? " third" : " thirds")]
         };
         BYID.kpi.cols.forEach(function (c) { if (on(sec, c[0])) items.push(all[c[0]]); });
         if (!items.length) return;
@@ -457,10 +472,11 @@
       },
       compare: function (sec) {
         var P = M.prev; if (!P) return empty(M.prevRange ? "No shifts were logged in the previous period (" + rangeText(M.prevRange.from, M.prevRange.to) + "), so there is nothing to compare." : "No previous period to compare.");
-        var rows = [["Total output (lbs)", S.lbs, P.lbs, f0, 1], ["Average lbs/hr", S.lbhr, P.lbhr, f0, 1], ["% of goal", S.pct, P.pct, f1, 1, "pts"], ["Total downtime (hrs)", S.downMin / 60, P.downMin / 60, f1, -1],
+        var rows = [["Total output (lbs)", S.lbs, P.lbs, f0, 1], ["Output per shift (lbs)", S.perShift, P.perShift, f0, 1], ["Average lbs/hr", S.lbhr, P.lbhr, f0, 1], ["% of goal", S.pct, P.pct, f1, 1, "pts"], ["Total downtime (hrs)", S.downMin / 60, P.downMin / 60, f1, -1],
           ["Running vs down %", S.util, P.util, f1, 1, "pts"], ["Shifts logged", S.shifts, P.shifts, f0, 0], ["Shifts under goal", S.under, P.under, f0, -1], ["Under goal, no reason", S.noreason, P.noreason, f0, -1],
           ["Coils drawn", S.coils, P.coils, f0, 0], ["Average coil weight (lbs)", S.avgCoil, P.avgCoil, f0, 0]];
         note("This period: " + rangeText(M.from, M.to) + ".   Previous: " + rangeText(M.prevRange.from, M.prevRange.to) + ".");
+        if (M.uneven) note("The two periods have different numbers of shifts logged (" + S.shifts + " vs " + P.shifts + "). Compare output per shift and lbs/hr, not the totals.");
         if (sec.chart === "bar") {
           var items = rows.filter(function (r) { return r[1] !== null && r[2] !== null && r[2] !== 0; }).map(function (r) {
             var ch = r[5] ? r[1] - r[2] : (r[1] - r[2]) / Math.abs(r[2]) * 100;
@@ -475,7 +491,7 @@
       },
       daily: function (sec) {
         if (!M.daily.length) return empty();
-        if (sec.chart !== "table") trend(M.daily.map(function (d) { return { label: dshort(d.key), v: d.lbs, g: d.goal || null }; }), sec.chart, { leg: [{ l: "Output (lbs)", c: PAL[0] }, { l: sec.chart === "bar" ? "Goal (black tick)" : "Goal (dashed)", c: "#6f7b86" }] });
+        if (sec.chart !== "table") trend(M.daily.map(function (d) { return { label: dshort(d.key), v: d.lbs, g: d.goal || null }; }), sec.chart, { leg: [{ l: "Output (lbs)", c: PAL[0] }, { l: (sec.chart === "bar" ? "Goal (black tick)" : "Goal (dashed)") + (S.goalShifts < S.shifts ? ", only the " + S.goalShifts + " of " + S.shifts + " shifts with a goal" : ""), c: "#6f7b86" }] });
         if (sec.chart === "table" || sec.tbl) table([{ h: "Day" }, { h: "Shifts", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Goal (lbs)", r: 1 }, { h: "% of goal", r: 1 }, { h: "Lbs/hr", r: 1 }, { h: "Downtime (hrs)", r: 1 }, { h: "Under goal", r: 1 }],
           M.daily.map(function (d) { return [dmid(d.key), f0(d.shifts), f0(d.lbs), f0(d.goal), fp(d.pct), f0(d.lbhr), fh(d.downMin), f0(d.under)]; }));
       },
@@ -490,7 +506,7 @@
             ops: ["Operator time share", function (m) { return m.opList.map(function (o) { return o.label + " " + Math.round(o.share) + "%"; }).join(", ") || "-"; }, 0] };
           var C = [{ h: "Machine" }]; BYID.machine.cols.forEach(function (c) { if (on(sec, c[0])) C.push({ h: defs[c[0]][0], f: defs[c[0]][1], r: defs[c[0]][2] }); });
           var ml = M.machines.reduce(function (a, m) { return a + m.lbs; }, 0), tot = { label: "All machines", lbs: ml, hrs: M.machines.reduce(function (a, m) { return a + m.hrs; }, 0), goal: M.machines.reduce(function (a, m) { return a + m.goal; }, 0), downMin: S.downMin, coils: S.coils, reasonList: M.downReasons.filter(function (r) { return r.label !== "Not broken out"; }), opList: [] };
-          var mh = M.machines.reduce(function (a, m) { return a + m.hlbs; }, 0); tot.lbhr = div(mh, tot.hrs); tot.goalRate = div(tot.goal, tot.hrs); tot.pct = tot.goal > 0 ? mh / tot.goal * 100 : null; tot.util = S.util;
+          var mh = M.machines.reduce(function (a, m) { return a + m.hlbs; }, 0), mg = M.machines.reduce(function (a, m) { return a + m.glbs; }, 0), gh = M.machines.reduce(function (a, m) { return a + m.ghrs; }, 0); tot.lbhr = div(mh, tot.hrs); tot.goalRate = div(tot.goal, gh); tot.pct = tot.goal > 0 ? mg / tot.goal * 100 : null; tot.util = S.util;
           var rows = M.machines.map(function (m) { return C.map(function (c) { return c.f ? c.f(m) : m.label; }); }); rows.push(C.map(function (c) { return c.f ? c.f(tot) : "All machines"; }));
           table(C, rows, { bold: function (i) { return i === rows.length - 1; }, fs: C.length > 7 ? 7.8 : 8.6 });
         }
