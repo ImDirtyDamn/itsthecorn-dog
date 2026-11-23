@@ -232,7 +232,8 @@
   function mval(r, m) { return m === "dt" ? r.dt / 60 : r[m]; }
   function fmt(m, v) {
     if (v === null || v === undefined || isNaN(v)) return "\u2013";
-    if (m === "lbhr" || m === "hours" || m === "dt") return C.n1(v);
+    if (m === "lbhr") return C.n0(v);
+    if (m === "hours" || m === "dt") return C.n1(v);
     if (m === "coils") return Math.abs(v - Math.round(v)) < 0.05 ? C.n0(v) : C.n1(v);
     return C.n0(v);
   }
@@ -567,7 +568,7 @@
     var series = [], xmax = 0;
     list.forEach(function (s) {
       var o = dayNum(sameAxis ? origin : firstDate(s, s.period ? P.from2 : P.from)); s.x0 = o;
-      var pts = s.pts.filter(function (p) { return p.lbhr !== null; }).map(function (p) { var x = dayNum(p.date) - o; xmax = Math.max(xmax, x); return { x: x, y: p.lbhr, tip: p.date + ": " + C.n1(p.lbhr) + " lbs/hr", goal: p.goal }; });
+      var pts = s.pts.filter(function (p) { return p.lbhr !== null; }).map(function (p) { var x = dayNum(p.date) - o; xmax = Math.max(xmax, x); return { x: x, y: p.lbhr, tip: p.date + ": " + C.n0(p.lbhr) + " lb/hr", goal: p.goal }; });
       s.xy = pts; s.st = progressStats(s.pts, o);
       series.push({ color: s.color, pts: pts });
       if (s.st.fit && pts.length > 1) { var xa = pts[0].x, xb = pts[pts.length - 1].x; series.push({ color: s.color, dots: false, dash: "7 5", width: 1.6, pts: [{ x: xa, y: s.st.fit.a + s.st.fit.b * xa }, { x: xb, y: s.st.fit.a + s.st.fit.b * xb }] }); }
@@ -581,9 +582,9 @@
     $("pstats").innerHTML = list.map(function (s) {
       var st = s.st, sign = st.change === null ? "" : st.change >= 0 ? "+" : "\u2212";
       return (list.length > 1 ? '<h3 style="color:' + s.color + '">' + esc(s.name) + '</h3>' : "") + '<div class="stats">' +
-        '<div class="stat"><i>Average</i><b>' + C.n1(st.avg) + '</b><small>lbs/hr \u00b7 ' + st.shifts + ' shift' + (st.shifts === 1 ? "" : "s") + '</small></div>' +
-        '<div class="stat"><i>Best shift</i><b>' + (st.best ? C.n1(st.best.lbhr) : "\u2013") + '</b><small>' + (st.best ? esc(C.day(st.best.date)) : "\u2013") + '</small></div>' +
-        '<div class="stat"><i>Change (trend)</i><b>' + (st.change === null ? "\u2013" : sign + C.n1(Math.abs(st.change))) + '</b><small>' + (st.change === null ? "needs 2+ shifts on different days" : "lbs/hr" + (st.pct !== null ? " \u00b7 " + sign + Math.abs(Math.round(st.pct)) + "%" : "")) + '</small></div>' +
+        '<div class="stat"><i>Average</i><b>' + C.n0(st.avg) + '</b><small>lbs/hr \u00b7 ' + st.shifts + ' shift' + (st.shifts === 1 ? "" : "s") + '</small></div>' +
+        '<div class="stat"><i>Best shift</i><b>' + (st.best ? C.n0(st.best.lbhr) : "\u2013") + '</b><small>' + (st.best ? esc(C.day(st.best.date)) : "\u2013") + '</small></div>' +
+        '<div class="stat"><i>Change (trend)</i><b>' + (st.change === null ? "\u2013" : sign + C.n0(Math.abs(st.change))) + '</b><small>' + (st.change === null ? "needs 2+ shifts on different days" : "lbs/hr" + (st.pct !== null ? " \u00b7 " + sign + Math.abs(Math.round(st.pct)) + "%" : "")) + '</small></div>' +
         '<div class="stat"><i>Goal hit</i><b>' + (st.goalN ? st.goalMet + " of " + st.goalN : "\u2013") + '</b><small>' + (st.goalN ? "shifts with a goal" : "no goal on these logs") + '</small></div></div>';
     }).join("");
   }
