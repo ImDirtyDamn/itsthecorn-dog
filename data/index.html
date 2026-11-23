@@ -138,8 +138,18 @@ ul.list{padding-left:22px;color:var(--white);line-height:1.45;font-size:17px;mar
 body.noscroll{overflow:hidden}
 .more{margin:12px 0}
 /* tabs + analyze */
-.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0 0}
-.tabs button{padding:10px 2px;font-size:15px;letter-spacing:.02em;min-width:0}
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:10px 0 0}
+.tabs button{padding:10px 1px;font-size:14px;letter-spacing:0;min-width:0}
+/* home */
+.ovq{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px}
+#ovbody .stat small{overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.ovh{color:var(--white);font-size:15px;letter-spacing:.08em;margin:22px 0 6px}
+.ovl{margin:14px 0 2px}
+.ovdup{margin:8px 0 0;line-height:1.4;font-size:14px}
+.ovbar{margin:0 0 10px}
+.ovbl{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--white)}
+.ovbl span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovbl b{color:var(--fg);white-space:nowrap}
 .tabs[hidden]{display:none}
 .subtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0}
 .subtabs button{font-size:14px;padding:6px 2px;letter-spacing:.04em}
@@ -258,24 +268,25 @@ details.rp-cols>summary span{color:var(--fg-dim)}
   <h1>MASTER LOG<small>Every production log sent in</small></h1>
   <div class="hbtns"><button id="lockbtn" type="button" class="ghost" hidden>LOCK</button><a class="back" href="/draw/app/">&larr; TRACKER</a></div>
 </header>
-<nav class="tabs" id="tabs" hidden><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button><button type="button" data-v="lookup">LOOKUP</button><button type="button" data-v="report">REPORT</button></nav>
+<nav class="tabs" id="tabs" hidden><button type="button" data-v="home">HOME</button><button type="button" data-v="logs">LOGS</button><button type="button" data-v="analyze">ANALYZE</button><button type="button" data-v="lookup">LOOKUP</button><button type="button" data-v="report">REPORT</button></nav>
 <main id="app"></main>
 <div class="overlay" id="detail" hidden role="dialog" aria-label="Log detail"><div class="ovtop"><b id="dtitle">LOG</b><button id="dclose" type="button">CLOSE</button></div><div id="dbody"></div></div>
 <div class="confirm" id="confirm" hidden role="alertdialog" aria-label="Confirm"><div class="box"><b id="ctitle">DELETE THIS LOG?</b><p id="cmsg"></p><ul class="diffl" id="clist" hidden></ul>
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=6"></script>
+<script src="analyze.js?v=7"></script>
 <script src="lookup.js?v=5"></script>
 <script src="fields.js?v=4"></script>
-<script src="report.js?v=3"></script>
+<script src="report.js?v=4"></script>
+<script src="overview.js?v=1"></script>
 <script>
 (function () {
   "use strict";
   var API = String(window.LOGDB_API_BASE || "").replace(/\/+$/, "");
   var SKEY = "logdbAdminCode";          // sessionStorage only: gone when the tab closes
   var PAGE = 100;
-  var VKEY = "logdbView", view = (function () { try { return sessionStorage.getItem(VKEY) || (/[#&]cmp=/.test(location.hash) ? "analyze" : "logs"); } catch (e) { return "logs"; } })();
+  var VKEY = "logdbView", view = (function () { try { return sessionStorage.getItem(VKEY) || (/[#&]cmp=/.test(location.hash) ? "analyze" : "home"); } catch (e) { return "home"; } })();
   if (/[#&]cmp=/.test(location.hash)) view = "analyze";
   var F = { from: "", to: "", operator: "", draw: "" }, NR = false, logs = [], summary = null, operators = [], hasMore = false, current = null;
   function $(id) { return document.getElementById(id); }
@@ -335,6 +346,9 @@ details.rp-cols>summary span{color:var(--fg-dim)}
       setTabs(); $("lockbtn").hidden = false;
       $("app").innerHTML = '<h3 style="margin-top:16px">JOB LOOKUP</h3><div id="jlhost"></div>';
       window.JobLookup.mount($("jlhost"), { auth: function () { return { "X-Admin-Code": code() }; }, needCode: false, canTip: false });
+    } else if (view === "home" && window.Overview) {
+      setTabs(); $("lockbtn").hidden = false;
+      window.Overview.show($("app"), { api: api, esc: esc, day: day, n0: n0, n1: n1, toast: toast, open: openDetail });
     } else if (view === "report" && window.Report) {
       setTabs(); $("lockbtn").hidden = false;
       window.Report.show($("app"), { api: api, esc: esc, toast: toast });
@@ -671,7 +685,7 @@ details.rp-cols>summary span{color:var(--fg-dim)}
     $("cyes").onclick = function () {
       $("cyes").disabled = true;
       api("/logs/" + encodeURIComponent(L.id), { method: "DELETE" }).then(function () {
-        $("confirm").hidden = true; closeDetail(); toast("Log deleted"); load(false);
+        $("confirm").hidden = true; closeDetail(); toast("Log deleted"); if (view === "home") start(); else load(false);
       }).catch(function (e) { $("confirm").hidden = true; if (e.message !== "401") toast("Delete failed: " + e.message); })
         .then(function () { $("cyes").disabled = false; });
     };
@@ -886,7 +900,7 @@ details.rp-cols>summary span{color:var(--fg-dim)}
           $("confirm").hidden = true; $("cno").textContent = "CANCEL";
           if (x.res.ok && x.j.ok) {
             editing = null; toast("Saved. The fixed log is in the master log."); coilQs = null;
-            load(false); openDetail({ id: r.body.id, operator: r.body.shift.operator, shift_date: r.body.shift.date });
+            if (view === "home") start(); else load(false); openDetail({ id: r.body.id, operator: r.body.shift.operator, shift_date: r.body.shift.date });
           } else if (x.res.status === 401) edErr("The crew code is wrong. Nothing was saved.");
           else edErr("Not saved: " + (x.j.error || "server said " + x.res.status) + (x.j.field ? " (" + x.j.field + ")" : ""));
         }).catch(function () { $("confirm").hidden = true; $("cno").textContent = "CANCEL"; edErr("Not saved: no connection to the database. Try again."); })

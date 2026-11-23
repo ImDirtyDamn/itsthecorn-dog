@@ -94,6 +94,13 @@
   }
 
   /* ================= engine (pure, tested in node) ================= */
+  /* a crew is one name per person: "Oleh, Ihor", "Ihor & Oleh" and "ihor,oleh" are the same crew, shown as "Ihor, Oleh" */
+  function crewName(s) {
+    var t = String(s || "").trim().replace(/\s+/g, " "), ps = t.split(/\s*(?:,|&|\/|\+|\band\b)\s*/i).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (ps.length < 2) return t;
+    var seen = {}; ps = ps.filter(function (x) { var k = x.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
+    return ps.sort(function (a, b) { var x = a.toLowerCase(), y = b.toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; }).join(", ");
+  }
   function num(v) { v = +v; return isFinite(v) ? v : 0; }
   function div(a, b) { return b > 0 ? a / b : null; }
   function canonWhy(s) { var k = String(s || "").trim().toLowerCase(); for (var i = 0; i < WHY.length; i++) if (WHY[i].toLowerCase() === k) return WHY[i]; return String(s || "").trim(); }
@@ -156,7 +163,7 @@
     M.underList = [];
     logs.forEach(function (l) {
       var lbs = num(l.total_lbs), h = num(l.net_hours), g = num(l.goal_lbs), dm = num(l.downtime_minutes), cs = coilsBy[l.id] || [], ms = machBy[l.id] || [];
-      var pct = g > 0 ? lbs / g * 100 : null, op = String(l.operator || "").trim() || "Unknown";
+      var pct = g > 0 ? lbs / g * 100 : null, op = crewName(l.operator) || "Unknown";
       // machines: lbs from coil rows, hours and goal from machine rows
       // a shift's lbs are its total; coil rows only say how it splits across machines (same as the Analyze tab)
       var coilSum = cs.reduce(function (a, c) { return a + num(c.weight); }, 0);
@@ -260,7 +267,7 @@
     M.machines.forEach(function (m) { if (m.pct !== null && m.pct < 90 && m.hrs >= 8) F.push({ t: m.label + " ran at " + f1(m.pct) + "% of goal (under 90%)." }); });
     if (M.shop.unfinished) F.push({ t: M.shop.unfinished + " shift" + (M.shop.unfinished === 1 ? " was" : "s were") + " sent before the shift was done (not rated)." });
     var seenDup = {}; logs.forEach(function (a, i) { logs.slice(i + 1).forEach(function (b) {
-      if (a.shift_date !== b.shift_date || String(a.operator || "").trim().toLowerCase() !== String(b.operator || "").trim().toLowerCase()) return;
+      if (a.shift_date !== b.shift_date || crewName(a.operator).toLowerCase() !== crewName(b.operator).toLowerCase()) return;
       var da = String(a.draws || "").split(",").filter(Boolean), db = String(b.draws || "").split(",").filter(Boolean), both = da.filter(function (x) { return db.indexOf(x) >= 0; });
       if (!both.length) return; var k = a.id + "|" + b.id; if (seenDup[k]) return; seenDup[k] = 1;
       F.push({ t: "Possible duplicate: " + dmid(a.shift_date) + ", " + (String(a.operator || "").trim() || "Unknown") + " on Draw " + both.join(", Draw ") + " was sent twice (" + f0(num(a.total_lbs)) + " lb and " + f0(num(b.total_lbs)) + " lb). Both are counted in every total. Delete one in Logs." });
@@ -764,6 +771,6 @@
     }).then(function () { busy = false; var b = host.querySelector("#rp-build"); if (b) b.disabled = false; });
   }
 
-  var api = { show: show, compute: compute, buildPdf: buildPdf, parseUnder: parseUnder, parseProblems: parseProblems, rangeOf: rangeOf, preset: preset, normLayout: normLayout, defaultLayout: defaultLayout, SECTIONS: SECTIONS, PRESETS: PRESETS, WHY: WHY };
+  var api = { crewName: crewName, show: show, compute: compute, buildPdf: buildPdf, parseUnder: parseUnder, parseProblems: parseProblems, rangeOf: rangeOf, preset: preset, normLayout: normLayout, defaultLayout: defaultLayout, SECTIONS: SECTIONS, PRESETS: PRESETS, WHY: WHY };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Report = api;
 })(typeof window !== "undefined" ? window : globalThis);

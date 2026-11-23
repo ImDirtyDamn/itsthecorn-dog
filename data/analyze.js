@@ -7,7 +7,14 @@
   "use strict";
 
   /* ================= pure engine (also tested in node) ================= */
-  function opKey(s) { return String(s || "").trim().replace(/\s+/g, " ").toLowerCase(); }
+  /* a crew is one name per person: "Oleh, Ihor", "Ihor & Oleh" and "ihor,oleh" are the same crew, shown as "Ihor, Oleh" */
+  function crewName(s) {
+    var t = String(s || "").trim().replace(/\s+/g, " "), ps = t.split(/\s*(?:,|&|\/|\+|\band\b)\s*/i).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (ps.length < 2) return t;
+    var seen = {}; ps = ps.filter(function (x) { var k = x.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
+    return ps.sort(function (a, b) { var x = a.toLowerCase(), y = b.toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; }).join(", ");
+  }
+  function opKey(s) { return crewName(s).toLowerCase(); }
   function shiftKind(l) {
     var s = String(l.shift_label || "").toLowerCase();
     if (/night|nite|3rd|2nd|third|second|pm\s*-/.test(s)) return "Night";
@@ -204,7 +211,7 @@
     if (v === null || v === undefined) return ""; if (typeof v === "number") return String(v);
     var s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
-  var engine = { opKey: opKey, shiftKind: shiftKind, coilCount: coilCount, buildParts: buildParts, filterParts: filterParts, agg: agg, groupBy: groupBy,
+  var engine = { crewName: crewName, opKey: opKey, shiftKind: shiftKind, coilCount: coilCount, buildParts: buildParts, filterParts: filterParts, agg: agg, groupBy: groupBy,
     shiftPoints: shiftPoints, fitLine: fitLine, progressStats: progressStats, bucketSeries: bucketSeries, weekKey: weekKey, dayNum: dayNum, ymd: ymd,
     parseYmd: parseYmd, emptyF: emptyF, csvCell: csvCell, underReasons: underReasons, reasonKeys: reasonKeys, WHY: WHY, partKey: partKey, tagList: tagList, sizeNum: sizeNum, sizeKey: sizeKey, factors: factors, THIN: THIN, NO_TAG: NO_TAG };
   if (typeof module !== "undefined" && module.exports) { module.exports = engine; return; }
@@ -245,7 +252,7 @@
   function cleanF(f) {
     var e = emptyF(), out = {}; f = f && typeof f === "object" ? f : {};
     Object.keys(e).forEach(function (k) {
-      if (Array.isArray(e[k])) out[k] = Array.isArray(f[k]) ? f[k].filter(function (x) { return typeof x === "string"; }).slice(0, 200).map(function (x) { return x.slice(0, 80); }) : [];
+      if (Array.isArray(e[k])) out[k] = Array.isArray(f[k]) ? f[k].filter(function (x) { return typeof x === "string"; }).slice(0, 200).map(function (x) { return k === "ops" ? opKey(x).slice(0, 80) : x.slice(0, 80); }) : [];
       else out[k] = typeof f[k] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f[k]) ? f[k] : "";
     });
     return out;
@@ -275,7 +282,7 @@
         if (j.fac) { S.fac.f = cleanF(j.fac.f); S.fac.draw = /^[1-9*]?$/.test(j.fac.draw || "") ? j.fac.draw || "" : ""; S.fac.step = [0, 0.025, 0.05, 0.1].indexOf(+j.fac.step) >= 0 ? +j.fac.step : 0; }
         applyCmp(j.cmp);
         if (j.group) { S.group.f = cleanF(j.group.f); if (BYS[j.group.by]) S.group.by = j.group.by; if (METRICS[j.group.metric]) S.group.metric = j.group.metric; }
-        if (j.prog) Object.keys(S.prog).forEach(function (k) { if (typeof j.prog[k] === "string") S.prog[k] = j.prog[k].slice(0, 80); });
+        if (j.prog) Object.keys(S.prog).forEach(function (k) { if (typeof j.prog[k] === "string") S.prog[k] = (k === "op" || k === "op2" ? opKey(j.prog[k]) : j.prog[k]).slice(0, 80); });
       }
     } catch (e) {}
     var m = /[#&]cmp=([A-Za-z0-9_-]+)/.exec(location.hash || "");
