@@ -182,6 +182,9 @@
   .phase { margin: 1rem 0 1.5rem; padding: 0.5rem 0.75rem; background: var(--panel); color: var(--fg); font-size: 0.9rem; letter-spacing: 0.05em; }
   .phase.amber { color: var(--amber); }
   .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .coil-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.35rem 0.7rem; margin: 0 0 0.6rem; padding-bottom: 0.5rem; border-bottom: 1px dashed var(--fg-faint); }
+  .coil-line b { font-size: clamp(1.6rem, 7vw, 2.4rem); font-weight: 700; line-height: 1.05; color: var(--white); font-variant-numeric: tabular-nums; }
+  .coil-line .unit { flex-basis: 100%; }
   .big { font-size: 2.6rem; font-weight: 700; line-height: 1.1; color: var(--white); font-variant-numeric: tabular-nums; margin-top: 0.2rem; overflow-wrap: anywhere; }
   .big.pc { color: var(--fg); }
   .unit { font-size: 0.85rem; color: var(--fg-dim); }
@@ -707,6 +710,7 @@
     </section>
     <p class="phase" id="d-phase"></p>
 
+    <div class="coil-line"><span class="lbl">Coils ran</span><b class="glow" id="d-coils">0</b><span class="unit">half coils count ½ · two halves = 1 coil</span></div>
     <div class="hero">
       <div>
         <div class="lbl">Lbs ran</div>
@@ -1148,24 +1152,23 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     s = s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return (neg && s !== "0" ? "-" : "") + s;
   }
-  // Coil count for the simple view. Whole coils as 1, 2, 3…; halves as 1½ (unicode ½).
-  // Tracker logs one entry per LOG COIL, so the live count is usually a whole number.
+  // Coil count: whole coils as 1, 2, 3…; a part left over as 1½, 2⅓, 2⅔ (other parts as one decimal).
   function fmtCoils(n) {
     if (!isFinite(n)) return "-";
-    var x = Math.round(Number(n) * 2) / 2, neg = x < 0;
-    x = Math.abs(x);
-    var whole = Math.floor(x + 1e-9), half = Math.abs(x - whole - 0.5) < 1e-9;
-    var s;
-    if (half) s = (whole === 0 ? "" : fmtInt(whole)) + "\u00BD";
-    else s = fmtInt(Math.round(x));
+    var neg = n < 0, x = Math.abs(Number(n)), whole = Math.floor(x + 1e-6), part = x - whole, s;
+    var FR = [[0.5, "\u00BD"], [1 / 3, "\u2153"], [2 / 3, "\u2154"], [0.25, "\u00BC"], [0.75, "\u00BE"], [1 / 6, "\u2159"], [5 / 6, "\u215A"]], hit = null;
+    FR.forEach(function (f) { if (!hit && Math.abs(part - f[0]) < 0.02) hit = f[1]; });
+    if (part < 0.02 || part > 0.98) s = fmtInt(Math.round(x));
+    else if (hit) s = (whole === 0 ? "" : fmtInt(whole)) + hit;
+    else s = (Math.round(x * 10) / 10).toFixed(1);
     return (neg && s !== "0" ? "-" : "") + s;
   }
-  function coilsRanCount() {
-    // One logged coil entry = 1 coil ran. No half-cut field on tracker coils; if a
-    // cut-in-half piece is logged as its own weight, it counts as 1 (so 1 coil cut
-    // into 2 halves logged separately = 2). Fractions only show if a count is half.
-    return (state.coils || []).length;
-  }
+  // Coils a logged entry stands for, the same rule as the master log: a coil cut in half is logged as two
+  // pieces ("1/2" each), so each piece counts ½ and two halves = 1 coil; thirds count ⅓ each.
+  function coilPart(c) { return 1 / splitPcs(c && c.split); }
+  function coilsSum(list) { var t = 0; (list || []).forEach(function (c) { t += coilPart(c); }); return Math.round(t * 1000) / 1000; }
+  function coilsWord(n) { return fmtCoils(n) + " coil" + (Math.abs(n - 1) < 1e-6 ? "" : "s"); }
+  function coilsRanCount() { return coilsSum(state.coils); }
   function fmtSigned(n) { var s = fmtInt(n); return n > 0 && s !== "0" ? "+" + s : s; }
   function fmtPct(n) { if (n == null || !isFinite(n)) return "-"; var s = Math.abs(n).toFixed(1); return (n > 0.05 ? "+" : n < -0.05 ? "-" : "") + s + "%"; }
   function fmtW(n) { return isFinite(n) ? (Math.round(n * 10) / 10).toFixed(1) : "-"; }
@@ -2093,6 +2096,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     updateOverBar(now);
 
     setText($("d-ran"), fmtInt(r.lbsRan));
+    setText($("d-coils"), fmtCoils(coilsRanCount()));
     var ranReady = !(r.paceCar == null || r.phase === "before" || r.phase === "invalid" || r.paceCar <= 0);
     var ranCls = ranReady ? " pace-" + paceColor(r.delta) : "";
     setCls($("d-ran"), "big glow" + ranCls);
@@ -2169,7 +2173,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       setCls(c.dl, mr.deltaPct == null || r.phase === "before" ? "" : colorFor(mr.deltaPct));
       var lc = null, list = coilsOf(mr.id);
       if (list.length) lc = list[list.length - 1];
-      var t = lc ? "Last coil " + fmtLb(lc.weight) + " lbs at " + fmtClock(Date.parse(lc.loggedAt)) + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") : "No coils yet";
+      var t = lc ? "Last coil " + fmtLb(lc.weight) + " lbs at " + fmtClock(Date.parse(lc.loggedAt)) + " · " + coilsWord(coilsSum(list)) : "No coils yet";
       if (c.last.className.indexOf("red") < 0 || lastLogged[mr.id]) { setText(c.last, t); setCls(c.last, "mc-last sub"); }
       lastLogged[mr.id] = null;
     });
@@ -2216,7 +2220,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var list = coilsOf(m.id), splits = {};
       Calc.splitRates(state, m.id).forEach(function (s) { splits[s.id] = s.rate; });
       var bar = el("div", "adv-line");
-      bar.appendChild(el("span", "lbl", "Coil log · " + list.length));
+      bar.appendChild(el("span", "lbl", "Coil log · " + coilsWord(coilsSum(list))));
       var undo = smallBtn("UNDO LAST", "", function () {
         if (!list.length) return;
         var lastC = list[list.length - 1];
@@ -2682,7 +2686,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     showReadback(list[list.length - 1]);
     rbCoil = list.map(function (c) { return c.id; });
     var tot = 0; list.forEach(function (c) { tot += c.weight; });
-    setText($("rb-w"), list.length + " coil" + (list.length === 1 ? "" : "s") + " · " + fmtLb(tot) + " lbs");
+    setText($("rb-w"), coilsWord(coilsSum(list)) + " · " + fmtLb(tot) + " lbs");
     var ws = list.slice(0, 8).map(function (c) { return fmtLb(c.weight); }).join(" + ") + (list.length > 8 ? " + " + (list.length - 8) + " more" : "");
     setText($("rb-det"), (scan ? "From the scanned sheet: " : "From the calculator: ") + ws + " lbs");
     setText(document.querySelector("#readback .rb-lbl"), scan ? "LOGGED FROM SHEET" : "LOGGED FROM CARD");
@@ -3117,11 +3121,11 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     } else if (sheetKind === "ran") {
       title = "COILS + LBS RAN · BY MACHINE";
       var n0 = coilsRanCount();
-      var b1 = el("div", "sh-big", fmtCoils(n0) + " coil" + (n0 === 1 ? "" : "s") + " · " + fmtInt(r.lbsRan) + " lbs"); b1.id = "sh-ran-big"; body.appendChild(b1);
+      var b1 = el("div", "sh-big", coilsWord(n0) + " · " + fmtInt(r.lbsRan) + " lbs"); b1.id = "sh-ran-big"; body.appendChild(b1);
       var dl = el("dl", "sh-rows"), n = 0;
       state.machines.forEach(function (m, i) {
         var list = coilsOf(m.id), mr = r.machines[i], lc = list.length ? list[list.length - 1] : null; n += list.length;
-        var d = sRow(dl, m.name + " · " + list.length + " coil" + (list.length === 1 ? "" : "s") + (lc ? " · last " + fmtClock(Date.parse(lc.loggedAt)) : ""), fmtInt(mr ? mr.lbs : 0) + " lbs");
+        var d = sRow(dl, m.name + " · " + coilsWord(coilsSum(list)) + (lc ? " · last " + fmtClock(Date.parse(lc.loggedAt)) : ""), fmtInt(mr ? mr.lbs : 0) + " lbs");
         d.id = "sh-ran-" + i;
       });
       sRow(dl, "TOTAL · " + n + " coil" + (n === 1 ? "" : "s"), fmtInt(r.lbsRan) + " lbs", "", "tot");
@@ -3176,7 +3180,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       var b4 = el("div", "sh-big", ms ? ms.t : "-"); b4.id = "sh-m-big"; if (ms) b4.style.color = ms.cls === "green" ? "var(--fg)" : ms.cls === "amber" ? "var(--amber)" : "var(--red)"; body.appendChild(b4);
       var list = coilsOf(m.id), lc = list.length ? list[list.length - 1] : null;
       var dl4 = el("dl", "sh-rows");
-      sRow(dl4, "Lbs ran · " + list.length + " coil" + (list.length === 1 ? "" : "s"), fmtInt(mr.lbs) + " lbs").id = "sh-m-ran";
+      sRow(dl4, "Lbs ran · " + coilsWord(coilsSum(list)), fmtInt(mr.lbs) + " lbs").id = "sh-m-ran";
       sRow(dl4, "Last coil", lc ? fmtLb(lc.weight) + " lbs at " + fmtClock(Date.parse(lc.loggedAt)) : "none yet");
       body.appendChild(dl4);
       paceCarMath(body, r, mr, m);
@@ -3692,7 +3696,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       machines: names,
       draws: draws,
       lbs: Math.round(r.lbsRan || 0),
-      coils: (st.coils || []).length,
+      coils: coilsSum(st.coils),
       lbhr: net > 0 ? Math.round((r.lbsRan || 0) / net) : null,
       state: snap
     };
@@ -3725,7 +3729,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
       left.appendChild(el("div", "hist-date", histFmtDate(e.date) + " ›"));
       left.appendChild(el("div", "hist-mach", histDrawLabel(e) + (e.operator ? " · " + e.operator : "")));
       b.appendChild(left);
-      var nums = el("div", "hist-nums", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lbs");
+      var nums = el("div", "hist-nums", coilsWord(histCoils(e)) + " · " + fmtInt(e.lbs) + " lbs");
       b.appendChild(nums);
       b.appendChild(el("div", "hist-rate", e.lbhr != null ? fmtInt(e.lbhr) + " lbs/hr" : "- lbs/hr"));
       b.addEventListener("click", function () { openHistOne(e.id); });
@@ -3733,16 +3737,18 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     });
     body.appendChild(el("p", "sh-sub", "Read-only. Older than " + HIST_DAYS + " days is removed automatically."));
   }
+  // past shifts saved before halves counted ½ kept a plain row count: work it out again from the saved coils
+  function histCoils(e) { return e && e.state && Array.isArray(e.state.coils) ? coilsSum(e.state.coils) : (e && isFinite(e.coils) ? e.coils : 0); }
   function renderHistOne(body, id) {
     var e = histById(id);
     if (!e) { openHist(); return; }
     setText($("sheet-title"), histFmtDate(e.date).toUpperCase() + " · READ ONLY");
-    body.appendChild(el("div", "sh-big", fmtCoils(e.coils) + " coil" + (e.coils === 1 ? "" : "s") + " · " + fmtInt(e.lbs) + " lbs"));
+    body.appendChild(el("div", "sh-big", coilsWord(histCoils(e)) + " · " + fmtInt(e.lbs) + " lbs"));
     var dl = el("dl", "sh-rows");
     sRow(dl, "Draw / machines", histDrawLabel(e));
     sRow(dl, "Average lbs/hr", e.lbhr != null ? fmtInt(e.lbhr) + " lbs/hr" : "-");
     sRow(dl, "Shift", (e.start ? fmtHHMM(e.start) : "not set") + " to " + (e.end ? fmtHHMM(e.end) : "not set") + (e.operator ? " · " + e.operator : ""));
-    sRow(dl, "Coils ran", fmtCoils(e.coils), "", "tot");
+    sRow(dl, "Coils ran", fmtCoils(histCoils(e)), "", "tot");
     sRow(dl, "Lbs ran", fmtInt(e.lbs) + " lbs", "", "tot");
     body.appendChild(dl);
     var hs = e.state || {}, notes = trim(hs.shift && hs.shift.dayNotes);
@@ -3951,10 +3957,10 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var box = $("ml-sum"); if (!box) return;
     box.textContent = "";
     if (mlMode === "send") {
-      var c = state.coils.length, lb = 0; state.coils.forEach(function (x) { lb += x.weight; });
+      var c = coilsSum(state.coils), lb = 0; state.coils.forEach(function (x) { lb += x.weight; });
       var r = Calc.compute(state, Date.now());
       box.appendChild(el("p", "ml-line", "THIS SHIFT: " + fmtShiftDay(state.shift.date) + " · " + fmtHHMM(state.shift.start) + " – " + fmtHHMM(state.shift.end) +
-        " · " + c + (c === 1 ? " coil" : " coils") + " · " + fmtLb(lb) + " lbs" + (state.downtime.length ? " · " + state.downtime.length + " downtime" : "")));
+        " · " + coilsWord(c) + " · " + fmtLb(lb) + " lbs" + (state.downtime.length ? " · " + state.downtime.length + " downtime" : "")));
       box.appendChild(el("p", "sh-sub", !mlHasData() ? "Nothing to send yet: log a coil or downtime first."
         : r.phase === "after" ? "The shift is over, so this sends the whole shift. NEW SHIFT also sends it by itself."
         : "The shift isn't over, so this sends what you have so far. NEW SHIFT sends the finished shift and replaces this one."));
