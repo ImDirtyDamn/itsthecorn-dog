@@ -72,7 +72,7 @@ details.filters>summary span{color:var(--fg-dim);font-weight:normal;font-size:13
 .stat i{display:block;font-style:normal;color:var(--amber);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
 .stat b{display:block;color:var(--fg);font-size:24px;margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgba(57,255,106,.35);overflow-wrap:anywhere}
 .stat small{display:block;color:var(--fg-dim);font-size:12px;margin-top:2px}
-.stat.wide{grid-column:1/-1}
+.stat.wide,.stat.wide1{grid-column:1/-1}
 .meter{height:10px;border:1px solid var(--fg-dim);margin-top:6px;background:#000}
 .meter span{display:block;height:100%;background:var(--fg)}
 .toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0}
@@ -155,7 +155,7 @@ body.noscroll{overflow:hidden}
 .ovn{color:var(--fg-dim);font-size:12px;letter-spacing:0;font-weight:normal;float:right;margin-top:2px}
 .ovflag{border-left:4px solid var(--fg-dim);padding:6px 10px;margin:6px 0;background:var(--panel);font-size:14px;line-height:1.4;color:var(--white)}.ovflag b{display:block;color:var(--white)}.ovflag span{color:#b9c9b9}.ovflag.dup,.ovflag.noreason{border-left-color:var(--red)}.ovflag.dup b,.ovflag.noreason b{color:var(--red)}.ovflag.nogoal{border-left-color:var(--amber)}.ovflag.nogoal b{color:var(--amber)}
 .ng{color:var(--fg-dim)}
-#ovbody .tbl th,#ovbody .tbl td{padding:7px 5px;font-size:13px}#ovbody .tbl th{font-size:11px;letter-spacing:0}#ovbody .tbl td:first-child{white-space:normal;max-width:34vw;line-height:1.25}
+#ovbody .tbl th,#ovbody .tbl td{padding:7px 3px;font-size:12.5px}#ovbody .tbl th{font-size:11px;letter-spacing:0}#ovbody .tbl td:first-child{white-space:normal;max-width:30vw;line-height:1.25;padding-left:5px}
 .ovbl b{color:var(--fg);white-space:nowrap}
 .tabs[hidden]{display:none}
 .subtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0}
@@ -227,8 +227,8 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
   h1{font-size:22px}
   h1 small{font-size:14px;color:#7fbf8f}
   .tabs{max-width:720px}
-  .stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
-  .stat.wide{grid-column:auto}
+  .stats{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+  .stat.wide,.stat.wide1{grid-column:auto}
   .stat b{font-size:28px}
   .toolbar{max-width:560px;margin-left:auto}
   .loglist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -284,11 +284,11 @@ details.rp-cols>summary span{color:var(--fg-dim)}
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=8"></script>
-<script src="lookup.js?v=5"></script>
+<script src="analyze.js?v=9"></script>
+<script src="lookup.js?v=6"></script>
 <script src="fields.js?v=4"></script>
-<script src="report.js?v=5"></script>
-<script src="overview.js?v=2"></script>
+<script src="report.js?v=6"></script>
+<script src="overview.js?v=3"></script>
 <script>
 (function () {
   "use strict";
@@ -428,8 +428,9 @@ details.rp-cols>summary span{color:var(--fg-dim)}
     h += '<div class="stats">' +
       '<div class="stat"><i>Logs</i><b>' + n0(s.count) + '</b><small>' + esc(n0(s.net_hours)) + ' run hrs</small></div>' +
       '<div class="stat"><i>Total lbs</i><b>' + n0(s.total_lbs) + '</b><small>goal ' + n0(s.goal_lbs) + '</small></div>' +
+      '<div class="stat"><i>Coils</i><b id="stcoils">' + (coilDone === qs() && coilTotal() !== null ? fcoil(coilTotal()) : "\u2026") + '</b><small>coils drawn</small></div>' +
       '<div class="stat"><i>Avg lb/hr</i><b>' + n0(s.avg_lbhr) + '</b><small>all lbs \u00f7 all hrs</small></div>' +
-      '<div class="stat"><i>Downtime</i><b>' + n1((s.downtime_minutes || 0) / 60) + ' hr</b><small>' + n0(s.downtime_minutes) + ' min</small></div>' +
+      '<div class="stat wide1"><i>Downtime</i><b>' + n1((s.downtime_minutes || 0) / 60) + ' hr</b><small>' + n0(s.downtime_minutes) + ' min</small></div>' +
       '<div class="stat wide"><i>Goal met</i><b>' + (rated ? s.met + " of " + rated + " (" + pct + "%)" : "\u2013") + '</b><div class="meter"><span style="width:' + pct + '%"></span></div>' +
       (s.count > rated ? '<small>' + unratedNote(s.count - rated) + '</small>' : "") + '</div></div>';
     h += '<div class="toolbar"><button type="button" id="csv">EXPORT CSV</button><button type="button" id="refresh" class="ghost">REFRESH</button></div>';
@@ -443,7 +444,7 @@ details.rp-cols>summary span{color:var(--fg-dim)}
         '<div class="lc2">' + badge(l.goal_met, l) + draws(l.draws).map(function (d) { return '<span class="tag">D' + esc(d) + '</span>'; }).join("") + (l.day_notes ? '<span class="tag">NOTES</span>' : "") + (noReason(l) ? '<span class="badge nr">NO REASON</span>' : "") + '</div>' +
         (l.goal_met === 0 && reasonOf(l) ? '<div class="why">' + esc(reasonOf(l)) + '</div>' : "") +
         (SQ.hits && SQ.hits[l.id] ? '<div class="hit"><i>' + esc(SQ.hits[l.id].label) + '</i>' + markUp(SQ.hits[l.id].text, SQ.terms) + '</div>' : "") +
-        '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? n0(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n0(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + (+l.goal_lbhr > 0 ? n0(l.goal_lbhr) : "\u2013") + '</b></div></div></button>';
+        '<div class="lc3 four"><div><i>COILS</i><b class="lc-coils" data-id="' + esc(l.id) + '">' + (coilCount[l.id] != null ? fcoil(coilCount[l.id]) : "\u2026") + '</b></div><div><i>LBS</i><b>' + n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + n0(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + (+l.goal_lbhr > 0 ? n0(l.goal_lbhr) : "\u2013") + '</b></div></div></button>';
     });
     h += '</div>';
     if (hasMore) h += '<button type="button" class="big more" id="more">SHOW MORE</button>';
@@ -589,9 +590,14 @@ details.rp-cols>summary span{color:var(--fg-dim)}
     if (needsCoils(f)) openAll(logs, go); else go(0);
   }
   /* coils per log for the list cards (one card row can be several coils: Coils Drawn) */
-  var coilCount = {}, coilQs = null;
+  /* counted the same way everywhere on /data (Report.coilsOf): a coil cut in half is two "1/2" rows = 1 coil */
+  var coilCount = {}, coilQs = null, coilDone = null;
+  function coilsOf(x) { return window.Report ? window.Report.coilsOf(x) : (x.coils_in > 0 ? x.coils_in : 1); }
+  function fcoil(n) { return window.Report ? window.Report.fc(n) : n0(n); }
+  function coilTotal() { var k = Object.keys(coilCount); return k.length ? k.reduce(function (a, id) { return a + coilCount[id]; }, 0) : null; }
   function paintCoilCounts() {
-    Array.prototype.forEach.call(document.querySelectorAll(".lc-coils"), function (b) { var n = coilCount[b.getAttribute("data-id")]; b.textContent = n != null ? n0(n) : "0"; });
+    Array.prototype.forEach.call(document.querySelectorAll(".lc-coils"), function (b) { var n = coilCount[b.getAttribute("data-id")]; b.textContent = n ? fcoil(n) : "0"; });
+    var st = document.getElementById("stcoils"); if (st) { var t = coilTotal(); st.textContent = t !== null ? fcoil(t) : "0"; }
   }
   function loadCoilCounts() {
     var key = qs();
@@ -600,9 +606,9 @@ details.rp-cols>summary span{color:var(--fg-dim)}
     api("/analyze" + key).then(function (j) {
       if (coilQs !== key) return;
       var c = {}; (j.logs || []).forEach(function (l) { c[l.id] = 0; });
-      (j.coils || []).forEach(function (x) { c[x.log_id] = (c[x.log_id] || 0) + (x.coils_in > 0 ? x.coils_in : 1); });
-      coilCount = c; paintCoilCounts();
-    }).catch(function () { coilQs = null; Array.prototype.forEach.call(document.querySelectorAll(".lc-coils"), function (b) { if (b.textContent === "\u2026") b.textContent = "?"; }); });
+      (j.coils || []).forEach(function (x) { c[x.log_id] = (c[x.log_id] || 0) + coilsOf(x); });
+      coilCount = c; coilDone = key; paintCoilCounts();
+    }).catch(function () { coilQs = null; Array.prototype.forEach.call(document.querySelectorAll(".lc-coils, #stcoils"), function (b) { if (b.textContent === "\u2026") b.textContent = "?"; }); });
   }
 
   function exportCsv() {
@@ -633,7 +639,8 @@ details.rp-cols>summary span{color:var(--fg-dim)}
   function renderDetail(j) {
     var L = j.log, h = '<div style="margin:12px 0">' + badge(L.goal_met, L) + '</div>';
     h += line("Shift", (L.shift_label ? L.shift_label + " \u00b7 " : "") + (L.shift_start ? clock12(L.shift_start) + " \u2013 " + clock12(L.shift_end) : "\u2013"));
-    h += line("Total Weight Produced", n0(L.total_lbs), true) + line("Hours per shift", nh(L.net_hours), true) +
+    var nCoils = (j.coils || []).reduce(function (a, c) { return a + coilsOf(c); }, 0);
+    h += line("Total Weight Produced", n0(L.total_lbs), true) + line("Coils drawn", j.coils && j.coils.length ? fcoil(nCoils) : "\u2013", true) + line("Hours per shift", nh(L.net_hours), true) +
       line("Goal: Lbs/Hour", n0(L.goal_lbhr), true) + line("Average lbs/hr", n0(L.avg_lbhr), true) + line("Shift goal (lbs)", n0(L.goal_lbs));
     if (j.machines.length) {
       h += '<h3>Machines</h3>';

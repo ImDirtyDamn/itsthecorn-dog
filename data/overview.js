@@ -30,7 +30,7 @@
   if (typeof module !== "undefined" && module.exports) { module.exports = api; return; }
 
   /* ---- UI ---- */
-  var C, host, range = "thisweek", busy = false, lastLogs = {};
+  var C, host, range = "thisweek", busy = false, lastLogs = {}, coilN = {};
   try { var sv = localStorage.getItem(LS); if (RANGES.some(function (r) { return r[0] === sv; })) range = sv; } catch (e) {}
   function esc(s) { return C.esc(s); }
   function pct(v) { return v === null || v === undefined || !isFinite(v) ? "\u2013" : (Math.round(v * 10) / 10).toFixed(1) + "%"; }
@@ -42,7 +42,7 @@
     return '<button type="button" class="logcard ovc' + (cls ? " " + cls : "") + '" data-id="' + esc(l.id) + '"><div class="lc1"><b>' + esc(l.operator) + '</b><span>' + esc(C.day(l.shift_date, true)) +
       (l.shift_label ? " \u00b7 " + esc(l.shift_label) : "") + '</span></div><div class="lc2">' + (extra.badge || "") + d + '</div>' +
       (extra.why ? '<div class="why">' + esc(extra.why) + '</div>' : "") +
-      '<div class="lc3"><div><i>LBS</i><b>' + C.n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + C.n0(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + (num(l.goal_lbhr) > 0 ? C.n0(l.goal_lbhr) : "\u2013") + '</b></div></div></button>';
+      '<div class="lc3 four"><div><i>COILS</i><b>' + (coilN[l.id] ? root.Report.fc(coilN[l.id]) : "\u2013") + '</b></div><div><i>LBS</i><b>' + C.n0(l.total_lbs) + '</b></div><div><i>LB/HR</i><b>' + C.n0(l.avg_lbhr) + '</b></div><div><i>GOAL/HR</i><b>' + (num(l.goal_lbhr) > 0 ? C.n0(l.goal_lbhr) : "\u2013") + '</b></div></div></button>';
   }
   function show(el, ctx) {
     host = el; C = ctx;
@@ -76,7 +76,8 @@
   var TILES = ["lbs", "lbhr", "pct", "down", "coils", "shifts"];
   function render(M, A, r, pr) {
     var S = M.shop, R = root.Report, Z = R.summarize(M), logs = A.logs || [], h = "";
-    lastLogs = {};
+    lastLogs = {}; coilN = {};
+    (A.coils || []).forEach(function (c) { coilN[c.log_id] = (coilN[c.log_id] || 0) + R.coilsOf(c); });
     h += '<p class="snote">' + esc(C.day(r.from, true)) + " \u2013 " + esc(C.day(r.to, true)) + (M.prev ? " \u00b7 compared with " + esc(C.day(pr.from, true)) + " \u2013 " + esc(C.day(pr.to, true)) : "") + '</p>';
     if (!logs.length) { host.querySelector("#ovbody").innerHTML = h + '<div class="msg">No shifts logged in this period yet.</div>'; return; }
     h += '<div class="stats ovstats">' + TILES.map(function (k) { var t = Z.tiles[k];
@@ -118,7 +119,7 @@
     if (M.daily.length) {
       var dm = Math.max.apply(null, M.daily.map(function (d) { return d.lbs; }));
       h += '<h3 class="ovh">DAILY OUTPUT</h3><div class="panel">' + M.daily.map(function (d) {
-        return '<div class="ovbar"><div class="ovbl"><span>' + esc(C.day(d.key, true)) + ' \u00b7 ' + d.shifts + ' shift' + (d.shifts === 1 ? "" : "s") + '</span><b>' + C.n0(d.lbs) + ' lb</b></div><div class="meter"><span style="width:' + Math.max(2, d.lbs / dm * 100).toFixed(1) + '%"></span></div></div>';
+        return '<div class="ovbar"><div class="ovbl wrap"><span>' + esc(C.day(d.key, true)) + ' \u00b7 ' + d.shifts + '\u00a0shift' + (d.shifts === 1 ? "" : "s") + ' \u00b7 ' + R.fc(d.coils) + '\u00a0coil' + (d.coils === 1 ? "" : "s") + '</span><b>' + C.n0(d.lbs) + ' lb</b></div><div class="meter"><span style="width:' + Math.max(2, d.lbs / dm * 100).toFixed(1) + '%"></span></div></div>';
       }).join("") + '</div>';
     }
 
@@ -126,13 +127,13 @@
     function pg(v) { return v === null || v === undefined ? '<span class="ng">no goal</span>' : pct(v); }
     var ms = M.machines.filter(function (m) { return /^[1-9]$/.test(m.key); });
     if (ms.length) {
-      h += '<h3 class="ovh">BY DRAW</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Draw</th><th>Shifts</th><th>Lbs</th><th>Lb/hr</th><th>% goal</th><th>Down hr</th></tr></thead><tbody>' +
-        ms.map(function (m) { return '<tr><td>' + esc(m.label) + '</td><td>' + m.shifts + '</td><td>' + C.n0(m.lbs) + '</td><td>' + C.n0(m.lbhr) + '</td><td>' + pg(m.pct) + '</td><td>' + C.n1(m.downMin / 60) + '</td></tr>'; }).join("") +
+      h += '<h3 class="ovh">BY DRAW</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Draw</th><th>Shifts</th><th>Lbs</th><th>Coils</th><th>Lb/hr</th><th>% goal</th><th>Down hr</th></tr></thead><tbody>' +
+        ms.map(function (m) { return '<tr><td>' + esc(m.label) + '</td><td>' + m.shifts + '</td><td>' + C.n0(m.lbs) + '</td><td>' + R.fc(m.coils) + '</td><td>' + C.n0(m.lbhr) + '</td><td>' + pg(m.pct) + '</td><td>' + C.n1(m.downMin / 60) + '</td></tr>'; }).join("") +
         '</tbody></table></div><div class="snote">Lb/hr is per machine: when one person runs two Draws together, each shows its own share. % goal only counts shifts that have a goal rate.</div>';
     }
     if (M.ops.length) {
-      h += '<h3 class="ovh">BY OPERATOR</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Operator</th><th>Shifts</th><th>Lbs</th><th>Lb/hr</th><th>% goal</th><th>Down hr</th></tr></thead><tbody>' +
-        M.ops.map(function (o) { return '<tr><td>' + esc(o.name) + '</td><td>' + o.shifts + '</td><td>' + C.n0(o.lbs) + '</td><td>' + C.n0(o.lbhr) + '</td><td>' + pg(o.pct) + '</td><td>' + C.n1(o.downMin / 60) + '</td></tr>'; }).join("") +
+      h += '<h3 class="ovh">BY OPERATOR</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Operator</th><th>Shifts</th><th>Lbs</th><th>Coils</th><th>Lb/hr</th><th>% goal</th><th>Down hr</th></tr></thead><tbody>' +
+        M.ops.map(function (o) { return '<tr><td>' + esc(o.name) + '</td><td>' + o.shifts + '</td><td>' + C.n0(o.lbs) + '</td><td>' + R.fc(o.coils) + '</td><td>' + C.n0(o.lbhr) + '</td><td>' + pg(o.pct) + '</td><td>' + C.n1(o.downMin / 60) + '</td></tr>'; }).join("") +
         '</tbody></table></div>';
     }
 

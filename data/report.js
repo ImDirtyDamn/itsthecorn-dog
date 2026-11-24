@@ -14,8 +14,8 @@
      on: on by default. Old saved layouts (v1) are swapped for this default once (see normLayout). */
   var SECTIONS = [
     { id: "kpi", pg: "summary", on: 1, title: "Summary", charts: ["tiles"], cols: [["lbs", "Output", 1], ["lbhr", "Avg lb/hr", 1], ["pct", "% of goal (rated shifts)", 1], ["down", "Downtime and running %", 1], ["coils", "Coils drawn", 1], ["shifts", "Shifts", 1], ["under", "Shifts under goal", 0], ["noreason", "Under goal, no reason", 0], ["avgcoil", "Average coil weight", 0], ["split", "Coils split", 0], ["goal", "Goal (lbs)", 0], ["util", "Running vs down %", 0]] },
-    { id: "machine", pg: "tables", on: 1, title: "By Draw", charts: ["table", "bar"], tbl: 0, cols: [["shifts", "Shifts", 1], ["lbs", "Output (lbs)", 1], ["hrs", "Run hr", 1], ["lbhr", "Lb/hr", 1], ["goalrate", "Goal lb/hr", 0], ["pct", "% of goal", 1], ["down", "Down hr", 1], ["util", "Running %", 0], ["coils", "Coils", 0], ["reasons", "Top downtime reasons", 0], ["ops", "Operator time share", 0]] },
-    { id: "operator", pg: "tables", on: 1, title: "By operator", charts: ["table", "bar"], tbl: 0, cols: [["shifts", "Shifts", 1], ["lbs", "Output (lbs)", 1], ["hrs", "Run hr", 1], ["lbhr", "Lb/hr", 1], ["pct", "% of goal", 1], ["met", "Goal met", 1], ["down", "Down hr", 1], ["best", "Best shift", 0], ["worst", "Worst shift", 0], ["steady", "Consistency", 0]] },
+    { id: "machine", pg: "tables", on: 1, title: "By Draw", charts: ["table", "bar"], tbl: 0, cols: [["shifts", "Shifts", 1], ["lbs", "Output (lbs)", 1], ["coils", "Coils", 1], ["hrs", "Run hr", 1], ["lbhr", "Lb/hr", 1], ["goalrate", "Goal lb/hr", 0], ["pct", "% of goal", 1], ["down", "Down hr", 1], ["util", "Running %", 0], ["reasons", "Top downtime reasons", 0], ["ops", "Operator time share", 0]] },
+    { id: "operator", pg: "tables", on: 1, title: "By operator", charts: ["table", "bar"], tbl: 0, cols: [["shifts", "Shifts", 1], ["lbs", "Output (lbs)", 1], ["coils", "Coils", 1], ["hrs", "Run hr", 1], ["lbhr", "Lb/hr", 1], ["pct", "% of goal", 1], ["met", "Goal met", 1], ["down", "Down hr", 1], ["best", "Best shift", 0], ["worst", "Worst shift", 0], ["steady", "Consistency", 0]] },
     { id: "underlist", pg: "appendix", on: 1, title: "Shifts under goal", charts: ["table"] },
     { id: "notes", pg: "appendix", on: 1, title: "Maintenance notes and job tips", charts: ["table"] },
     { id: "flags", pg: "appendix", title: "All flags", charts: ["list"] },
@@ -40,7 +40,7 @@
   var BYID = {}; SECTIONS.forEach(function (s) { BYID[s.id] = s; });
   var RANGES = [["last7", "LAST 7 DAYS"], ["thisweek", "THIS WEEK"], ["lastweek", "LAST WEEK"], ["last30", "LAST 30 DAYS"], ["thismonth", "THIS MONTH"], ["lastmonth", "LAST MONTH"]];
 
-  var LAYOUT_V = 2;
+  var LAYOUT_V = 3; // 3: Coils column next to every lbs column (v2 layouts are kept, with Coils switched on once)
   function defaultLayout(only) {
     return { v: LAYOUT_V, title: "Production Report", plant: "Draw Room", range: "last7", sections: SECTIONS.map(function (s) {
       var cols = {}; (s.cols || []).forEach(function (c) { cols[c[0]] = !!c[2]; });
@@ -71,11 +71,11 @@
     var d = defaultLayout(); if (!L || typeof L !== "object" || !Array.isArray(L.sections)) return d;
     var head = { title: typeof L.title === "string" ? L.title.slice(0, 80) : d.title, plant: typeof L.plant === "string" ? L.plant.slice(0, 80) : d.plant,
       range: RANGES.some(function (r) { return r[0] === L.range; }) || L.range === "custom" ? L.range : "last7" };
-    if (!(L.v >= LAYOUT_V) && !keepOld) { d.title = head.title; d.plant = head.plant; d.range = head.range; return d; }
+    if (!(L.v >= 2) && !keepOld) { d.title = head.title; d.plant = head.plant; d.range = head.range; return d; }
     var out = { v: LAYOUT_V, title: head.title, plant: head.plant, range: head.range, sections: [] }, seen = {};
     L.sections.forEach(function (s) {
       var def = s && BYID[s.id]; if (!def || seen[s.id]) return; seen[s.id] = 1;
-      var cols = {}; (def.cols || []).forEach(function (c) { cols[c[0]] = s.cols && typeof s.cols[c[0]] === "boolean" ? s.cols[c[0]] : !!c[2]; });
+      var cols = {}; (def.cols || []).forEach(function (c) { cols[c[0]] = s.cols && typeof s.cols[c[0]] === "boolean" && !(c[0] === "coils" && !(L.v >= 3)) ? s.cols[c[0]] : !!c[2]; });
       out.sections.push({ id: s.id, on: s.on !== false, chart: def.charts.indexOf(s.chart) >= 0 ? s.chart : def.charts[0], tbl: typeof s.tbl === "boolean" ? s.tbl : !!def.tbl, cols: cols });
     });
     d.sections.forEach(function (s) { if (!seen[s.id]) out.sections.push(s); });
@@ -135,6 +135,18 @@
     return String(p || "").split("\n").map(function (x) { var m = DT_RE.exec(x.trim()); if (!m) return null; var dm = /draw\s*(\d+)/i.exec(m[1]);
       return { machine: m[1], draw: dm ? +dm[1] : null, minutes: +m[2], reason: (m[3] || "").trim() }; }).filter(Boolean);
   }
+  /* Coils drawn on one coil row (the incoming coils, the same everywhere on /data):
+     a piece of a coil ("1/2", "1/3" in the Coils box, as the tracker sends a coil cut in half) counts as that part of a coil,
+     so two halves make 1; "A=B" (A coils in, cut into B) counts A; else coils in, coils out, the number typed, or 1 for a weighed row. */
+  function coilsOf(c) {
+    if (!c) return 0;
+    var t = String(c.coils_text || "").trim(), m = /^(\d+)\s*\/\s*(\d+)$/.exec(t);
+    if (m && +m[2] > 0) return +m[1] / +m[2];
+    if (c.coils_in !== null && c.coils_in !== undefined && c.coils_in !== "" && isFinite(+c.coils_in)) return Math.max(0, +c.coils_in);
+    if (c.coils_out !== null && c.coils_out !== undefined && c.coils_out !== "" && isFinite(+c.coils_out)) return Math.max(0, +c.coils_out);
+    var n = /^\s*(\d+(?:\.\d+)?)/.exec(t); if (n) return +n[1];
+    return num(c.weight) > 0 ? 1 : 0;
+  }
   function isSplit(c) { var t = String(c.tags || "").toLowerCase(), x = String(c.coils_text || ""); return /thirds?/.test(t) || x === "1/3" ? "third" : /cut in half/.test(t) || x === "1/2" ? "half" : ""; }
   function mkey(d) { return d === null || d === undefined || d === "" ? "none" : String(d); }
   function mlabel(k) { return k === "none" ? "No machine" : "Draw " + k; }
@@ -154,7 +166,7 @@
     (coils || []).forEach(function (c) {
       var sp = isSplit(c); S.rows++;
       if (sp === "half") S.half++; else if (sp === "third") S.third++;
-      else { S.coils += num(c.coils_in) || 1; S.coilLbs += num(c.weight); }
+      S.coils += coilsOf(c); S.coilLbs += num(c.weight);
     });
     S.lbhr = div(S.hlbs, S.hrs); S.pct = S.goal > 0 ? S.rlbs / S.goal * 100 : null; S.underPct = S.rated ? S.under / S.rated * 100 : null;
     S.util = S.hrs + S.downMin / 60 > 0 ? S.hrs / (S.hrs + S.downMin / 60) * 100 : null; S.avgCoil = div(S.coilLbs, S.coils);
@@ -184,7 +196,8 @@
       var timed = ms.some(function (m) { return num(m.run_hours) > 0; });
       // % of goal per machine only counts lbs from machines that had a goal rate on this log (scanned sheets often have none)
       var hasGoal = {}; ms.forEach(function (m) { if (num(m.goal_lbhr) > 0 && num(m.run_hours) > 0) hasGoal[mkey(m.draw)] = 1; });
-      cs.forEach(function (c) { var m = MA(mkey(c.draw)), v = coilSum > 0 ? lbs * num(c.weight) / coilSum : 0; m.lbs += v; if (timed) m.hlbs += v; if (hasGoal[mkey(c.draw)]) m.glbs += v; m.coils += isSplit(c) ? 0 : (num(c.coils_in) || 1); });
+      cs.forEach(function (c) { var m = MA(mkey(c.draw)), v = coilSum > 0 ? lbs * num(c.weight) / coilSum : 0; m.lbs += v; if (timed) m.hlbs += v; if (hasGoal[mkey(c.draw)]) m.glbs += v; m.coils += coilsOf(c); });
+      var nCoils = cs.reduce(function (a, c) { return a + coilsOf(c); }, 0);
       var runSum = ms.reduce(function (a, m) { return a + num(m.run_hours); }, 0);
       // scanned sheets put the shift's one goal rate on every machine it ran (Draw 1 + Draw 4 both 2100): scale so the machines add up to the shift's goal
       var mgoal = ms.reduce(function (a, m) { return a + num(m.goal_lbhr) * num(m.run_hours); }, 0), gk = g > 0 && mgoal > 0 ? g / mgoal : 1;
@@ -214,8 +227,8 @@
       if (D && Array.isArray(D.coils)) D.coils.forEach(function (c) { if (String(c.note || "").trim()) coilNotes++; });
       if (String(l.day_notes || "").trim()) dayNotes++;
       // operators
-      var O = ops[op] || (ops[op] = { name: op, met: 0, shifts: 0, lbs: 0, hrs: 0, hlbs: 0, rlbs: 0, goal: 0, downMin: 0, under: 0, rated: 0, pcts: [], best: null, worst: null });
-      O.shifts++; O.lbs += lbs; O.downMin += dm; if (h > 0) { O.hrs += h; O.hlbs += lbs; } if (g > 0) { O.goal += g; O.rlbs += lbs; }
+      var O = ops[op] || (ops[op] = { name: op, met: 0, shifts: 0, lbs: 0, coils: 0, hrs: 0, hlbs: 0, rlbs: 0, goal: 0, downMin: 0, under: 0, rated: 0, pcts: [], best: null, worst: null });
+      O.shifts++; O.lbs += lbs; O.coils += nCoils; O.downMin += dm; if (h > 0) { O.hrs += h; O.hlbs += lbs; } if (g > 0) { O.goal += g; O.rlbs += lbs; }
       if (l.goal_met === 0 || l.goal_met === 1) { O.rated++; if (l.goal_met === 0) O.under++; else O.met++; }
       if (pct !== null && (l.goal_met === 0 || l.goal_met === 1)) {
         O.pcts.push(pct); var s = { date: l.shift_date, pct: pct, lbhr: div(lbs, h) };
@@ -224,8 +237,8 @@
       // daily, shift, day of week
       var dd = pd(l.shift_date);
       [[daily, l.shift_date], [shift, l.shift_label ? String(l.shift_label) : "No shift label"], [dow, dd ? (dd.getDay() + 6) % 7 : 7]].forEach(function (p) {
-        var x = p[0][p[1]] || (p[0][p[1]] = { key: p[1], shifts: 0, gs: 0, lbs: 0, hrs: 0, hlbs: 0, rlbs: 0, goal: 0, downMin: 0, under: 0 });
-        x.shifts++; x.lbs += lbs; x.downMin += dm; if (h > 0) { x.hrs += h; x.hlbs += lbs; } if (g > 0) { x.goal += g; x.rlbs += lbs; x.gs++; } if (l.goal_met === 0) x.under++;
+        var x = p[0][p[1]] || (p[0][p[1]] = { key: p[1], shifts: 0, gs: 0, lbs: 0, coils: 0, hrs: 0, hlbs: 0, rlbs: 0, goal: 0, downMin: 0, under: 0 });
+        x.shifts++; x.lbs += lbs; x.coils += nCoils; x.downMin += dm; if (h > 0) { x.hrs += h; x.hlbs += lbs; } if (g > 0) { x.goal += g; x.rlbs += lbs; x.gs++; } if (l.goal_met === 0) x.under++;
       });
       // under goal
       var U = parseUnder(l.day_notes); if (U) underLines++;
@@ -245,7 +258,7 @@
     (A.coils || []).forEach(function (c) {
       var k = (c.finish ? String(c.finish) : "?") + "|" + (c.grade ? String(c.grade).toUpperCase() : "");
       var x = sizes[k] || (sizes[k] = { finish: c.finish || "-", grade: c.grade ? String(c.grade).toUpperCase() : "-", lbs: 0, coils: 0 });
-      x.lbs += num(c.weight); x.coils += isSplit(c) ? 0 : (num(c.coils_in) || 1);
+      x.lbs += num(c.weight); x.coils += coilsOf(c);
     });
     function fin(x) { x.lbhr = div(x.hlbs, x.hrs); x.pct = x.goal > 0 ? x.rlbs / x.goal * 100 : null; return x; }
     M.machines = Object.keys(mach).map(function (k) {
@@ -316,11 +329,11 @@
     tiles.lbhr = { label: "Avg lb/hr", value: f0(S.lbhr), sub: P && P.lbhr !== null && S.lbhr !== null ? sg(S.lbhr - P.lbhr, f0) + " vs before" : "all lbs / all run hours", good: P && P.lbhr !== null && S.lbhr !== null ? S.lbhr >= P.lbhr : null };
     tiles.pct = { label: "% of goal", value: S.pct !== null ? fp(S.pct) : "no goal", sub: S.goalShifts + " of " + S.shifts + " shifts rated" + (S.rated ? " (" + S.met + " met, " + S.under + " under)" : ""), good: S.pct !== null ? S.pct >= 100 : null };
     tiles.down = { label: "Downtime", value: fh(S.downMin) + " hr", sub: (S.util !== null ? fp(S.util) + " running" : "no run hours") + (even ? ", " + sg((S.downMin - P.downMin) / 60, f1) + " hr" : ""), good: even ? S.downMin <= P.downMin : null };
-    tiles.coils = { label: "Coils drawn", value: f0(S.coils), sub: S.avgCoil !== null ? "avg " + f0(S.avgCoil) + " lb per coil" : "full coils", good: null };
+    tiles.coils = { label: "Coils drawn", value: fc(S.coils), sub: S.avgCoil !== null ? "avg " + f0(S.avgCoil) + " lb per coil" : "halves count as 1/2", good: null };
     tiles.shifts = { label: "Shifts", value: f0(S.shifts), sub: P ? P.shifts + " the period before" + (M.uneven ? " (not comparable)" : "") : "none the period before", good: null };
     tiles.under = { label: "Under goal", value: f0(S.under), sub: "of " + S.rated + " rated shifts", good: null };
     tiles.noreason = { label: "Under goal, no reason", value: f0(S.noreason), sub: S.noreason ? "see flags" : "every miss explained", good: S.noreason ? false : null };
-    tiles.avgcoil = { label: "Avg coil weight", value: f0(S.avgCoil) + " lb", sub: "full coils", good: null };
+    tiles.avgcoil = { label: "Avg coil weight", value: f0(S.avgCoil) + " lb", sub: "coil-row lbs / coils drawn", good: null };
     tiles.split = { label: "Coils split", value: f0(S.half + S.third), sub: S.half + (S.half === 1 ? " half, " : " halves, ") + S.third + (S.third === 1 ? " third" : " thirds"), good: null };
     tiles.goal = { label: "Goal", value: f0(S.goal) + " lb", sub: "for the " + S.goalShifts + " rated shift" + (S.goalShifts === 1 ? "" : "s"), good: null };
     tiles.util = { label: "Running vs down", value: fp(S.util), sub: "running share of run + down", good: null };
@@ -351,6 +364,8 @@
   function f0(v) { return v === null || v === undefined || !isFinite(v) ? "-" : Math.round(v).toLocaleString("en-US"); }
   function f1(v) { return v === null || v === undefined || !isFinite(v) ? "-" : (Math.round(v * 10) / 10).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
   function fp(v) { return v === null || v === undefined || !isFinite(v) ? "-" : f1(v) + "%"; }
+  /* coil counts: whole numbers, or one decimal when halves or thirds leave a part */
+  function fc(v) { return v === null || v === undefined || !isFinite(v) ? "-" : Math.abs(v - Math.round(v)) < 0.05 ? f0(v) : f1(v); }
   function fh(min) { return f1(min / 60); }
   function niceMax(v) { if (!(v > 0)) return 1; var p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p, st = [1, 1.2, 1.6, 2, 2.4, 3, 4, 5, 6, 8, 10]; for (var i = 0; i < st.length; i++) if (n <= st[i] + 1e-9) return st[i] * p; return 10 * p; }
   function axisLbl(v) { return v >= 10000 ? f0(v / 1000) + "k" : v >= 1000 ? (Math.round(v / 100) / 10) + "k" : f0(v); }
@@ -476,7 +491,7 @@
     /* trend: points {label, v, g (goal or null)}; kind "line" or "bar" */
     function trend(pts, kind, o) {
       o = o || {}; if (!pts.length) return empty();
-      var h = o.h || 178, x0 = ML + 44, w = CW - 52, ph = h - 46 - (o.subs ? 10 : 0); need(h); var top = y + 18;
+      var h = o.h || 178, x0 = ML + 44, w = CW - 52, s2 = o.subs && pts.some(function (p) { return p.sub2; }), ph = h - 46 - (o.subs ? 10 : 0) - (s2 ? 9 : 0); need(h); var top = y + 18;
       var mx = niceMax(Math.max.apply(null, pts.map(function (p) { return Math.max(p.v || 0, p.g || 0); })) * 1.08);
       if (o.leg) legend(o.leg, x0, y + 8);
       for (var k = 0; k <= 4; k++) { var yy = top + ph - ph * k / 4; doc.setDrawColor(228, 231, 235); doc.setLineWidth(0.5); doc.line(x0, yy, x0 + w, yy); font(7.5, "normal", DIM); txt(axisLbl(mx * k / 4), x0 - 5, yy + 2.5, { align: "right" }); }
@@ -496,13 +511,13 @@
         pts.forEach(function (p, i) { doc.setFillColor.apply(doc, rgb(PAL[0])); doc.circle(X(i), Y(p.v), 2.6, "F"); if (n <= 12) { font(7, "bold", INK); txt(axisLbl(p.v), X(i), Y(p.v) - 6, { align: "center" }); } });
       }
       doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.7); doc.line(x0, top + ph, x0 + w, top + ph);
-      pts.forEach(function (p, i) { if (i % every) return; font(7.8, "bold", INK); txt(p.label, X(i), top + ph + 12, { align: "center" }); if (o.subs && p.sub) { font(7, "normal", DIM); txt(p.sub, X(i), top + ph + 21.5, { align: "center" }); } });
+      pts.forEach(function (p, i) { if (i % every) return; font(7.8, "bold", INK); txt(p.label, X(i), top + ph + 12, { align: "center" }); if (o.subs && p.sub) { font(7, "normal", DIM); txt(p.sub, X(i), top + ph + 21.5, { align: "center" }); if (s2 && p.sub2) txt(p.sub2, X(i), top + ph + 30.5, { align: "center" }); } });
       y += h + 6;
     }
     function on(sec, col) { return !sec.cols || sec.cols[col] !== false; }
     function groupTable(G) {
-      table([{ h: "" }, { h: "Shifts", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Lbs/hr", r: 1 }, { h: "% of goal", r: 1 }, { h: "Downtime (hrs)", r: 1 }, { h: "Under goal", r: 1 }],
-        G.map(function (g) { var x = g.x; return [g.label, f0(x.shifts), f0(x.lbs), f0(x.lbhr), fp(x.pct), fh(x.downMin), f0(x.under)]; }));
+      table([{ h: "" }, { h: "Shifts", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Coils", r: 1 }, { h: "Lbs/hr", r: 1 }, { h: "% of goal", r: 1 }, { h: "Downtime (hrs)", r: 1 }, { h: "Under goal", r: 1 }],
+        G.map(function (g) { var x = g.x; return [g.label, f0(x.shifts), f0(x.lbs), fc(x.coils), f0(x.lbhr), fp(x.pct), fh(x.downMin), f0(x.under)]; }));
     }
     function groupSec(sec, G) {
       if (!G.length) return empty();
@@ -576,7 +591,7 @@
           var hh = 196; if (y + 24 + hh > BOT) hh = Math.max(140, BOT - y - 26);
           need(24 + hh); sub("Daily output", ML, CW, M.daily.length + " day" + (M.daily.length === 1 ? "" : "s") + " with logs"); y += 20;
           var anyG = M.daily.some(function (d) { return d.gs && d.gs === d.shifts; });
-          trend(M.daily.map(function (d) { var dd = pd(d.key); return { label: M.daily.length <= 10 && dd ? DOW[dd.getDay()] + " " + (dd.getMonth() + 1) + "/" + dd.getDate() : dshort(d.key), v: d.lbs, g: d.gs && d.gs === d.shifts ? d.goal : null, sub: d.shifts + " shift" + (d.shifts === 1 ? "" : "s") }; }), "bar",
+          trend(M.daily.map(function (d) { var dd = pd(d.key); return { label: M.daily.length <= 10 && dd ? DOW[dd.getDay()] + " " + (dd.getMonth() + 1) + "/" + dd.getDate() : dshort(d.key), v: d.lbs, g: d.gs && d.gs === d.shifts ? d.goal : null, sub: d.shifts + " shift" + (d.shifts === 1 ? "" : "s"), sub2: fc(d.coils) + " coil" + (d.coils === 1 ? "" : "s") }; }), "bar",
             { h: hh, subs: M.daily.length <= 16, leg: [{ l: "Output (lbs)", c: PAL[0] }].concat(anyG ? [{ l: "Goal (black tick, only on days where every shift had a goal)", c: "#212529" }] : []) });
         }
       },
@@ -584,7 +599,7 @@
         var P = M.prev; if (!P) return empty(M.prevRange ? "No shifts were logged in the previous period (" + rangeText(M.prevRange.from, M.prevRange.to) + "), so there is nothing to compare." : "No previous period to compare.");
         var rows = [["Total output (lbs)", S.lbs, P.lbs, f0, 1], ["Output per shift (lbs)", S.perShift, P.perShift, f0, 1], ["Average lbs/hr", S.lbhr, P.lbhr, f0, 1], ["% of goal", S.pct, P.pct, f1, 1, "pts"], ["Total downtime (hrs)", S.downMin / 60, P.downMin / 60, f1, -1],
           ["Running vs down %", S.util, P.util, f1, 1, "pts"], ["Shifts logged", S.shifts, P.shifts, f0, 0], ["Shifts under goal", S.under, P.under, f0, -1], ["Under goal, no reason", S.noreason, P.noreason, f0, -1],
-          ["Coils drawn", S.coils, P.coils, f0, 0], ["Average coil weight (lbs)", S.avgCoil, P.avgCoil, f0, 0]];
+          ["Coils drawn", S.coils, P.coils, fc, 0], ["Average coil weight (lbs)", S.avgCoil, P.avgCoil, f0, 0]];
         note("This period: " + rangeText(M.from, M.to) + ".   Previous: " + rangeText(M.prevRange.from, M.prevRange.to) + ".");
         if (M.uneven) note("The two periods have different numbers of shifts logged (" + S.shifts + " vs " + P.shifts + "). Compare output per shift and lbs/hr, not the totals.");
         if (sec.chart === "bar") {
@@ -602,8 +617,8 @@
       daily: function (sec) {
         if (!M.daily.length) return empty();
         if (sec.chart !== "table") trend(M.daily.map(function (d) { return { label: dshort(d.key), v: d.lbs, g: d.goal || null }; }), sec.chart, { leg: [{ l: "Output (lbs)", c: PAL[0] }, { l: (sec.chart === "bar" ? "Goal (black tick)" : "Goal (dashed)") + (S.goalShifts < S.shifts ? ", only the " + S.goalShifts + " of " + S.shifts + " shifts with a goal" : ""), c: "#6f7b86" }] });
-        if (sec.chart === "table" || sec.tbl) table([{ h: "Day" }, { h: "Shifts", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Goal (lbs)", r: 1 }, { h: "% of goal", r: 1 }, { h: "Lbs/hr", r: 1 }, { h: "Downtime (hrs)", r: 1 }, { h: "Under goal", r: 1 }],
-          M.daily.map(function (d) { return [dmid(d.key), f0(d.shifts), f0(d.lbs), f0(d.goal), fp(d.pct), f0(d.lbhr), fh(d.downMin), f0(d.under)]; }));
+        if (sec.chart === "table" || sec.tbl) table([{ h: "Day" }, { h: "Shifts", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Coils", r: 1 }, { h: "Goal (lbs)", r: 1 }, { h: "% of goal", r: 1 }, { h: "Lbs/hr", r: 1 }, { h: "Downtime (hrs)", r: 1 }, { h: "Under goal", r: 1 }],
+          M.daily.map(function (d) { return [dmid(d.key), f0(d.shifts), f0(d.lbs), fc(d.coils), f0(d.goal), fp(d.pct), f0(d.lbhr), fh(d.downMin), f0(d.under)]; }));
       },
       machine: function (sec) {
         var ms = M.machines.filter(function (m) { return /^[1-9]$/.test(m.key); }), other = M.machines.filter(function (m) { return !/^[1-9]$/.test(m.key); });
@@ -613,7 +628,7 @@
         if (sec.chart === "table" || sec.tbl) {
           var defs = { shifts: ["Shifts", function (m) { return f0(m.shifts); }, 1], lbhr: ["Lb/hr", function (m) { return f0(m.lbhr); }, 1], goalrate: ["Goal lb/hr", function (m) { return m.goalRate ? f0(m.goalRate) : "no goal"; }, 1], lbs: ["Output (lbs)", function (m) { return f0(m.lbs); }, 1],
             pct: ["% of goal", function (m) { return m.pct !== null ? fp(m.pct) + (m.gShifts && m.gShifts < m.shifts ? " (" + m.gShifts + " of " + m.shifts + ")" : "") : "no goal"; }, 1], hrs: ["Run hr", function (m) { return f1(m.hrs); }, 1], down: ["Down hr", function (m) { return fh(m.downMin); }, 1], util: ["Running %", function (m) { return fp(m.util); }, 1],
-            coils: ["Coils", function (m) { return f0(m.coils); }, 1], reasons: ["Top downtime reasons", function (m) { return m.reasonList.slice(0, 3).map(function (r) { return r.label + " (" + fh(r.v) + " hr)"; }).join("; ") || "-"; }, 0],
+            coils: ["Coils", function (m) { return fc(m.coils); }, 1], reasons: ["Top downtime reasons", function (m) { return m.reasonList.slice(0, 3).map(function (r) { return r.label + " (" + fh(r.v) + " hr)"; }).join("; ") || "-"; }, 0],
             ops: ["Operator time share", function (m) { return m.opList.map(function (o) { return o.label + " " + Math.round(o.share) + "%"; }).join(", ") || "-"; }, 0] };
           var C = [{ h: "Draw" }]; BYID.machine.cols.forEach(function (c) { if (on(sec, c[0])) C.push({ h: defs[c[0]][0], f: defs[c[0]][1], r: defs[c[0]][2] }); });
           function sumOf(k) { return ms.reduce(function (a, m) { return a + m[k]; }, 0); }
@@ -626,12 +641,12 @@
         }
       },
       share: function (sec) {
-        var it = M.machines.filter(function (m) { return m.lbs > 0 && /^[1-9]$/.test(m.key); }).map(function (m) { return { label: m.label, v: m.lbs, txt: f0(m.lbs) + " lb", c: machColor(m.key) }; });
+        var it = M.machines.filter(function (m) { return m.lbs > 0 && /^[1-9]$/.test(m.key); }).map(function (m) { return { label: m.label, v: m.lbs, coils: m.coils, txt: f0(m.lbs) + " lb", c: machColor(m.key) }; });
         if (!it.length) return empty();
         var t = it.reduce(function (a, x) { return a + x.v; }, 0);
         if (sec.chart === "pie") pie(it, { fmt: function (v) { return f0(v) + " lb"; } });
         else if (sec.chart === "bar") hbar(it.map(function (x) { return { label: x.label, v: x.v, txt: f1(x.v / t * 100) + "%  " + x.txt, c: x.c }; }), { lw: 90 });
-        if (sec.chart === "table" || sec.tbl) table([{ h: "Machine" }, { h: "Output (lbs)", r: 1 }, { h: "Share of total", r: 1 }], it.map(function (x) { return [x.label, f0(x.v), fp(x.v / t * 100)]; }).concat([["All Draws", f0(t), "100.0%"]]), { bold: function (i) { return i === it.length; } });
+        if (sec.chart === "table" || sec.tbl) table([{ h: "Machine" }, { h: "Output (lbs)", r: 1 }, { h: "Coils", r: 1 }, { h: "Share of total", r: 1 }], it.map(function (x) { return [x.label, f0(x.v), fc(x.coils), fp(x.v / t * 100)]; }).concat([["All Draws", f0(t), fc(it.reduce(function (a, x) { return a + x.coils; }, 0)), "100.0%"]]), { bold: function (i) { return i === it.length; } });
       },
       machops: function (sec) {
         var ms = M.machines.filter(function (m) { return m.opList.length && /^[1-9]$/.test(m.key); }); if (!ms.length) return empty();
@@ -645,12 +660,12 @@
         if (!M.ops.length) return empty();
         if (sec.chart === "bar") hbar(M.ops.filter(function (o) { return o.pct !== null; }).map(function (o) { return { label: o.name, v: o.pct, txt: fp(o.pct) + "  " + f0(o.lbhr) + " lb/hr", c: PAL[0] }; }), { max: Math.max(110, Math.max.apply(null, M.ops.map(function (o) { return (o.pct || 0) * 1.05; }))), ref: 100, refLbl: "100% of goal" });
         if (sec.chart === "table" || sec.tbl) {
-          var defs = { shifts: ["Shifts", function (o) { return f0(o.shifts); }, 1], lbs: ["Output (lbs)", function (o) { return f0(o.lbs); }, 1], hrs: ["Run hr", function (o) { return f1(o.hrs); }, 1], lbhr: ["Lb/hr", function (o) { return f0(o.lbhr); }, 1],
+          var defs = { shifts: ["Shifts", function (o) { return f0(o.shifts); }, 1], lbs: ["Output (lbs)", function (o) { return f0(o.lbs); }, 1], coils: ["Coils", function (o) { return fc(o.coils); }, 1], hrs: ["Run hr", function (o) { return f1(o.hrs); }, 1], lbhr: ["Lb/hr", function (o) { return f0(o.lbhr); }, 1],
             pct: ["% of goal", function (o) { return o.pct !== null ? fp(o.pct) : "no goal"; }, 1], met: ["Goal met", function (o) { return o.rated ? o.met + " of " + o.rated : "no goal"; }, 1], down: ["Down hr", function (o) { return fh(o.downMin); }, 1],
             best: ["Best shift", function (o) { return o.best ? dshort(o.best.date) + ", " + Math.round(o.best.pct) + "%" : "-"; }, 0], worst: ["Worst shift", function (o) { return o.worst ? dshort(o.worst.date) + ", " + Math.round(o.worst.pct) + "%" : "-"; }, 0],
             steady: ["Consistency", function (o) { return o.steady + (o.sd !== null ? " (" + f1(o.sd) + ")" : ""); }, 0] };
           var C = [{ h: "Operator" }]; BYID.operator.cols.forEach(function (c) { if (on(sec, c[0])) C.push({ h: defs[c[0]][0], f: defs[c[0]][1], r: defs[c[0]][2] }); });
-          var tot = { name: "All operators", shifts: S.shifts, lbs: S.lbs, hrs: S.hrs, lbhr: S.lbhr, pct: S.pct, met: S.met, rated: S.rated, downMin: S.downMin, best: null, worst: null, steady: "", sd: null };
+          var tot = { name: "All operators", shifts: S.shifts, lbs: S.lbs, coils: S.coils, hrs: S.hrs, lbhr: S.lbhr, pct: S.pct, met: S.met, rated: S.rated, downMin: S.downMin, best: null, worst: null, steady: "", sd: null };
           var list = M.ops.concat(M.ops.length > 1 ? [tot] : []);
           var rows = list.map(function (o) { return C.map(function (c) { return c.f ? c.f(o) : o.name; }); });
           table(C, rows, { fs: C.length > 8 ? 8 : 8.6, pad: 3.3, bold: function (i) { return M.ops.length > 1 && i === rows.length - 1; }, dim: function (r, c) { return /no goal/.test(rows[r][c]); } });
@@ -688,13 +703,13 @@
       },
       coils: function (sec) {
         var full = S.rows - S.half - S.third;
-        if (sec.chart === "pie") pie([{ label: "Full coils", v: full, txt: f0(full) + " rows", c: PAL[0] }, { label: "Cut in half", v: S.half, txt: f0(S.half) + " rows", c: PAL[1] }, { label: "Cut in thirds", v: S.third, txt: f0(S.third) + " rows", c: PAL[2] }]);
-        table([{ h: "Coils" }, { h: "Value", r: 1 }], [["Coils drawn (full coils)", f0(S.coils)], ["Average coil weight (full coils)", f0(S.avgCoil) + " lb"], ["Card rows cut in half", f0(S.half)], ["Card rows cut in thirds", f0(S.third)], ["Share of card rows split", fp(S.splitPct)], ["Average full coils per shift", f1(S.shifts ? S.coils / S.shifts : null)]]);
+        if (sec.chart === "pie") pie([{ label: "Whole coils", v: full, txt: f0(full) + " rows", c: PAL[0] }, { label: "Cut in half", v: S.half, txt: f0(S.half) + " rows", c: PAL[1] }, { label: "Cut in thirds", v: S.third, txt: f0(S.third) + " rows", c: PAL[2] }]);
+        table([{ h: "Coils" }, { h: "Value", r: 1 }], [["Coils drawn (a half counts as 1/2)", fc(S.coils)], ["Average coil weight", f0(S.avgCoil) + " lb"], ["Card rows cut in half", f0(S.half)], ["Card rows cut in thirds", f0(S.third)], ["Share of card rows split", fp(S.splitPct)], ["Average coils per shift", f1(S.shifts ? S.coils / S.shifts : null)]]);
       },
       size: function (sec) {
         if (!M.sizes.length) return empty();
         if (sec.chart === "bar") hbar(M.sizes.map(function (x) { return { label: x.finish + (x.grade ? "  " + x.grade : ""), v: x.lbs, txt: f0(x.lbs) + " lb  " + Math.round(x.share) + "%", c: PAL[0] }; }), { lw: 130 });
-        if (sec.chart === "table" || sec.tbl) table([{ h: "Finish size" }, { h: "Grade" }, { h: "Coils", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Share", r: 1 }], M.sizes.map(function (x) { return [x.finish, x.grade, f0(x.coils), f0(x.lbs), fp(x.share)]; }));
+        if (sec.chart === "table" || sec.tbl) table([{ h: "Finish size" }, { h: "Grade" }, { h: "Coils", r: 1 }, { h: "Output (lbs)", r: 1 }, { h: "Share", r: 1 }], M.sizes.map(function (x) { return [x.finish, x.grade, fc(x.coils), f0(x.lbs), fp(x.share)]; }));
       },
       notes: function () {
         var N = M.notes;
@@ -898,6 +913,6 @@
     }).then(function () { busy = false; var b = host.querySelector("#rp-build"); if (b) b.disabled = false; });
   }
 
-  var api = { summarize: summarize, groupSort: groupSort, PAGES: PAGES, crewName: crewName, show: show, compute: compute, buildPdf: buildPdf, parseUnder: parseUnder, parseProblems: parseProblems, rangeOf: rangeOf, preset: preset, normLayout: normLayout, defaultLayout: defaultLayout, SECTIONS: SECTIONS, PRESETS: PRESETS, WHY: WHY };
+  var api = { summarize: summarize, groupSort: groupSort, PAGES: PAGES, crewName: crewName, coilsOf: coilsOf, fc: fc, show: show, compute: compute, buildPdf: buildPdf, parseUnder: parseUnder, parseProblems: parseProblems, rangeOf: rangeOf, preset: preset, normLayout: normLayout, defaultLayout: defaultLayout, SECTIONS: SECTIONS, PRESETS: PRESETS, WHY: WHY };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Report = api;
 })(typeof window !== "undefined" ? window : globalThis);

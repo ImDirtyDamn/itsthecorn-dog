@@ -23,10 +23,13 @@
     if (m) { var h = +m[1]; return h >= 4 && h < 14 ? "Day" : "Night"; }
     return "Not given";
   }
+  /* coils drawn on one card row, the same rule as Report.coilsOf: a piece of a coil ("1/2", "1/3") counts as that part,
+     so the tracker's two "1/2" rows for a coil cut in half make 1 coil; else coils in, coils out, the number typed, or 1 for a weighed row */
   function coilCount(c) {
+    var fr = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(c.coils_text || ""); if (fr && +fr[2] > 0) return +fr[1] / +fr[2];
     if (c.coils_in !== null && c.coils_in !== undefined && c.coils_in !== "") return +c.coils_in || 0;
     if (c.coils_out !== null && c.coils_out !== undefined && c.coils_out !== "") return +c.coils_out || 0;
-    var m = /^\s*(\d+(?:\.\d+)?)/.exec(c.coils_text || ""); return m ? +m[1] : 0;
+    var m = /^\s*(\d+(?:\.\d+)?)/.exec(c.coils_text || ""); return m ? +m[1] : +c.weight > 0 ? 1 : 0;
   }
   function num(v) { return v === null || v === undefined || v === "" || isNaN(+v) ? null : +v; }
   function drawList(s) { return String(s || "").split(",").filter(Boolean); }
@@ -598,7 +601,7 @@
   }
   function facCells(label, r, cls) {
     return '<tr class="' + (cls || "") + (r.thin ? " thinrow" : "") + '"><td>' + label + '</td><td><b>' + pctTxt(r.pct) + '</b></td><td>' + fmt("lbhr", r.lbhr) + '</td><td>' + r.shifts + thinTag(r) +
-      '</td><td>' + (r.hr10k === null ? "\u2013" : C.n1(r.hr10k)) + '</td><td>' + fmt("lbs", r.lbs) + '</td><td>' + fmt("hours", r.hours) + '</td></tr>';
+      '</td><td>' + (r.hr10k === null ? "\u2013" : C.n1(r.hr10k)) + '</td><td>' + fmt("lbs", r.lbs) + '</td><td>' + fmt("coils", r.coils) + '</td><td>' + fmt("hours", r.hours) + '</td></tr>';
   }
   function renderFactors() {
     var F = S.fac, box = $("asub");
@@ -616,14 +619,14 @@
       "Conditions come from the tracker\u2019s per-coil tags (Grease, Shape change, Stainless, Other); paper logs don\u2019t have them.") + '</div>' +
       '<div class="seg" id="fdraw">' + (dl.length ? dl.map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (F.draw === d ? "on" : "") + '">DRAW ' + d + '</button>'; }).join("") : "") +
       '<button type="button" data-d="*" class="' + (all ? "on" : "") + '">ALL</button></div>' +
-      '<div class="stats"><div class="stat"><i>Baseline \u00b7 ' + esc(mname) + '</i><b>' + fmt("lbhr", B.lbhr) + '</b><small>lbs/hr \u00b7 ' + B.shifts + ' shift' + (B.shifts === 1 ? "" : "s") + ' \u00b7 ' + fmt("lbs", B.lbs) + ' lbs</small></div></div></div>';
+      '<div class="stats"><div class="stat"><i>Baseline \u00b7 ' + esc(mname) + '</i><b>' + fmt("lbhr", B.lbhr) + '</b><small>lbs/hr \u00b7 ' + B.shifts + ' shift' + (B.shifts === 1 ? "" : "s") + ' \u00b7 ' + fmt("lbs", B.lbs) + ' lbs \u00b7 ' + fmt("coils", B.coils) + ' coils</small></div></div></div>';
     // headline sentences
     var lines = [];
     R.conds.forEach(function (c) { if (c.with.lbhr !== null && B.lbhr) lines.push({ t: c.tag + " runs at " + pctTxt(c.with.pct) + " of " + mname + " baseline (" + fmt("lbhr", c.with.lbhr) + " vs " + fmt("lbhr", B.lbhr) + " lbs/hr)", r: c.with }); });
     var rs = R.sizes.filter(function (r) { return r.lbhr !== null && isFinite(r.n); });
     if (rs.length >= 2) { var lo = rs[0], hi = rs[rs.length - 1]; lines.push({ t: lo.label + " runs at " + pctTxt(lo.pct) + " and " + hi.label + " at " + pctTxt(hi.pct) + " of baseline: 10,000 lbs takes " + C.n1(lo.hr10k) + " hr vs " + C.n1(hi.hr10k) + " hr", r: { thin: lo.thin || hi.thin, shifts: Math.min(lo.shifts, hi.shifts) } }); }
     if (lines.length) h += '<div class="panel"><span class="lbl">What stands out</span><ul class="list facl">' + lines.map(function (x) { return '<li>' + esc(x.t) + '.' + (x.r.thin ? ' <span class="thin">THIN DATA</span>' : "") + '</li>'; }).join("") + '</ul></div>';
-    var head = ["", "% of base", "Lbs/hr", "Shifts", "Hr / 10k lbs", "Lbs", "Hours"];
+    var head = ["", "% of base", "Lbs/hr", "Shifts", "Hr / 10k lbs", "Lbs", "Coils", "Hours"];
     h += '<h3>By finish size</h3><div class="seg" id="fstep">' + [[0, "EXACT"], [0.025, '.025"'], [0.05, '.050"'], [0.1, '.100"']].map(function (x) { return '<button type="button" data-s="' + x[0] + '" class="' + (F.step === x[0] ? "on" : "") + '">' + x[1] + '</button>'; }).join("") + '</div>' +
       '<div id="fchart" class="chartbox"></div>' + facTable(head, R.sizes.map(function (r) { return facCells(esc(r.label), r); }), "No logs match these filters.");
     h += '<h3>By run condition</h3>' + (R.tagged ? facTable(head, [].concat.apply([], R.conds.map(function (c) {
@@ -638,8 +641,8 @@
     Array.prototype.forEach.call(box.querySelectorAll("#fstep button"), function (b) { b.onclick = function () { F.step = +b.dataset.s; render(); }; });
     $("fcsv").onclick = function () {
       var r1 = function (v, d) { return v === null || v === undefined ? "" : Math.round(v * d) / d; };
-      var lines = [["machine", mname].map(csvCell).join(","), ["filters", fSummary(F.f)].map(csvCell).join(","), ["factor", "value", "shifts", "lb", "hours", "lb_per_hr", "pct_of_baseline", "hr_per_10k_lb", "thin_data"].join(",")];
-      var row = function (k, v, r) { lines.push([k, v, r.shifts, r1(r.lbs, 1), r1(r.hours, 100), r1(r.lbhr, 10), r1(r.pct, 1), r1(r.hr10k, 100), r.thin ? "yes" : ""].map(csvCell).join(",")); };
+      var lines = [["machine", mname].map(csvCell).join(","), ["filters", fSummary(F.f)].map(csvCell).join(","), ["factor", "value", "shifts", "lb", "coils", "hours", "lb_per_hr", "pct_of_baseline", "hr_per_10k_lb", "thin_data"].join(",")];
+      var row = function (k, v, r) { lines.push([k, v, r.shifts, r1(r.lbs, 1), r1(r.coils, 10), r1(r.hours, 100), r1(r.lbhr, 10), r1(r.pct, 1), r1(r.hr10k, 100), r.thin ? "yes" : ""].map(csvCell).join(",")); };
       row("baseline", mname, B);
       R.sizes.forEach(function (r) { row("finish size", r.label, r); });
       R.conds.forEach(function (c) { row("with condition", c.tag, c.with); row("without condition", c.tag, c.without); });
