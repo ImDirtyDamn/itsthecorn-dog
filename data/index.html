@@ -220,6 +220,59 @@ textarea.in{width:100%;min-height:5rem;padding:.6rem .85rem;background:#000;colo
 .edtot b{color:var(--fg);font-size:20px}
 .diffl{margin:0 0 14px;padding-left:20px;color:var(--white);line-height:1.45;max-height:45vh;overflow-y:auto}
 .edited{border:1px solid var(--amber);color:var(--amber);padding:8px 10px;margin:10px 0;font-size:14px}
+/* ANALYZE mode switch + GRANULAR ANALYSIS (granular.js) */
+.amode{margin:10px 0 4px}.amode button{font-size:13px}
+.gblk{padding:12px}
+.ghead{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.gnum{color:#000;background:var(--amber);font-weight:bold;min-width:30px;text-align:center;padding:4px 0}
+.gname{height:2.75rem}
+.gblk .seg{margin:8px 0}
+.gfl{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;font-size:13px}
+.gchip{min-height:40px;min-width:0;padding:6px 10px;font-size:13px;letter-spacing:.02em;border-color:var(--fg-dim);color:var(--fg)}
+.gchip.gf{background:#0b2a0b;color:var(--fg);border-color:var(--fg)}
+.gchip.on{background:var(--fg);color:#000;border-color:var(--fg);font-weight:bold}
+.gcbox[hidden]{display:none}
+.gchip.ghostc{color:var(--fg-dim)}
+details.gcols{border:1px solid var(--fg-faint);padding:0 10px;margin:8px 0}
+details.gcols>summary{list-style:none;cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--white);letter-spacing:.06em;font-weight:bold;font-size:14px}
+details.gcols>summary::-webkit-details-marker{display:none}
+details.gcols>summary span{color:var(--fg-dim);font-weight:normal;font-size:12px;text-align:right}
+.gclist{display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding-bottom:8px}
+.gcrow{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--fg-faint);min-height:48px}
+.gcrow label{display:flex;align-items:center;gap:10px;color:var(--white);font-size:15px;min-height:44px;flex:1;min-width:0;cursor:pointer}
+.gcrow input,.gtog input,.gshl input{width:22px;height:22px;accent-color:#39ff6a;flex:none}
+.gfbtn{min-height:40px;font-size:12px;padding:4px 10px;border-color:var(--fg-dim);color:var(--fg-dim)}
+.gfbtn.on{color:#000;background:var(--amber);border-color:var(--amber);font-weight:bold}
+.grow2{display:grid;grid-template-columns:minmax(0,1fr);gap:0 10px}
+.grow4{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}
+.grow4 .field:first-child{grid-column:1/-1}
+.gtog{display:flex;align-items:center;gap:10px;color:var(--white);font-size:14px;min-height:44px;margin:6px 0;cursor:pointer}
+.gsum{color:var(--fg-dim);font-size:13px;margin:8px 0 0}
+.gtw{max-height:70vh;overflow:auto}
+.gtbl th{white-space:nowrap;padding:0 2px 0 6px}
+.gtbl th button{all:unset;cursor:pointer;min-height:36px;display:inline-flex;align-items:center}
+.gtbl th button.gth-f{color:var(--fg-dim);padding:0 4px;min-width:22px;justify-content:center;font-size:14px}
+.gtbl th button.gth-f.on{color:var(--amber)}
+.gtbl thead th{position:sticky;top:0;background:var(--bg);z-index:1}
+.gtbl thead th:first-child{z-index:2}
+.gnote{font-size:12px;margin:6px 0}
+.gchart{margin-top:6px}
+.gleg{margin-bottom:4px}
+.gbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.gbtns button{flex:1 1 40%;font-size:13px;min-height:44px;padding:6px 8px}
+#gadd{margin:6px 0 14px}
+.gsheet{position:fixed;inset:0;z-index:60}
+.gsh-bg{position:absolute;inset:0;background:rgba(0,0,0,.7)}
+.gsh{position:absolute;left:0;right:0;bottom:0;max-height:86vh;overflow:auto;background:var(--panel);border-top:2px solid var(--fg);padding:12px 14px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+.gsh-h{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--white);letter-spacing:.06em}
+.gsh-h button{min-height:44px;font-size:13px;padding:6px 12px}
+.gshl{display:flex;flex-direction:column;max-height:46vh;overflow:auto;border:1px solid var(--fg-faint)}
+.gshl label{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 10px;border-bottom:1px solid var(--fg-faint);color:var(--white);cursor:pointer}
+.gshl label span{flex:1;min-width:0;overflow-wrap:anywhere}.gshl label i{font-style:normal;color:var(--fg-dim);font-size:13px}
+.gshl label[hidden]{display:none}
+@media (min-width:700px){ .grow2{grid-template-columns:repeat(2,minmax(0,1fr))} .grow4{grid-template-columns:repeat(4,minmax(0,1fr))} .grow4 .field:first-child{grid-column:auto}
+  .gclist{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px} .gbtns button{flex:0 1 auto;padding:6px 16px}
+  .gsh{left:50%;right:auto;bottom:auto;top:8vh;transform:translateX(-50%);width:min(520px,92vw);border:2px solid var(--fg);max-height:84vh} }
 /* desktop and wide tablets: use the screen (phones keep the single column above) */
 @media (min-width:900px){
   body{max-width:1200px;padding:0 28px 48px}
@@ -284,7 +337,8 @@ details.rp-cols>summary span{color:var(--fg-dim)}
   <div class="btns"><button id="cno" type="button" class="big">CANCEL</button><button id="cyes" type="button" class="big warn">DELETE</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="analyze.js?v=9"></script>
+<script src="analyze.js?v=10"></script>
+<script src="granular.js?v=1"></script>
 <script src="lookup.js?v=6"></script>
 <script src="fields.js?v=4"></script>
 <script src="report.js?v=6"></script>

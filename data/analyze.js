@@ -403,14 +403,31 @@
     });
   }
   function info(text) { return '<details class="info"><summary aria-label="How this is counted">\u24d8</summary><p>' + text + '</p></details>'; }
+  /* ANALYZE has two modes: the standard views (Compare, Group by, Operator, Factors) and GRANULAR ANALYSIS (granular.js) */
+  var MODE_LS = "analyzeModeV1", mode = "std";
+  try { if (localStorage.getItem(MODE_LS) === "gran") mode = "gran"; } catch (e) {}
+  function modeBar() {
+    return '<div class="seg two amode" role="tablist">' + [["std", "STANDARD VIEWS"], ["gran", "GRANULAR ANALYSIS"]].map(function (t) {
+      return '<button type="button" role="tab" aria-selected="' + (mode === t[0]) + '" data-mode="' + t[0] + '" class="' + (mode === t[0] ? "on" : "") + '">' + t[1] + '</button>'; }).join("") + '</div>';
+  }
+  function wireMode() {
+    Array.prototype.forEach.call(host.querySelectorAll("[data-mode]"), function (b) { b.onclick = function () { mode = b.dataset.mode; try { localStorage.setItem(MODE_LS, mode); } catch (e) {} render(); }; });
+    $("areload").onclick = function () { data = null; host.innerHTML = '<p class="muted" style="margin-top:24px">Loading\u2026</p>'; load(); };
+  }
   function render() {
     save();
-    var h = '<div class="subtabs">' + [["compare", "COMPARE"], ["group", "GROUP BY"], ["progress", "OPERATOR"], ["factors", "FACTORS"]].map(function (t) {
+    if (mode === "gran" && root.Granular) {
+      host.innerHTML = modeBar() + '<div id="agran"></div><div class="toolbar"><button type="button" id="areload" class="ghost">REFRESH DATA</button><span class="muted" style="font-size:12px;align-self:center">' + (data.logs || []).length + ' logs loaded</span></div>';
+      wireMode(); rerender = null;
+      root.Granular.show($("agran"), C, data, engine);
+      return;
+    }
+    var h = modeBar() + '<div class="subtabs">' + [["compare", "COMPARE"], ["group", "GROUP BY"], ["progress", "OPERATOR"], ["factors", "FACTORS"]].map(function (t) {
       return '<button type="button" data-sub="' + t[0] + '" class="' + (S.sub === t[0] ? "on" : "") + '">' + t[1] + '</button>'; }).join("") + '</div><div id="asub"></div>' +
       '<div class="toolbar"><button type="button" id="areload" class="ghost">REFRESH DATA</button><span class="muted" style="font-size:12px;align-self:center">' + (data.logs || []).length + ' logs loaded</span></div>';
     host.innerHTML = h;
     Array.prototype.forEach.call(host.querySelectorAll("[data-sub]"), function (b) { b.onclick = function () { S.sub = b.dataset.sub; render(); }; });
-    $("areload").onclick = function () { data = null; host.innerHTML = '<p class="muted" style="margin-top:24px">Loading\u2026</p>'; load(); };
+    wireMode();
     ({ compare: renderCompare, group: renderGroup, progress: renderProgress, factors: renderFactors })[S.sub]();
   }
 
