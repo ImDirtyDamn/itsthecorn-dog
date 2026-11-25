@@ -597,6 +597,11 @@
   .pn-list { display: grid; gap: 0.6rem; margin-top: 0.6rem; }
   .pn-run { border: 2px solid var(--fg-dim); border-left: 6px solid var(--amber); padding: 0.55rem 0.7rem; background: var(--panel, #0b0b0b); }
   .pn-run.now { border-left-color: var(--fg); }
+  .pn-q { margin: 0 0 0.3rem; color: var(--white); font-size: 1.05rem; font-weight: 700; }
+  .pn-group { margin: 0.4rem 0 -0.2rem; font-size: 0.75rem; letter-spacing: 0.1em; font-weight: 700; color: var(--amber); }
+  .pn-group.t2, .pn-group.t3 { color: var(--fg); }
+  .pn-run.t2 { border-left-color: var(--fg); } .pn-run.t3 { border-left-color: var(--fg-dim); }
+  .pn-job { margin: 0 0 0.3rem; color: var(--fg); font-size: 0.9rem; font-weight: 700; }
   .pn-head { margin: 0 0 0.35rem; color: var(--fg-dim); font-size: 0.85rem; letter-spacing: 0.03em; }
   .pn-note { display: flex; gap: 0.5rem; align-items: flex-start; justify-content: space-between; margin: 0.3rem 0; }
   .pn-text { margin: 0; color: var(--white); font-size: 1.15rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
@@ -3323,7 +3328,7 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var seg = el("div", "det-seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Draw type");
     var segBtns = ["round", "shape"].map(function (v) {
       var b = el("button", null, v.toUpperCase()); b.type = "button"; b.id = "det-shape-" + v; b.setAttribute("aria-pressed", String(shape === v));
-      b.addEventListener("click", function () { shape = v; segBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); redW.hidden = shape !== "shape"; paintRa(); put(); });
+      b.addEventListener("click", function () { shape = v; segBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); redW.hidden = shape !== "shape"; paintRa(); put(); if (pnKick) pnKick(); });
       seg.appendChild(b); return b;
     });
     var split = splitOf(cur.split);
@@ -3355,17 +3360,18 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     var it = tagChips(cur.tags, "det-tag-");
     var ino = el("textarea", "in"); ino.id = "det-note"; ino.rows = 2; ino.maxLength = 300; ino.placeholder = "Only goes on the next coil"; ino.value = cur.note || "";
     var r0 = el("div", "row2"); r0.appendChild(field("Card #", icd)); r0.appendChild(field("Coils on card", icn)); form.appendChild(r0);
-    // PRIOR NOTES: typing a card # checks earlier runs of that card (this phone's 7 days + the master log) and pops up any notes
-    var pnBtn = el("button", "btn pn-btn", "CHECK FOR PRIOR NOTES"); pnBtn.type = "button"; pnBtn.id = "det-pn";
-    var pnMsg = el("p", "pn-msg"); pnMsg.id = "det-pn-msg"; pnMsg.setAttribute("aria-live", "polite");
-    form.appendChild(pnBtn); form.appendChild(pnMsg);
-    pnWire(icd, pnBtn, pnMsg, ino, function () { put(); }, cur.card || "");
     var r1 = el("div", "row2"); r1.appendChild(field("Start size (in)", ist)); r1.appendChild(field("Finish size (in)", is)); form.appendChild(r1);
     form.appendChild(ra); paintRa();
     var rT = el("div", "row2"); rT.appendChild(field("Card total (lbs)", itt)); rT.appendChild(field("Avg weight (lbs)", iav)); form.appendChild(rT);
     var spW = el("div", "field"); spW.appendChild(el("span", "lbl", "Coil split")); spW.lastChild.style.display = "block"; spW.lastChild.style.marginBottom = "0.4rem"; spW.appendChild(spSeg); form.appendChild(spW);
     form.appendChild(avMsg); paintAvg();
     form.appendChild(field("Grade", ig));
+    // PRIOR NOTES: finish size + grade (+ start size / reduction) typed = earlier runs of the same job are checked and any notes pop up
+    var pnBtn = el("button", "btn pn-btn", "CHECK FOR PRIOR NOTES"); pnBtn.type = "button"; pnBtn.id = "det-pn";
+    var pnMsg = el("p", "pn-msg"); pnMsg.id = "det-pn-msg"; pnMsg.setAttribute("aria-live", "polite");
+    form.appendChild(pnBtn); form.appendChild(pnMsg);
+    var pnKick = pnWire(function () { return { size: is.value, start: ist.value, grade: ig.value, shape: shape, red: ird.value }; }, [is, ist, ig, ird], pnBtn, pnMsg, ino, function () { put(); },
+      { size: cur.size || "", start: cur.start || "", grade: cur.grade || "", shape: cur.shape, red: cur.red != null ? String(cur.red) : "" });
     var tw = el("div", "field"); tw.appendChild(el("span", "lbl", "Conditions (tap all that apply)")); tw.lastChild.style.display = "block"; tw.lastChild.style.marginBottom = "0.4rem"; tw.appendChild(it.el); form.appendChild(tw);
     var sw = el("div", "field"); sw.appendChild(el("span", "lbl", "Draw type")); sw.lastChild.style.display = "block"; sw.lastChild.style.marginBottom = "0.4rem"; sw.appendChild(seg); form.appendChild(sw);
     var redW = field("Reduction % (optional)", ird); redW.hidden = shape !== "shape"; form.appendChild(redW);
@@ -3392,90 +3398,159 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     body.appendChild(clr);
     body.appendChild(el("p", "sh-sub", "Starting the next job? Tap NEW CARD. Already logged a coil? Fix it in RECENT COILS. NEW SHIFT clears the card."));
   }
-  /* ---------- PRIOR NOTES for a card # ----------
-     When the operator types a card # on the card screen (pauses, or taps Next), earlier runs of that same card are
-     checked and any notes pop up: coil notes typed on that card, plus that shift's day notes, under-goal reasons and
-     job tips (labelled as the shift's). Sources: this phone's PAST SHIFTS (7 days) and this shift, always, so it works
-     with no signal and in the offline tablet file; plus the master log (GET /card-notes, crew code, read only) when
-     there is signal and a crew code. Exact card # only (case, spaces and dashes don't matter). The popup shows once
-     per card # per card screen; CHECK FOR PRIOR NOTES shows it again any time, or says there are none. */
-  var pnOpen = false, PN_WAIT = 1200;
+  /* ---------- PRIOR NOTES: earlier runs of the same job (size + grade + area reduction) ----------
+     Card #s never repeat (like a PO), so earlier runs are matched on what does: finish size, start size, grade and
+     % area reduction. When the card screen has a finish size and a grade (start size too, if known), earlier runs are
+     checked and any notes pop up, best match first:
+       1 SAME JOB      same finish size + same start size (so the same reduction) + same grade
+                       (shape draws: same finish + grade, and the typed reduction within 1 point when both have one)
+       2 SAME SIZE     same finish size + same grade, other or unknown start size
+       3 CLOSE         same grade, any size, reduction within PN_NEAR (5) points of this card's (same as JOB LOOKUP)
+     Round and shape draws are never mixed. Inside a group: closest reduction, then newest.
+     Sources: this device's PAST SHIFTS (7 days) and this shift, always, so it works with no signal and in the offline
+     tablet file; plus the master log through JOB LOOKUP's search (GET /search, crew code, read only) when there is
+     signal and a crew code: coil notes, that shift's day notes / under-goal line, and job tips. The popup shows once per
+     size/grade combo per card screen; CHECK FOR PRIOR NOTES shows it again any time, or says there are none. */
+  var pnOpen = false, PN_WAIT = 1200, PN_NEAR = 5;
+  var PN_TIER = { 1: "SAME JOB: SAME SIZES + GRADE", 2: "SAME FINISH SIZE + GRADE", 3: "CLOSE REDUCTION, SAME GRADE" };
   function pnCode() { try { var v = localStorage.getItem("logdbCrewCode"); return v ? String(JSON.parse(v) || "") : ""; } catch (e) { return ""; } }
   function pnApi() { return location.protocol === "file:" ? "" : String(window.LOGDB_API_BASE || "").replace(/\/+$/, ""); }
   function pnDay(ymd) {
     var p = String(ymd || "").split("-"); if (p.length !== 3) return ymd || "";
     var dt = new Date(+p[0], +p[1] - 1, +p[2]); return isFinite(dt.getTime()) ? DAYS[dt.getDay()] + " " + MONTHS[dt.getMonth()] + " " + dt.getDate() + ", " + p[0] : ymd;
   }
-  // one run from a saved shift (this phone): coils on that card, their notes, and that shift's day notes
-  function pnFromShift(st, key, src) {
-    var coils = (st.coils || []).filter(function (c) { return cardKey(c.card || c.coilNo) === key; });
-    if (!coils.length) return null;
-    var ms = {}; (st.machines || []).forEach(function (m) { ms[m.id] = m.name; });
-    var notes = [], machines = [];
-    coils.forEach(function (c) { var n = trim(c.notes); if (n && notes.indexOf(n) < 0) notes.push(n); var mn = ms[c.machineId]; if (mn && machines.indexOf(mn) < 0) machines.push(mn); });
-    var dn = trim((st.shift && st.shift.dayNotes) || ""), why = "", m = /^Under goal:\s*([^\n]*)/m.exec(dn);
-    if (m) { why = trim(m[1]); dn = trim(dn.replace(/^Under goal:[^\n]*\n?/m, "")); }
-    return { key: mlBase(st), date: st.shift && st.shift.date || "", operator: str((st.shift && st.shift.operator) || "", 60), machines: machines, coils: coilsSum(coils),
-      notes: notes, day: dn, why: why ? [why] : [], tips: [], src: src };
+  function pnGk(g) { return String(g || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  function pnSame(a, b) { return a != null && b != null && Math.abs(a - b) < 0.0005; }
+  // what this card is: finish, start, grade, round/shape and its reduction (worked out for round, typed for shape)
+  function pnQuery(v) {
+    var shape = v.shape === "shape" ? "shape" : "round", fi = sizeInch(v.size), si = sizeInch(v.start);
+    var red = shape === "shape" ? redNum(v.red) : reductionPct(v.size, v.start);
+    return { size: trim(v.size), start: trim(v.start), grade: gradeNorm(v.grade), g: pnGk(gradeNorm(v.grade)), fi: fi, si: si, shape: shape, red: red,
+      key: [fi, si, pnGk(gradeNorm(v.grade)), shape, red].join("|") };
   }
-  function pnLocal(key) {
-    var out = [];
-    histLoad().forEach(function (e) { var r = e && e.state ? pnFromShift(e.state, key, "phone") : null; if (r) out.push(r); });
-    var now = pnFromShift(state, key, "now"); if (now) out.unshift(now);
+  function pnQText(q) { return [q.start && q.size ? q.start + " to " + q.size : q.size, q.grade, q.shape === "shape" ? "shape" : "", q.red != null ? q.red + "%" : ""].filter(Boolean).join(" \u00b7 "); }
+  // which group (1-3) an earlier run falls in, or 0 = not a match
+  function pnTier(q, r) {
+    if (pnGk(r.grade) !== q.g || (r.shape === "shape" ? "shape" : "round") !== q.shape) return 0;
+    var sameFin = pnSame(r.fi, q.fi);
+    if (sameFin && q.shape === "round" && pnSame(r.si, q.si)) return 1;
+    if (sameFin && q.shape === "shape" && (q.si == null || pnSame(r.si, q.si)) && (q.red == null || r.red == null || Math.abs(r.red - q.red) <= 1)) return 1;
+    if (sameFin) return 2;
+    if (q.red != null && r.red != null && Math.abs(r.red - q.red) <= PN_NEAR + 1e-9) return 3;
+    return 0;
+  }
+  function pnSplitDay(dn) {
+    dn = String(dn || ""); var m = /^Under goal:\s*([^\n]*)/m.exec(dn), why = m && trim(m[1]) ? [trim(m[1])] : [];
+    if (m) dn = dn.replace(/^Under goal:[^\n]*\n?/m, "");
+    return { day: trim(dn), why: why };
+  }
+  // runs from one saved shift (this device): one per finish x start x grade x shape, with their coil notes
+  function pnFromShift(st, q, src) {
+    var ms = {}; (st.machines || []).forEach(function (m) { ms[m.id] = m.name; });
+    var dd = pnSplitDay(st.shift && st.shift.dayNotes), runs = {}, out = [];
+    (st.coils || []).forEach(function (c) {
+      var shape = c.shape === "shape" ? "shape" : "round", fi = sizeInch(c.size), si = sizeInch(c.startSize);
+      var r0 = { grade: c.grade, shape: shape, fi: fi, si: si, red: shape === "shape" ? (c.red != null ? +c.red : null) : reductionPct(c.size, c.startSize) };
+      var t = pnTier(q, r0); if (!t) return;
+      var k = [fi, si, pnGk(c.grade), shape].join("|"), r = runs[k];
+      if (!r) {
+        r = runs[k] = { key: mlBase(st), date: st.shift && st.shift.date || "", operator: str((st.shift && st.shift.operator) || "", 60), machines: [], coils: 0, list: [],
+          finish: c.size || "", start: c.startSize || "", grade: gradeNorm(c.grade), shape: shape, red: r0.red, tier: t, notes: [], day: dd.day, why: dd.why, tip: "", src: src };
+        out.push(r);
+      }
+      r.list.push(c);
+      var n = trim(c.notes); if (n && r.notes.indexOf(n) < 0) r.notes.push(n);
+      var mn = ms[c.machineId]; if (mn && r.machines.indexOf(mn) < 0) r.machines.push(mn);
+    });
+    out.forEach(function (r) { r.coils = coilsSum(r.list); delete r.list; });
     return out;
   }
-  function pnServer(card) {
+  function pnLocal(q) {
+    var out = pnFromShift(state, q, "now");
+    histLoad().forEach(function (e) { if (e && e.state) out = out.concat(pnFromShift(e.state, q, "phone")); });
+    return out;
+  }
+  // the master log: JOB LOOKUP's own search. Asked twice when the start size is known: with it (same job + close
+  // reduction) and without it (same finish size + grade on any start size).
+  function pnGet(api, code, qs) {
+    var ac = window.AbortController ? new AbortController() : null, t = ac ? setTimeout(function () { ac.abort(); }, 6000) : 0;
+    return fetch(api + "/search?" + qs, { headers: { "X-Crew-Code": code }, credentials: "omit", cache: "no-store", signal: ac ? ac.signal : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { clearTimeout(t); return r.ok && j.ok ? j : { skip: r.status === 401 ? "code" : "error" }; }); })
+      .catch(function () { clearTimeout(t); return { skip: "offline" }; });
+  }
+  function pnServer(q) {
     var api = pnApi(), code = pnCode();
     if (!api) return Promise.resolve({ skip: "file" });
     if (!code) return Promise.resolve({ skip: "code" });
     if (navigator.onLine === false) return Promise.resolve({ skip: "offline" });
-    var ac = window.AbortController ? new AbortController() : null, t = ac ? setTimeout(function () { ac.abort(); }, 6000) : 0;
-    return fetch(api + "/card-notes?card=" + encodeURIComponent(card), { headers: { "X-Crew-Code": code }, credentials: "omit", cache: "no-store", signal: ac ? ac.signal : undefined })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { clearTimeout(t); return r.ok && j.ok ? { runs: j.runs || [] } : { skip: r.status === 401 ? "code" : "error" }; }); })
-      .catch(function () { clearTimeout(t); return { skip: "offline" }; });
-  }
-  // both sources, newest first; a shift this phone already sent shows once (the master-log copy)
-  function pnLookup(card) {
-    var key = cardKey(card), local = pnLocal(key);
-    return pnServer(card).then(function (sv) {
-      var runs = (sv.runs || []).map(function (r) {
-        var dn = String(r.day_notes || ""), m = /^Under goal:\s*([^\n]*)/m.exec(dn), why = (r.under_reasons || []).slice();
-        if (m) { if (trim(m[1])) why = [trim(m[1])]; dn = dn.replace(/^Under goal:[^\n]*\n?/m, ""); }
-        dn = trim(dn);
-        return { key: String(r.log_id || "").replace(/-v\d+$/, ""), date: r.date || "", shift: r.shift || "", operator: r.operator || "", machines: r.machines && r.machines.length ? r.machines : (r.draws || []).map(function (d) { return "Draw " + d; }),
-          coils: r.coils || 0, notes: r.notes || [], day: dn, why: why, tips: r.tips || [], src: "log" };
+    var base = "size=" + encodeURIComponent(q.size) + "&grade=" + encodeURIComponent(q.grade) + "&shape=" + q.shape + "&limit=60";
+    var asks = [pnGet(api, code, base + (q.shape === "shape" && q.red != null ? "&red=" + q.red : ""))];
+    if (q.start && q.shape === "round") asks.push(pnGet(api, code, base + "&start=" + encodeURIComponent(q.start)));
+    return Promise.all(asks).then(function (rs) {
+      var ok = rs.filter(function (j) { return j.ok; });
+      if (!ok.length) return { skip: rs[0].skip || "error" };
+      var runs = [], tips = [], seenR = {}, seenT = {};
+      ok.forEach(function (j) {
+        (j.runs || []).forEach(function (r) { var k = [r.log_id, r.finish, r.start_size, r.grade, r.shape].join("|"); if (!seenR[k]) { seenR[k] = 1; runs.push(r); } });
+        (j.tips || []).forEach(function (t) { if (!seenT[t.id]) { seenT[t.id] = 1; tips.push(t); } });
       });
-      var have = {}; runs.forEach(function (r) { have[r.key] = 1; });
-      local.forEach(function (r) { if (r.src === "now" || !have[r.key]) runs.push(r); });
-      runs.sort(function (a, b) { return (b.src === "now") - (a.src === "now") || String(b.date).localeCompare(String(a.date)); });
-      var noted = runs.filter(function (r) { return r.notes.length || r.day || r.why.length || r.tips.length; });
-      return { card: card, key: key, runs: runs, noted: noted, skip: sv.skip || "" };
+      return { runs: runs, tips: tips };
+    });
+  }
+  // both sources, best group first, then closest reduction, then newest; a shift this device already sent shows once
+  function pnLookup(q) {
+    var local = pnLocal(q);
+    return pnServer(q).then(function (sv) {
+      var all = [];
+      (sv.runs || []).forEach(function (r) {
+        var x = { grade: r.grade, shape: r.shape, fi: sizeInch(r.finish), si: sizeInch(r.start_size), red: r.reduction != null ? +r.reduction : null };
+        var t = pnTier(q, x); if (!t) return;
+        var dd = pnSplitDay(r.day_notes);
+        all.push({ key: String(r.log_id || "").replace(/-v\d+$/, ""), date: r.date || "", shift: r.shift || "", operator: r.operator || "", machines: (r.draws || []).map(function (d) { return "Draw " + d; }),
+          coils: r.coils || 0, finish: r.finish || "", start: r.start_size || "", grade: r.grade || "", shape: x.shape, red: x.red, tier: t, notes: r.notes || [], day: dd.day, why: dd.why, tip: "", src: "log" });
+      });
+      (sv.tips || []).forEach(function (tp) {
+        var x = { grade: tp.grade, shape: tp.shape, fi: sizeInch(tp.finish), si: sizeInch(tp.start_size), red: tp.reduction != null ? +tp.reduction : null };
+        var t = pnTier(q, x); if (!t) return;
+        all.push({ key: "tip:" + tp.id, date: tp.date || "", shift: "", operator: tp.operator || "", machines: tp.machine ? [tp.machine] : [], coils: 0,
+          finish: tp.finish || "", start: tp.start_size || "", grade: tp.grade || "", shape: x.shape, red: x.red, tier: t, notes: [], day: "", why: [], tip: tp.tip || "", src: "tip" });
+      });
+      var have = {}; all.forEach(function (r) { have[r.key] = 1; });
+      local.forEach(function (r) { if (r.src === "now" || !have[r.key]) all.push(r); });
+      var dist = function (r) { return q.red != null && r.red != null ? Math.abs(r.red - q.red) : 1e9; };
+      all.sort(function (a, b) { return a.tier - b.tier || (b.src === "now") - (a.src === "now") || dist(a) - dist(b) || String(b.date).localeCompare(String(a.date)); });
+      var noted = all.filter(function (r) { return r.notes.length || r.day || r.why.length || r.tip; });
+      return { q: q, runs: all.filter(function (r) { return r.src !== "tip"; }), noted: noted, skip: sv.skip || "" };
     });
   }
   function pnSkipText(skip) {
     return skip === "offline" ? " No signal: checked this device's last 7 days only." : skip === "code" ? " Master log not checked: type the crew code in SEND TO MASTER LOG once." :
       skip === "error" ? " The master log didn't answer: checked this device only." : "";
   }
-  function pnClose() { var box = $("wt-ask"); pnOpen = false; if (box) { box.hidden = true; box.textContent = ""; } try { $("det-card").focus({ preventScroll: true }); } catch (e) {} }
-  // the popup: newest first, notes in big type; USE ON THIS CARD copies a note into this card's Note box
+  function pnClose() { var box = $("wt-ask"); pnOpen = false; if (box) { box.hidden = true; box.textContent = ""; } try { $("det-pn").focus({ preventScroll: true }); } catch (e) {} }
+  function fmtCoils(n) { return String(Math.round(n * 10) / 10); }
+  // the popup: grouped (same job / same finish / close), notes in big type; USE ON THIS CARD copies a note into this card's Note box
   function pnShow(res, useNote) {
-    var box = wtBox(), inner = el("div", "wt-box pn-box"); pnOpen = true;
-    var h = el("h3", null, "NOTES FROM BEFORE \u00b7 CARD #" + res.card); h.id = "wt-title"; inner.appendChild(h);
-    inner.appendChild(el("p", "sub", "This card ran " + res.runs.length + (res.runs.length === 1 ? " time" : " times") + " before; " + res.noted.length + " had notes. Newest first." + pnSkipText(res.skip)));
-    var list = el("div", "pn-list"); list.id = "pn-list";
+    var box = wtBox(), inner = el("div", "wt-box pn-box"), q = res.q; pnOpen = true;
+    var h = el("h3", null, "NOTES FROM BEFORE"); h.id = "wt-title"; inner.appendChild(h);
+    inner.appendChild(el("p", "pn-q", pnQText(q)));
+    inner.appendChild(el("p", "sub", res.noted.length + (res.noted.length === 1 ? " earlier run or tip" : " earlier runs and tips") + " with notes, best match first." + pnSkipText(res.skip)));
+    var list = el("div", "pn-list"), last = 0; list.id = "pn-list";
     res.noted.forEach(function (r) {
-      var it = el("div", "pn-run" + (r.src === "now" ? " now" : ""));
+      if (r.tier !== last) { last = r.tier; var gh = el("p", "pn-group t" + r.tier, PN_TIER[r.tier] + (r.tier === 3 ? " (\u00b1" + PN_NEAR + " pts)" : "")); list.appendChild(gh); }
+      var it = el("div", "pn-run t" + r.tier + (r.src === "now" ? " now" : ""));
+      var job = [r.start && r.finish ? r.start + " to " + r.finish : r.finish, r.grade, r.red != null ? r.red + "%" + (q.red != null && r.tier !== 1 ? " (yours " + q.red + "%)" : "") : ""].filter(Boolean).join(" \u00b7 ");
       var head = [r.src === "now" ? "THIS SHIFT" : pnDay(r.date), r.shift ? r.shift + " shift" : "", r.operator, (r.machines || []).join(" + "), r.coils ? fmtCoils(r.coils) + (r.coils === 1 ? " coil" : " coils") : ""].filter(Boolean).join(" \u00b7 ");
-      it.appendChild(el("p", "pn-head", head));
-      r.notes.forEach(function (n) {
-        var row = el("div", "pn-note"); row.appendChild(el("p", "pn-text", n));
+      it.appendChild(el("p", "pn-head", head)); it.appendChild(el("p", "pn-job", job));
+      var texts = r.tip ? [r.tip] : r.notes;
+      texts.forEach(function (n) {
+        var row = el("div", "pn-note"); row.appendChild(el("p", "pn-text", (r.tip ? "Job tip: " : "") + n));
         if (useNote) { var u = el("button", "btn pn-use", "USE ON THIS CARD"); u.type = "button"; u.addEventListener("click", function () { useNote(n); setText(u, "ADDED TO NOTE"); u.disabled = true; }); row.appendChild(u); }
         it.appendChild(row);
       });
       if (r.why.length) it.appendChild(el("p", "pn-shift", "Under goal that shift: " + r.why.join(", ")));
       if (r.day) it.appendChild(el("p", "pn-shift", "That shift's day notes: " + r.day));
-      r.tips.forEach(function (t) { it.appendChild(el("p", "pn-shift", "Job tip that shift: " + t)); });
-      it.appendChild(el("p", "pn-src", r.src === "log" ? "Master log" : r.src === "now" ? "This shift, this device" : "This device (past shifts)"));
+      it.appendChild(el("p", "pn-src", r.src === "log" ? "Master log" : r.src === "tip" ? "Job tip (master log)" : r.src === "now" ? "This shift, this device" : "This device (past shifts)"));
       list.appendChild(it);
     });
     inner.appendChild(list);
@@ -3486,33 +3561,36 @@ if (typeof window !== "undefined") window.DrawRateCalc = Calc;
     box.onkeydown = function (e) { if (e.key === "Escape") pnClose(); };
     setTimeout(function () { try { ok.focus({ preventScroll: true }); } catch (e) {} }, 50);
   }
-  function fmtCoils(n) { return String(Math.round(n * 10) / 10); }
-  // wire the card screen: auto check after a pause / Next, the button checks on demand
-  function pnWire(icd, btn, msg, ino, onNote, start) {
-    var timer = 0, seen = {}, seq = 0, startKey = cardKey(start);
-    if (startKey) seen[startKey] = 1;   // reopening THIS CARD doesn't pop up again for the card already on it
+  // wire the card screen: auto check once finish size + grade are in (after a pause / Next), the button checks on demand
+  function pnWire(get, inputs, btn, msg, ino, onNote, startVals) {
+    var timer = 0, seen = {}, seq = 0, q0 = pnQuery(startVals);
+    if (q0.fi != null && q0.g) seen[q0.key] = 1;   // reopening THIS CARD doesn't pop up again for the job already on it
     var useNote = function (n) { var v = trim(ino.value); if (v.indexOf(n) < 0) { ino.value = (v ? v + " / " : "") + n; ino.value = ino.value.slice(0, 300); onNote(); } };
     var run = function (manual) {
       clearTimeout(timer);
-      var card = trim(icd.value), key = cardKey(card);
-      if (key.length < 3) { if (manual) { setText(msg, "Type the card # first."); setCls(msg, "pn-msg amber"); try { icd.focus(); } catch (e) {} } return; }
-      if (!manual && seen[key]) return;
-      seen[key] = 1; var my = ++seq;
-      setText(msg, "Checking card #" + card + " for notes\u2026"); setCls(msg, "pn-msg");
-      pnLookup(card).then(function (res) {
-        if (my !== seq || cardKey(icd.value) !== key || sheetKind !== "details") return;   // the card # changed or the screen closed meanwhile
+      var q = pnQuery(get());
+      if (q.fi == null || !q.g) { if (manual) { setText(msg, "Type the finish size and the grade first (start size too, for the closest match)."); setCls(msg, "pn-msg amber"); } return; }
+      if (!manual && seen[q.key]) return;
+      seen[q.key] = 1; var my = ++seq;
+      setText(msg, "Checking earlier runs of " + pnQText(q) + "\u2026"); setCls(msg, "pn-msg");
+      pnLookup(q).then(function (res) {
+        if (my !== seq || pnQuery(get()).key !== q.key || sheetKind !== "details") return;   // the card changed or the screen closed meanwhile
         if (res.noted.length) {
-          setText(msg, res.noted.length + (res.noted.length === 1 ? " earlier run" : " earlier runs") + " of #" + card + " had notes. Tap CHECK FOR PRIOR NOTES to see them again."); setCls(msg, "pn-msg found");
+          var best = res.noted[0].tier;
+          setText(msg, res.noted.length + " with notes (best: " + PN_TIER[best].toLowerCase() + "). Tap CHECK FOR PRIOR NOTES to see them again."); setCls(msg, "pn-msg found");
           pnShow(res, useNote);
         } else {
-          setText(msg, (res.runs.length ? "Card #" + card + " ran " + res.runs.length + (res.runs.length === 1 ? " time" : " times") + " before, no notes." : "No notes from earlier runs of #" + card + ".") + pnSkipText(res.skip)); setCls(msg, "pn-msg");
+          setText(msg, (res.runs.length ? res.runs.length + (res.runs.length === 1 ? " earlier run" : " earlier runs") + " of " + pnQText(q) + ", no notes." : "No earlier runs of " + pnQText(q) + " with notes.") + pnSkipText(res.skip)); setCls(msg, "pn-msg");
         }
       });
     };
-    icd.addEventListener("input", function () { clearTimeout(timer); setText(msg, ""); if (cardKey(icd.value).length >= 4) timer = setTimeout(function () { run(false); }, PN_WAIT); });
-    icd.addEventListener("change", function () { run(false); });
-    icd.addEventListener("keydown", function (e) { if (e.key === "Enter") run(false); });
+    inputs.forEach(function (x) {
+      x.addEventListener("input", function () { clearTimeout(timer); var q = pnQuery(get()); if (q.fi != null && q.g && !seen[q.key]) timer = setTimeout(function () { run(false); }, PN_WAIT); });
+      // left a box: check soon, but wait a pause if the operator moved on to another of these boxes (no popup on a half-typed job)
+      x.addEventListener("change", function () { clearTimeout(timer); timer = setTimeout(function () { run(false); }, inputs.indexOf(document.activeElement) >= 0 ? PN_WAIT : 150); });
+    });
     btn.addEventListener("click", function () { run(true); });
+    return function () { clearTimeout(timer); timer = setTimeout(function () { run(false); }, 300); };   // call after ROUND/SHAPE changes
   }
   /* ---------- under goal: ask why (at SEND TO MASTER LOG and at NEW SHIFT) ----------
      Asked when the shift ended under its goal, or mid-shift when more than about a coil behind the pace car.
