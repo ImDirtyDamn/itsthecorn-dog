@@ -147,7 +147,8 @@
     }
     .button:hover, .button:focus { outline: 3px solid #fff; outline-offset: 3px; }
     .button-ghost { background: transparent; color: var(--gold); }
-    .form-note { margin: 0; color: var(--muted); font-size: 14px; max-width: 46ch; }
+    .form-note { margin: 0; color: var(--muted); font-size: 14px; max-width: 56ch; }
+    .turnstile-wrap { margin-top: 2px; min-height: 65px; }
     .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
     .form-status { margin: 0; font-size: 16px; }
     .form-status.ok { color: #cfe8cf; }
@@ -211,7 +212,7 @@
   <div class="nocookie" id="nocookie" role="dialog" aria-modal="false" aria-labelledby="nc-title" aria-describedby="nc-body" hidden>
     <h2 id="nc-title">🌭 About cookies.</h2>
     <div id="nc-body">
-      <p>We don't have any. Just corn dogs. No trackers, no cookies, no analytics. Ever. We never collect, analyze, or sell your data.</p>
+      <p>We don't set our own cookies, and we don't run analytics or ad trackers. Just corn dogs. We never collect, analyze, or sell your data.</p>
       <p class="money">Our site makes money by selling an actual useful product: training films, SOPs, websites, and shop-floor software. Not you.</p>
     </div>
     <div class="panel" id="nc-panel" hidden>
@@ -219,7 +220,7 @@
       <p>[✓] Not being tracked (always on)</p>
       <p>That's the only setting. We checked.</p>
     </div>
-    <p class="fine">Honest fine print: our web host (GitHub Pages) may keep basic server logs, like IP addresses, for security. We don't see or use them. Clicking "Cool." saves a single note in your own browser so this box stays gone. It never leaves your device. And if you email us, yes, we get your email.</p>
+    <p class="fine">Honest fine print: our web host (GitHub Pages) may keep basic server logs, like IP addresses, for security. We don't see or use them. Clicking "Cool." saves a single note in your own browser so this box stays gone. It never leaves your device. The request form uses a Cloudflare Turnstile spam check so we can tell people from bots. Cloudflare may keep a small note in your browser, on their domain, for that check. We do not use it to track or advertise. And if you email us, yes, we get your email.</p>
     <div class="row">
       <button type="button" class="ok" id="nc-ok">Cool.</button>
       <button type="button" class="prefs" id="nc-prefs" aria-expanded="false" aria-controls="nc-panel">Manage preferences</button>
@@ -313,10 +314,11 @@
             <input type="text" name="website" id="req-website" tabindex="-1" autocomplete="off">
           </label>
         </div>
+        <div class="turnstile-wrap" id="request-turnstile" aria-label="Cloudflare spam check"></div>
         <div class="actions">
           <button class="button" type="submit" id="req-submit">Send to sales@</button>
           <a class="button button-ghost" id="req-mailto" href="mailto:sales@itsthecorn.dog?subject=Production%20tracker%20inquiry">Or just email us</a>
-          <p class="form-note" id="form-note">This form sends a message straight to sales@itsthecorn.dog from this page. We do not use a third-party form service, we do not set cookies, and we do not add trackers. If the send does not go through, use the email link.</p>
+          <p class="form-note" id="form-note">This form sends a message straight to sales@itsthecorn.dog from this page. We do not use a third-party form service, and we do not add analytics or advertising trackers. A Cloudflare Turnstile spam check runs on the form so we can tell people from bots. If the send does not go through, use the email link.</p>
         </div>
         <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
       </form>
@@ -351,10 +353,42 @@
     var form=document.getElementById('request-form');
     if(!form) return;
     var ENDPOINT='https://shopdocs-walkthrough-form.itsthecorndog-log.workers.dev/';
+    var SITEKEY='0x4AAAAAAGTHCPDgmZuoalqY';
     var statusEl=document.getElementById('form-status');
     var submitBtn=document.getElementById('req-submit');
+    var turnstileWidgetId;
+    function renderTurnstile(){
+      if(!window.turnstile || turnstileWidgetId !== undefined) return;
+      turnstileWidgetId = window.turnstile.render('#request-turnstile', {
+        sitekey: SITEKEY,
+        action: 'walkthrough-request',
+        theme: 'dark'
+      });
+    }
+    window.onRequestTurnstileLoad = renderTurnstile;
+    if(window.turnstile) renderTurnstile();
+    function tokenValue(){
+      var tok='';
+      try{
+        if(window.turnstile && turnstileWidgetId !== undefined){
+          tok = window.turnstile.getResponse(turnstileWidgetId) || '';
+        }
+      }catch(e){}
+      if(!tok){
+        var hidden=form.querySelector('[name="cf-turnstile-response"]');
+        tok = hidden && hidden.value || '';
+      }
+      return tok;
+    }
+    function resetTurnstile(){
+      try{
+        if(window.turnstile && turnstileWidgetId !== undefined){
+          window.turnstile.reset(turnstileWidgetId);
+        }
+      }catch(e){}
+    }
     function fields(){
-      return {
+      var f={
         request: document.getElementById('req-type').value,
         name: document.getElementById('req-name').value.trim(),
         company: document.getElementById('req-company').value.trim(),
@@ -363,6 +397,8 @@
         message: document.getElementById('req-message').value.trim(),
         website: (document.getElementById('req-website')||{}).value||''
       };
+      f['cf-turnstile-response']=tokenValue();
+      return f;
     }
     function mailtoHref(f){
       var subject='Walkthrough request: '+f.request+' from '+f.name+', '+f.company;
@@ -373,6 +409,11 @@
       e.preventDefault();
       if(!form.reportValidity()) return;
       var f=fields();
+      if(!f['cf-turnstile-response']){
+        statusEl.className='form-status err';
+        statusEl.textContent='Please complete the spam check, then try again.';
+        return;
+      }
       statusEl.className='form-status';
       statusEl.textContent='Sending…';
       submitBtn.disabled=true;
@@ -396,9 +437,13 @@
         document.getElementById('req-mailto').setAttribute('href', href);
         statusEl.className='form-status err';
         statusEl.innerHTML='Could not send from this page. <a href="'+href+'">Open an email to sales@ instead</a>.';
-      }).then(function(){ submitBtn.disabled=false; });
+      }).then(function(){
+        submitBtn.disabled=false;
+        resetTurnstile();
+      });
     });
   })();
   </script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onRequestTurnstileLoad&render=explicit" async defer></script>
 </body>
 </html>
