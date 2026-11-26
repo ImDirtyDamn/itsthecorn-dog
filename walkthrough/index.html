@@ -4,6 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <script>
+  /* Pin the cookie box from the first frame. Returning visitors get nc-ack
+     before paint, so reserved header space is never shown and the box does not pop in. */
+  (function () {
+    try { if (localStorage.getItem('corndog-no-cookies-ack')) document.documentElement.classList.add('nc-ack'); } catch (e) {}
+  })();
+  </script>
+  <script>
   /* PHONE FIT: if the phone browser is set to "Request Desktop Website" it lays the page out
      about 980px wide and shrinks it to fit, so everything looks tiny. Spot that (small touch
      screen, much wider layout) and zoom the page back up to real phone size. */
@@ -30,7 +37,7 @@
   <meta name="theme-color" content="#0d0f12">
   <meta name="description" content="A walkthrough of a phone-based production tracker: put a template on your floor, or get a custom system, without an IBM i server or a team of coders. Shown with demo data.">
   <meta property="og:title" content="Production tracker walkthrough">
-  <meta property="og:image" content="https://itsthecorn.dog/walkthrough/poster.jpg?v=20261119">
+  <meta property="og:image" content="https://itsthecorn.dog/walkthrough/poster.jpg?v=20261126">
   <title>Production tracker walkthrough</title>
   <link rel="icon" href="/assets-site/favicon.svg" type="image/svg+xml">
   <style>
@@ -164,10 +171,9 @@
     }
     footer strong { color: #fff; }
 
-    /* not-a-cookie banner: same copy and behavior as itsthecorndog.media, gold matched to this site */
-    .nocookie{position:fixed;left:1.2rem;bottom:1.2rem;z-index:50;width:min(440px,calc(100vw - 2.4rem));background:#141416;border:2px solid var(--gold);border-radius:18px;padding:1.2rem 1.3rem 1.1rem;box-shadow:0 18px 60px #000d,0 0 0 6px #e3a83b1a;transition:transform .35s ease,opacity .35s ease,top .35s,bottom .35s;font-size:.95rem;text-align:left;line-height:1.5}
-    .nocookie[hidden]{display:none}
-    .nocookie.up{bottom:auto;top:1.2rem}
+    /* Cookie box is pinned from the first frame so it does not shift the layout (CLS). */
+    .nocookie{position:fixed;left:1.2rem;top:1.2rem;bottom:auto;z-index:50;width:min(440px,calc(100vw - 2.4rem));background:#141416;border:2px solid var(--gold);border-radius:18px;padding:1.2rem 1.3rem 1.1rem;box-shadow:0 18px 60px #000d,0 0 0 6px #e3a83b1a;font-size:.95rem;text-align:left;line-height:1.5}
+    .nocookie[hidden], html.nc-ack .nocookie{display:none}
     .nocookie h2{font-size:1.25rem;margin:0 0 .5rem;line-height:1.1;color:#fff;letter-spacing:0}
     .nocookie p{margin:0 0 .6rem;color:#e2dbcc;font-size:.95rem;font-weight:400}
     .nocookie .money{border-left:4px solid var(--ketchup);padding-left:.7rem;color:var(--paper)}
@@ -181,18 +187,23 @@
     .nocookie .panel{background:#0b0b0c;border:1px dashed #ffffff33;border-radius:10px;padding:.7rem .8rem;margin:0 0 .9rem;font-family:var(--mono);font-size:.8rem;color:#cfe8cf}
     .nocookie .panel p{color:#cfe8cf;margin:.2rem 0}
     @media (min-width: 801px) {
-      body.nocookie-open header {
+      html:not(.nc-ack) header {
         padding-left: min(472px, 38vw);
         text-align: left;
       }
-      body.nocookie-open .sub { margin-left: 0; margin-right: auto; }
+      html:not(.nc-ack) .sub { margin-left: 0; margin-right: auto; }
     }
     @media(max-width:800px){
-      .nocookie{left:.6rem;right:.6rem;bottom:.6rem;width:auto;padding:1rem;font-size:.9rem}
-      .nocookie.up{top:auto;bottom:.6rem;opacity:0;visibility:hidden;transform:translateY(120%)}
+      .nocookie{left:.6rem;right:.6rem;top:auto;bottom:.6rem;width:auto;padding:1rem;font-size:.9rem}
       .nocookie .fine{font-size:.74rem}
     }
-    @media (prefers-reduced-motion:reduce){.nocookie{transition:none}}
+
+    .sample-report { width: min(1100px, 100%); margin: 0 auto; padding: 36px 16px 8px; }
+    .sample-report h2 { margin: 0 0 12px; color: #fff; font-size: clamp(22px, 4vw, 32px); letter-spacing: .01em; }
+    .sample-frame { display: block; margin-top: 16px; border: 1px solid rgba(227, 168, 59, 0.35); background: #f7f3ec; }
+    .sample-frame img { display: block; width: 100%; height: auto; }
+    .sample-frame:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .sample-cap { margin: 10px 0 0; text-align: center; color: var(--muted); font-size: 15px; }
 
     @media (max-width: 800px) {
       .cards { grid-template-columns: 1fr 1fr; }
@@ -209,7 +220,7 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <div class="nocookie" id="nocookie" role="dialog" aria-modal="false" aria-labelledby="nc-title" aria-describedby="nc-body" hidden>
+  <div class="nocookie" id="nocookie" role="dialog" aria-modal="false" aria-labelledby="nc-title" aria-describedby="nc-body">
     <h2 id="nc-title">🌭 About cookies.</h2>
     <div id="nc-body">
       <p>We don't set our own cookies, and we don't run analytics or ad trackers. Just corn dogs. We never collect, analyze, or sell your data.</p>
@@ -234,11 +245,11 @@
   </header>
 
   <main id="main">
-    <video class="screen" controls playsinline preload="metadata" poster="/walkthrough/poster.jpg?v=20261119" width="1920" height="1080">
-      <source src="/walkthrough/tracker-walkthrough.mp4?v=20261120" type="video/mp4">
-      Your browser can't play this video. <a href="/walkthrough/tracker-walkthrough.mp4?v=20261120">Download the MP4</a>.
+    <video class="screen" controls playsinline preload="metadata" poster="/walkthrough/poster.webp?v=20261126" width="1920" height="1080">
+      <source src="/walkthrough/tracker-walkthrough.mp4?v=20261126" type="video/mp4">
+      Your browser can't play this video. <a href="/walkthrough/tracker-walkthrough.mp4?v=20261126">Download the MP4</a>.
     </video>
-    <p class="meta">About 7 minutes, with sound. <a href="/">Home</a> &middot; <a href="/pricing/">Price list</a></p>
+    <p class="meta">About 5 minutes, with sound. <a href="/">Home</a> &middot; <a href="/pricing/">Price list</a></p>
   </main>
 
   <section class="vision" aria-labelledby="vision-title">
@@ -258,6 +269,15 @@
         <li><strong>Reports</strong><p>The weekly report builds itself.</p></li>
       </ul>
     </div>
+  </section>
+
+  <section class="sample-report" id="sample-report" aria-labelledby="sample-report-title">
+    <h2 id="sample-report-title">A sample weekly report</h2>
+    <p class="lead">The supervisor dashboard builds this itself. The pages below are a sample, made from demo data. Your shop's names and parts would go here.</p>
+    <a class="sample-frame" href="/walkthrough/sample-weekly-report.pdf?v=20261126" aria-label="Open the sample weekly production report PDF, shown with demo data">
+      <img src="/walkthrough/sample-weekly-report.webp?v=20261126" width="1324" height="862" alt="Sample weekly production report, pages 1 and 2, shown with demo data: output versus goal, downtime, and totals by line and by operator.">
+    </a>
+    <p class="sample-cap">Sample data only. <a href="/walkthrough/sample-weekly-report.pdf?v=20261126">Open the 3-page PDF</a>.</p>
   </section>
 
   <section class="familiar" id="familiar" aria-labelledby="familiar-title">
@@ -334,19 +354,13 @@
   <script>
   (function(){
     var KEY='corndog-no-cookies-ack', box=document.getElementById('nocookie');
-    try{ if(localStorage.getItem(KEY)) return; }catch(e){}
-    box.hidden=false;
-    document.body.classList.add('nocookie-open');
-    function close(){ try{localStorage.setItem(KEY,'1');}catch(e){} box.hidden=true; document.body.classList.remove('nocookie-open'); }
+    if(!box) return;
+    function close(){ try{localStorage.setItem(KEY,'1');}catch(e){} document.documentElement.classList.add('nc-ack'); box.hidden=true; }
+    if(document.documentElement.classList.contains('nc-ack')) { box.hidden=true; return; }
     document.getElementById('nc-ok').addEventListener('click',close);
     var pb=document.getElementById('nc-prefs'), panel=document.getElementById('nc-panel');
     pb.addEventListener('click',function(){ var open=panel.hidden; panel.hidden=!open; pb.setAttribute('aria-expanded',open?'true':'false'); pb.textContent=open?'Hide preferences':'Manage preferences'; });
-    document.addEventListener('keydown',function(e){ if(e.key==='Escape' && !box.hidden){ box.hidden=true; document.body.classList.remove('nocookie-open'); } });
-    // keep the box off the video's controls: when the player is in view, park the box at the top
-    var scr=document.querySelector('.screen');
-    if(scr && 'IntersectionObserver' in window){
-      new IntersectionObserver(function(en){ box.classList.toggle('up', en[0].isIntersecting); },{rootMargin:'0px 0px -35% 0px'}).observe(scr);
-    }
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape' && !box.hidden) close(); });
   })();
 
   (function(){
